@@ -1,35 +1,169 @@
-import { Tabs } from 'expo-router';
 import React from 'react';
+import { Tabs, useRouter } from 'expo-router';
+import { Text, View, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { Colors } from '../../constants/colors';
+// Import a free icon pack
+import { Ionicons } from '@expo/vector-icons';
+// *** IMPORT useSafeAreaInsets HOOK ***
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+// *** IMPORT TYPES FOR PROPS ***
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+// --- This is the new Custom Tab Bar Component ---
+// *** ADDED TYPES FOR PROPS ***
+const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
+  const router = useRouter();
+  // *** GET SAFE AREA INSETS ***
+  const insets = useSafeAreaInsets();
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const handleDiagnosePress = () => {
+    Alert.alert('Analyze', 'Analyze feature will be available soon!');
+  };
 
   return (
+    // *** APPLY DYNAMIC PADDING ***
+    // We add the 'insets.bottom' to the padding.
+    // I also set a minimum padding of 8 for devices without a bottom notch.
+    <View 
+      style={[
+        styles.tabBarContainer, 
+        { 
+          height: 85 + insets.bottom, // Dynamically adjust height
+          paddingBottom: (insets.bottom > 0 ? insets.bottom : 8) 
+        }
+      ]}
+    >
+      {/* 2 Buttons on the LEFT */}
+      <TabButton
+        iconName={state.index === 0 ? 'home' : 'home-outline'}
+        label="Home"
+        isFocused={state.index === 0}
+        onPress={() => navigation.navigate('index')}
+      />
+      <TabButton
+        iconName={state.index === 1 ? 'stats-chart' : 'stats-chart-outline'}
+        label="Track"
+        isFocused={state.index === 1}
+        onPress={() => navigation.navigate('track')}
+      />
+
+      {/* CENTER Plus Button with Label */}
+      <View style={styles.centerButtonContainer}>
+        <TouchableOpacity
+          style={styles.centerButton}
+          onPress={handleDiagnosePress}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="add" size={36} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.centerButtonLabel}>Analyze</Text>
+      </View>
+
+      {/* 2 Buttons on the RIGHT */}
+      <TabButton
+        iconName={state.index === 2 ? 'document-text' : 'document-text-outline'}
+        label="Reports"
+        isFocused={state.index === 2}
+        onPress={() => navigation.navigate('reports')}
+      />
+      <TabButton
+        iconName={state.index === 3 ? 'ellipsis-horizontal' : 'ellipsis-horizontal-outline'}
+        label="More"
+        isFocused={state.index === 3}
+        onPress={() => navigation.navigate('more')}
+      />
+    </View>
+  );
+};
+
+// --- Define prop types for TabButton ---
+type TabButtonProps = {
+  iconName: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  isFocused: boolean;
+  onPress: () => void;
+};
+
+// --- Helper Component for the 4 main tab buttons ---
+// *** ADDED TYPES FOR PROPS ***
+const TabButton = ({ iconName, label, isFocused, onPress }: TabButtonProps) => {
+  const color = isFocused ? Colors.light.primary : Colors.light.textLight;
+  return (
+    <TouchableOpacity style={styles.tabButton} onPress={onPress}>
+      <Ionicons name={iconName} size={24} color={color} />
+      <Text style={[styles.tabLabel, { color }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+};
+
+
+// --- This is your main export, now using the CustomTabBar ---
+export default function TabsLayout() {
+  return (
     <Tabs
+      // Use the new custom tab bar component
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
+      }}
+    >
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="track" />
+      <Tabs.Screen name="reports" />
+      <Tabs.Screen name="more" />
     </Tabs>
   );
 }
+
+// --- Styles for the new Custom Tab Bar ---
+const styles = StyleSheet.create({
+  tabBarContainer: {
+    flexDirection: 'row',
+    // *** REMOVED fixed height and paddingBottom ***
+    // height: 85, (Now set dynamically)
+    // paddingBottom: 8, (Now set dynamically)
+    backgroundColor: Colors.light.cardBackground,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+    paddingHorizontal: 8, 
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  tabButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 8, 
+  },
+  tabLabel: {
+    fontSize: 11, 
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  centerButtonContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -30,
+  },
+  centerButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 34,
+    backgroundColor: Colors.light.primary, 
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderColor: Colors.light.background,
+    borderWidth: 4,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 10,
+  },
+  centerButtonLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.primary,
+    marginTop: 6,
+  },
+});
