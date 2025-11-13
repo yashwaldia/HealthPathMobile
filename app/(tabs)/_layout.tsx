@@ -1,23 +1,12 @@
 import React from 'react';
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Text, View, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Colors } from '../../constants/colors';
-
-// Import a free icon pack
 import { Ionicons } from '@expo/vector-icons';
-
-// *** IMPORT useSafeAreaInsets HOOK ***
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-// *** IMPORT TYPES FOR PROPS ***
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
-// --- This is the new Custom Tab Bar Component ---
-// *** ADDED TYPES FOR PROPS ***
 const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
-  const router = useRouter();
-
-  // *** GET SAFE AREA INSETS ***
   const insets = useSafeAreaInsets();
 
   const handleDiagnosePress = () => {
@@ -25,9 +14,6 @@ const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => 
   };
 
   return (
-    // *** APPLY DYNAMIC PADDING ***
-    // We add the 'insets.bottom' to the padding.
-    // I also set a minimum padding of 8 for devices without a bottom notch.
     <View
       style={[
         styles.tabBarContainer,
@@ -61,22 +47,21 @@ const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => 
 
       {/* 2 Buttons on the RIGHT */}
       <TabButton
-        iconName="document-text"
-        label="Reports"
+        iconName="fitness"
+        label="Vitals"
         isFocused={state.index === 2}
-        onPress={() => navigation.navigate('reports')}
+        onPress={() => navigation.navigate('vitals')}
       />
       <TabButton
-        iconName="person"
-        label="Profile"
+        iconName="compass"
+        label="Explore"
         isFocused={state.index === 3}
-        onPress={() => navigation.navigate('profile')}
+        onPress={() => navigation.navigate('explore')}
       />
     </View>
   );
 };
 
-// --- Define prop types for TabButton ---
 type TabButtonProps = {
   iconName: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
@@ -84,8 +69,6 @@ type TabButtonProps = {
   onPress: () => void;
 };
 
-// --- Helper Component for the 4 main tab buttons ---
-// *** ADDED TYPES FOR PROPS ***
 const TabButton = ({ iconName, label, isFocused, onPress }: TabButtonProps) => {
   const color = isFocused ? Colors.light.primary : Colors.light.textLight;
 
@@ -97,7 +80,6 @@ const TabButton = ({ iconName, label, isFocused, onPress }: TabButtonProps) => {
   );
 };
 
-// --- This is your main export, now using the CustomTabBar ---
 export default function TabsLayout() {
   return (
     <Tabs
@@ -108,13 +90,12 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="track" />
-      <Tabs.Screen name="reports" />
-      <Tabs.Screen name="profile" />
+      <Tabs.Screen name="vitals" />
+      <Tabs.Screen name="explore" />
     </Tabs>
   );
 }
 
-// --- Styles for the new Custom Tab Bar ---
 const styles = StyleSheet.create({
   tabBarContainer: {
     flexDirection: 'row',

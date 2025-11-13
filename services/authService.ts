@@ -1,5 +1,5 @@
-import { 
-  createUserWithEmailAndPassword, 
+import {
+  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
@@ -47,18 +47,18 @@ const getErrorMessage = (errorCode: string): string => {
 
 // Sign Up with Email and Password
 export const signUpWithEmail = async (
-  email: string, 
-  password: string, 
+  email: string,
+  password: string,
   displayName: string
 ): Promise<User> => {
   try {
     console.log('🔐 Starting sign up process...');
     console.log('📧 Email:', email);
     console.log('👤 Display Name:', displayName);
-    
+
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
-    
+
     console.log('✅ User created in Firebase Auth:', user.uid);
 
     // Update user profile with display name
@@ -73,7 +73,7 @@ export const signUpWithEmail = async (
       createdAt: new Date(),
       photoURL: null,
     };
-    
+
     await setDoc(doc(db, 'users', user.uid), userDoc);
     console.log('✅ User document created in Firestore');
     console.log('🎉 Sign up successful!');
@@ -88,17 +88,17 @@ export const signUpWithEmail = async (
 
 // Sign In with Email and Password
 export const signInWithEmail = async (
-  email: string, 
+  email: string,
   password: string
 ): Promise<User> => {
   try {
     console.log('🔐 Starting sign in process...');
     console.log('📧 Email:', email);
-    
+
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     console.log('✅ Sign in successful!');
     console.log('👤 User:', userCredential.user.uid);
-    
+
     return userCredential.user;
   } catch (error: any) {
     console.error('❌ Sign in error:', error.code, error.message);
@@ -138,7 +138,7 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
     console.log('📄 Fetching user profile for:', uid);
     const docRef = doc(db, 'users', uid);
     const docSnap = await getDoc(docRef);
-    
+
     if (docSnap.exists()) {
       console.log('✅ User profile found');
       return docSnap.data() as UserProfile;
