@@ -16,9 +16,11 @@ export const Colors = {
     
     // UI Elements
     border: '#FFD4C4',
-    error: '#F56565',
-    success: '#48BB78',
-    warning: '#FF9A76',
+    
+    // Status & Feedback Colors
+    error: '#ef4444',    // Critical/Error (Updated)
+    success: '#22c55e',  // Success/Normal (Updated)
+    warning: '#f59e0b',  // Warning/Alert (Updated)
     
     // Input Fields
     inputBackground: '#FFFFFF',

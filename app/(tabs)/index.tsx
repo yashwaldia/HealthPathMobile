@@ -37,47 +37,52 @@ export default function HomeScreen() {
     else setGreeting('Good Evening');
   }, []);
 
-  // Action button data with professional Ionicons
+  // Action button data with professional Ionicons - ALL features from website sidebar
   const actionButtons = [
-    { id: 1, icon: 'restaurant-outline', label: 'Scan Meal', route: 'scan-meal' },
-    { id: 2, icon: 'medical-outline', label: 'Log Meds', route: 'medications' },
-    { id: 3, icon: 'heart-outline', label: 'Symptoms', route: 'symptoms' },
-    { id: 4, icon: 'fitness-outline', label: 'Vitals', route: 'vitals' },
-    { id: 5, icon: 'flask-outline', label: 'Lab Tests', route: 'fithology' },
-    { id: 6, icon: 'scan-outline', label: 'Radiology', route: 'radiology' },
-    { id: 7, icon: 'bar-chart-outline', label: 'Reports', route: 'reports' },
-    { id: 8, icon: 'shield-checkmark-outline', label: 'Screening', route: 'screening' },
-    { id: 9, icon: 'pulse-outline', label: 'Biohacking', route: 'biohacking' },
-    { id: 10, icon: 'people-outline', label: 'Child Health', route: 'child-health' },
-    { id: 11, icon: 'settings-outline', label: 'Settings', route: 'settings' },
-    { id: 12, icon: 'apps-outline', label: 'More', route: 'more' },
+    { id: 1, icon: 'fitness-outline', label: 'Vitals', route: '/(tabs)/vitals' },
+    { id: 2, icon: 'cloud-upload-outline', label: 'Upload', route: 'smart-upload' },
+    { id: 3, icon: 'heart-outline', label: 'Symptoms', route: 'symptom-selector' },
+    { id: 4, icon: 'flask-outline', label: 'Lab Tests', route: 'interpreter' },
+    { id: 5, icon: 'bar-chart-outline', label: 'Reports', route: 'dashboard' },
+    { id: 6, icon: 'scan-outline', label: 'Radiology', route: 'radiology-analyzer' },
+    { id: 7, icon: 'sparkles-outline', label: 'AI Report', route: 'ai-report' },
+    { id: 8, icon: 'pulse-outline', label: 'Biohacking', route: 'biohacking' },
+    { id: 9, icon: 'restaurant-outline', label: 'Nutrition', route: 'nutrition-tracker' },
+    { id: 10, icon: 'medical-outline', label: 'Medication', route: 'medication-tracker' },
+    { id: 11, icon: 'shield-checkmark-outline', label: 'Screening', route: 'screening-tracker' },
+    { id: 12, icon: 'people-outline', label: 'Child Health', route: 'child-health' },
+    { id: 13, icon: 'time-outline', label: 'History', route: 'historical' },
+    { id: 14, icon: 'barbell-outline', label: 'FitCalc', route: 'fitcalc' },
+    { id: 15, icon: 'nutrition-outline', label: 'MacroMaster', route: 'macromaster' },
+    { id: 16, icon: 'book-outline', label: 'Directory', route: 'directory' },
+    { id: 17, icon: 'body-outline', label: 'Radiology Dir', route: 'radiology-directory' },
+    { id: 18, icon: 'school-outline', label: 'Learning', route: 'learning' },
+    { id: 19, icon: 'settings-outline', label: 'Settings', route: 'settings' },
   ];
 
   const handleActionPress = (label: string, route: string) => {
     console.log('Action pressed:', label);
-    Alert.alert('Coming Soon', `${label} feature will be available soon!`);
-    // Later: router.push(route);
+    
+    // Navigate to the Vitals screen if the route matches
+    if (route === '/(tabs)/vitals') {
+      router.push(route);
+    } else {
+      Alert.alert('Coming Soon', `${label} feature will be available soon!`);
+    }
   };
 
   const handleProfilePress = () => {
     Alert.alert('Profile', 'Profile feature coming soon!');
-    // Later: router.push('/(tabs)/more'); // Navigate to More tab for now
+    // Later: router.push('/(tabs)/profile');
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+    <SafeAreaView style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header Section */}
         <View style={styles.header}>
           <Text style={styles.appName}>HealthPath</Text>
-          <TouchableOpacity 
-            style={styles.profileButton}
-            onPress={handleProfilePress}
-          >
+          <TouchableOpacity onPress={handleProfilePress} style={styles.profileButton}>
             <View style={styles.profilePlaceholder}>
               <Text style={styles.profileInitial}>
                 {(user?.displayName?.[0] || 'U').toUpperCase()}
@@ -85,7 +90,7 @@ export default function HomeScreen() {
             </View>
           </TouchableOpacity>
         </View>
-        
+
         {/* Greeting Section */}
         <View style={styles.greetingContainer}>
           <Text style={styles.greeting}>
@@ -97,7 +102,7 @@ export default function HomeScreen() {
         <View style={styles.statsContainer}>
           {/* Calories Card */}
           <View style={styles.statCard}>
-            <Ionicons name="flame-outline" size={20} color={Colors.light.primary} style={styles.statIcon} />
+            <Ionicons name="flame-outline" size={24} color={Colors.light.primary} style={styles.statIcon} />
             <Text style={styles.statLabel}>Calories</Text>
             <Text style={styles.statValue}>{HEALTH_STATS.calories.current}</Text>
             <Text style={styles.statGoal}>/{HEALTH_STATS.calories.goal}</Text>
@@ -105,7 +110,7 @@ export default function HomeScreen() {
 
           {/* Steps Card */}
           <View style={styles.statCard}>
-            <Ionicons name="footsteps-outline" size={20} color={Colors.light.primary} style={styles.statIcon} />
+            <Ionicons name="footsteps-outline" size={24} color={Colors.light.primary} style={styles.statIcon} />
             <Text style={styles.statLabel}>Steps</Text>
             <Text style={styles.statValue}>{(HEALTH_STATS.steps.current / 1000).toFixed(1)}k</Text>
             <Text style={styles.statGoal}>/{(HEALTH_STATS.steps.goal / 1000).toFixed(0)}k</Text>
@@ -113,7 +118,7 @@ export default function HomeScreen() {
 
           {/* Heart Rate Card */}
           <View style={styles.statCard}>
-            <Ionicons name="heart-outline" size={20} color={Colors.light.primary} style={styles.statIcon} />
+            <Ionicons name="heart-outline" size={24} color={Colors.light.primary} style={styles.statIcon} />
             <Text style={styles.statLabel}>HR</Text>
             <Text style={styles.statValue}>{HEALTH_STATS.heartRate.current}</Text>
             <Text style={styles.statUnit}>bpm</Text>
@@ -121,14 +126,14 @@ export default function HomeScreen() {
 
           {/* Sleep Card */}
           <View style={styles.statCard}>
-            <Ionicons name="moon-outline" size={20} color={Colors.light.primary} style={styles.statIcon} />
+            <Ionicons name="moon-outline" size={24} color={Colors.light.primary} style={styles.statIcon} />
             <Text style={styles.statLabel}>Sleep</Text>
             <Text style={styles.statValue}>{HEALTH_STATS.sleep.hours}h</Text>
             <Text style={styles.statUnit}>{HEALTH_STATS.sleep.minutes}m</Text>
           </View>
         </View>
 
-        {/* Action Buttons Grid - 4x3 Layout */}
+        {/* Action Buttons Grid - 4x5 Layout (19 items) */}
         <View style={styles.actionsContainer}>
           {actionButtons.map((button) => (
             <TouchableOpacity
@@ -138,15 +143,9 @@ export default function HomeScreen() {
               activeOpacity={0.7}
             >
               <View style={styles.iconContainer}>
-                <Ionicons 
-                  name={button.icon as any} 
-                  size={28} 
-                  color={Colors.light.primary} 
-                />
+                <Ionicons name={button.icon as any} size={24} color={Colors.light.primary} />
               </View>
-              <Text style={styles.actionLabel} numberOfLines={1} ellipsizeMode="tail">
-                {button.label}
-              </Text>
+              <Text style={styles.actionLabel}>{button.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -175,8 +174,9 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   appName: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
+    marginTop: 10,
     color: Colors.light.text,
   },
   greetingContainer: {
@@ -186,6 +186,7 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 26,
     fontWeight: '700',
+    marginTop: 5,
     color: Colors.light.text,
   },
   profileButton: {
@@ -206,11 +207,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
+
   // Stats Container - 1x4 Layout
   statsContainer: {
-    flexDirection: 'row', 
+    flexDirection: 'row',
     paddingHorizontal: 16,
-    marginTop: 8,
+    marginTop: 10,
     gap: 8,
   },
   statCard: {
@@ -231,30 +233,31 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 10, 
+    fontSize: 10,
     color: Colors.light.textSecondary,
     marginBottom: 4,
     fontWeight: '600',
   },
   statValue: {
-    fontSize: 18, 
+    fontSize: 18,
     fontWeight: '700',
     color: Colors.light.text,
     textAlign: 'center',
     lineHeight: 20,
   },
   statGoal: {
-    fontSize: 10, 
+    fontSize: 10,
     color: Colors.light.textLight,
     fontWeight: '600',
     marginTop: 2,
   },
   statUnit: {
-    fontSize: 10, 
+    fontSize: 10,
     color: Colors.light.textSecondary,
     fontWeight: '600',
     marginTop: 2,
   },
+
   // Action Grid - 4 columns layout
   actionsContainer: {
     flexDirection: 'row',
