@@ -11,8 +11,9 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to health monitoring devices.",
-        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to health monitoring devices."
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload medical documents.",
+        "NSCameraUsageDescription": "This app needs access to your camera to capture medical documents.",
+        "NSPhotoLibraryAddUsageDescription": "This app needs access to save processed medical documents."
       }
     },
     "android": {
@@ -25,18 +26,9 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.BLUETOOTH",
-        "android.permission.BLUETOOTH_ADMIN",
-        "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.BLUETOOTH_SCAN",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.BLUETOOTH",
-        "android.permission.BLUETOOTH_ADMIN",
-        "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.BLUETOOTH_SCAN",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA"
       ],
       "package": "com.ab1224.HealthPathMobile"
     },
@@ -59,14 +51,10 @@
         }
       ],
       [
-        "react-native-ble-plx",
+        "expo-image-picker",
         {
-          "isBackgroundEnabled": true,
-          "modes": [
-            "peripheral",
-            "central"
-          ],
-          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to bluetooth devices to sync health data."
+          "photosPermission": "The app needs access to your photos to upload medical documents.",
+          "cameraPermission": "The app needs access to your camera to capture medical documents."
         }
       ]
     ],

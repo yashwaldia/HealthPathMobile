@@ -33,10 +33,10 @@ export interface VitalRecord {
   
   // Metadata
   notes?: string;
-  source?: 'manual' | 'device' | 'imported';
+  source?: 'manual' | 'imported'; // Removed 'device'
 }
 
-export type VitalType = 
+export type VitalType =
   | 'bloodPressure'
   | 'bloodSugar'
   | 'heartRate'
