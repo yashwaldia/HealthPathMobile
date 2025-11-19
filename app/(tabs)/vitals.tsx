@@ -493,13 +493,6 @@ export default function VitalsScreen() {
               }
             ]}
           >
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => Alert.alert('Coming Soon', 'View history feature will be available soon!')}
-            >
-              <Ionicons name="time-outline" size={20} color={Colors.light.primary} />
-              <Text style={styles.actionText}>View History</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.actionButton}

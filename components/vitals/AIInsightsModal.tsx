@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { VitalRecord } from '../../types/vitals';
 import { getHealthRecommendations } from '../../services/aiService';
+
 
 interface AIInsightsModalProps {
   visible: boolean;
@@ -20,14 +20,17 @@ interface AIInsightsModalProps {
   latestVitals: Partial<VitalRecord>;
 }
 
+
 // Helper function to parse markdown-like text to React Native components
 const parseMarkdownText = (text: string) => {
   const parts: any[] = [];
   let lastIndex = 0;
 
+
   // Regex to find **bold** and numbered lists
   const boldRegex = /\*\*(.*?)\*\*/g;
   let match;
+
 
   while ((match = boldRegex.exec(text)) !== null) {
     // Add text before bold
@@ -45,6 +48,7 @@ const parseMarkdownText = (text: string) => {
     lastIndex = match.index + match[0].length;
   }
 
+
   // Add remaining text
   if (lastIndex < text.length) {
     parts.push({
@@ -53,12 +57,15 @@ const parseMarkdownText = (text: string) => {
     });
   }
 
+
   return parts;
 };
+
 
 // Component to render parsed text with bold styling
 const FormattedText = ({ text, style }: { text: string; style: any }) => {
   const parts = parseMarkdownText(text);
+
 
   return (
     <Text style={style}>
@@ -74,6 +81,7 @@ const FormattedText = ({ text, style }: { text: string; style: any }) => {
   );
 };
 
+
 export default function AIInsightsModal({
   visible,
   onClose,
@@ -82,34 +90,14 @@ export default function AIInsightsModal({
   const [loading, setLoading] = useState(false);
   const [insights, setInsights] = useState<string>('');
 
-  // --- ANIMATION VALUES ---
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
 
   useEffect(() => {
     if (visible) {
-      // Reset animations
-      fadeAnim.setValue(0);
-      slideAnim.setValue(50);
-
-      // Start animations
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
       // Load insights
       loadInsights();
     }
   }, [visible]);
+
 
   const loadInsights = async () => {
     setLoading(true);
@@ -125,9 +113,11 @@ export default function AIInsightsModal({
     }
   };
 
+
   const hasData = Object.keys(latestVitals).some(
     key => key !== 'id' && key !== 'userId' && key !== 'date' && key !== 'source' && latestVitals[key as keyof VitalRecord]
   );
+
 
   return (
     <Modal
@@ -137,15 +127,7 @@ export default function AIInsightsModal({
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
-        <Animated.View 
-          style={[
-            styles.modalContent,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }
-          ]}
-        >
+        <View style={styles.modalContent}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
@@ -156,6 +138,7 @@ export default function AIInsightsModal({
               <Ionicons name="close" size={24} color={Colors.light.text} />
             </TouchableOpacity>
           </View>
+
 
           {/* Content */}
           {!hasData ? (
@@ -175,6 +158,7 @@ export default function AIInsightsModal({
                 <FormattedText text={insights} style={styles.insightText} />
               </View>
 
+
               <View style={styles.tipsSection}>
                 <Text style={styles.tipsTitle}>💡 Quick Health Tips</Text>
                 <View style={styles.tipItem}>
@@ -193,15 +177,17 @@ export default function AIInsightsModal({
             </ScrollView>
           )}
 
+
           {/* Footer Button */}
           <TouchableOpacity style={styles.button} onPress={onClose}>
             <Text style={styles.buttonText}>Close</Text>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
       </View>
     </Modal>
   );
 }
+
 
 const styles = StyleSheet.create({
   modalOverlay: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -16,11 +15,13 @@ import { vitalsService } from '../../services/vitalsService';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
+
 interface ExportDataModalProps {
   visible: boolean;
   onClose: () => void;
   userId?: string;
 }
+
 
 export default function ExportDataModal({
   visible,
@@ -29,32 +30,6 @@ export default function ExportDataModal({
 }: ExportDataModalProps) {
   const [loading, setLoading] = useState(false);
 
-  // --- ANIMATION VALUES ---
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-
-  // Trigger animation when modal opens
-  useEffect(() => {
-    if (visible) {
-      // Reset animations
-      fadeAnim.setValue(0);
-      slideAnim.setValue(50);
-
-      // Start animations
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [visible]);
 
   const exportAsCSV = async () => {
     if (!userId) {
@@ -62,15 +37,18 @@ export default function ExportDataModal({
       return;
     }
 
+
     setLoading(true);
     try {
       const vitalsHistory = await vitalsService.getVitalsHistory(userId, 100);
+
 
       if (vitalsHistory.length === 0) {
         Alert.alert('No Data', 'No vitals data available to export.');
         setLoading(false);
         return;
       }
+
 
       const headers = [
         'Date',
@@ -84,6 +62,7 @@ export default function ExportDataModal({
         'Source',
       ];
 
+
       const rows = vitalsHistory.map(vital => [
         new Date(vital.date).toLocaleString(),
         vital.bloodPressureSystolic || '',
@@ -96,17 +75,21 @@ export default function ExportDataModal({
         vital.source || '',
       ]);
 
+
       const csvContent = [
         headers.join(','),
         ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
       ].join('\n');
 
+
       const fileName = `HealthPath_Vitals_${new Date().toISOString().split('T')[0]}.csv`;
       const filePath = `${FileSystem.documentDirectory}${fileName}`;
+
 
       await FileSystem.writeAsStringAsync(filePath, csvContent, {
         encoding: FileSystem.EncodingType.UTF8,
       });
+
 
       Alert.alert(
         'Export Successful',
@@ -140,15 +123,18 @@ export default function ExportDataModal({
     }
   };
 
+
   const exportAsJSON = async () => {
     if (!userId) {
       Alert.alert('Error', 'User not found');
       return;
     }
 
+
     setLoading(true);
     try {
       const vitalsHistory = await vitalsService.getVitalsHistory(userId, 100);
+
 
       if (vitalsHistory.length === 0) {
         Alert.alert('No Data', 'No vitals data available to export.');
@@ -156,18 +142,22 @@ export default function ExportDataModal({
         return;
       }
 
+
       const jsonData = {
         exportDate: new Date().toISOString(),
         totalRecords: vitalsHistory.length,
         vitals: vitalsHistory,
       };
 
+
       const fileName = `HealthPath_Vitals_${new Date().toISOString().split('T')[0]}.json`;
       const filePath = `${FileSystem.documentDirectory}${fileName}`;
+
 
       await FileSystem.writeAsStringAsync(filePath, JSON.stringify(jsonData, null, 2), {
         encoding: FileSystem.EncodingType.UTF8,
       });
+
 
       Alert.alert(
         'Export Successful',
@@ -201,6 +191,7 @@ export default function ExportDataModal({
     }
   };
 
+
   return (
     <Modal
       visible={visible}
@@ -209,15 +200,7 @@ export default function ExportDataModal({
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
-        <Animated.View 
-          style={[
-            styles.modalContent,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }
-          ]}
-        >
+        <View style={styles.modalContent}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
@@ -229,11 +212,13 @@ export default function ExportDataModal({
             </TouchableOpacity>
           </View>
 
+
           {/* Content */}
           <ScrollView style={styles.content}>
             <Text style={styles.description}>
               Export your vitals data in different formats for backup or sharing with your healthcare provider.
             </Text>
+
 
             {/* CSV Option */}
             <TouchableOpacity
@@ -257,6 +242,7 @@ export default function ExportDataModal({
               )}
             </TouchableOpacity>
 
+
             {/* JSON Option */}
             <TouchableOpacity
               style={[styles.exportOption, loading && styles.disabled]}
@@ -279,6 +265,7 @@ export default function ExportDataModal({
               )}
             </TouchableOpacity>
 
+
             {/* Info Section */}
             <View style={styles.infoSection}>
               <View style={styles.infoBullet}>
@@ -296,15 +283,17 @@ export default function ExportDataModal({
             </View>
           </ScrollView>
 
+
           {/* Footer Button */}
           <TouchableOpacity style={styles.button} onPress={onClose} disabled={loading}>
             <Text style={styles.buttonText}>Close</Text>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
       </View>
     </Modal>
   );
 }
+
 
 const styles = StyleSheet.create({
   modalOverlay: {

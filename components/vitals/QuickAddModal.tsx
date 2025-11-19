@@ -10,11 +10,11 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { VitalRecord } from '../../types/vitals';
+
 
 interface QuickAddModalProps {
   visible: boolean;
@@ -22,6 +22,7 @@ interface QuickAddModalProps {
   onSave: (data: Partial<VitalRecord>) => Promise<void>;
   currentVitals?: Partial<VitalRecord>;
 }
+
 
 export default function QuickAddModal({ 
   visible, 
@@ -41,13 +42,11 @@ export default function QuickAddModal({
     notes: '',
   });
 
-  // --- ANIMATION VALUES ---
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
 
   // Track if we've already initialized for this modal session
   const modalSessionId = useRef(0);
   const initializedSessionId = useRef(-1);
+
 
   // Create a stable reference to currentVitals to prevent unnecessary re-renders
   const stableCurrentVitals = useMemo(() => currentVitals, [
@@ -61,26 +60,10 @@ export default function QuickAddModal({
     currentVitals?.notes,
   ]);
 
-  // Initialize form data and trigger animation when modal opens
+
+  // Initialize form data when modal opens
   useEffect(() => {
     if (visible) {
-      // Reset and start animations
-      fadeAnim.setValue(0);
-      slideAnim.setValue(50);
-
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
       // Increment session ID when modal opens
       if (initializedSessionId.current !== modalSessionId.current) {
         modalSessionId.current += 1;
@@ -103,7 +86,8 @@ export default function QuickAddModal({
       // Reset session tracking when modal closes
       initializedSessionId.current = -1;
     }
-  }, [visible]);
+  }, [visible, stableCurrentVitals]);
+
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -112,12 +96,14 @@ export default function QuickAddModal({
     }));
   };
 
+
   const validateForm = () => {
     const hasValue = Object.values(formData).some(val => val.trim() !== '');
     if (!hasValue) {
       Alert.alert('Error', 'Please enter at least one vital sign.');
       return false;
     }
+
 
     const numericFields = [
       'bloodPressureSystolic',
@@ -129,6 +115,7 @@ export default function QuickAddModal({
       'weightKg',
     ];
 
+
     for (const field of numericFields) {
       const value = formData[field as keyof typeof formData];
       if (value && isNaN(Number(value))) {
@@ -137,15 +124,19 @@ export default function QuickAddModal({
       }
     }
 
+
     return true;
   };
+
 
   const handleSave = async () => {
     if (!validateForm()) return;
 
+
     setLoading(true);
     try {
       const dataToSave: Partial<VitalRecord> = {};
+
 
       if (formData.bloodPressureSystolic) {
         dataToSave.bloodPressureSystolic = Number(formData.bloodPressureSystolic);
@@ -172,7 +163,9 @@ export default function QuickAddModal({
         dataToSave.notes = formData.notes;
       }
 
+
       await onSave(dataToSave);
+
 
       // Reset form
       setFormData({
@@ -192,6 +185,7 @@ export default function QuickAddModal({
     }
   };
 
+
   return (
     <Modal
       visible={visible}
@@ -204,15 +198,7 @@ export default function QuickAddModal({
         style={styles.modalOverlay}
       >
         <View style={styles.modalOverlay}>
-          <Animated.View 
-            style={[
-              styles.modalContent,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              }
-            ]}
-          >
+          <View style={styles.modalContent}>
             {/* Header */}
             <View style={styles.header}>
               <Text style={styles.headerTitle}>Add Vital Reading</Text>
@@ -220,6 +206,7 @@ export default function QuickAddModal({
                 <Ionicons name="close" size={24} color={Colors.light.text} />
               </TouchableOpacity>
             </View>
+
 
             {/* Form */}
             <ScrollView 
@@ -261,6 +248,7 @@ export default function QuickAddModal({
                 </View>
               </View>
 
+
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Heart Rate</Text>
                 <View style={styles.inputWrapper}>
@@ -276,6 +264,7 @@ export default function QuickAddModal({
                   <Text style={styles.unit}>bpm</Text>
                 </View>
               </View>
+
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Temperature</Text>
@@ -293,6 +282,7 @@ export default function QuickAddModal({
                 </View>
               </View>
 
+
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Oxygen Saturation</Text>
                 <View style={styles.inputWrapper}>
@@ -308,6 +298,7 @@ export default function QuickAddModal({
                   <Text style={styles.unit}>%</Text>
                 </View>
               </View>
+
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Blood Sugar (Fasting)</Text>
@@ -325,6 +316,7 @@ export default function QuickAddModal({
                 </View>
               </View>
 
+
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Weight</Text>
                 <View style={styles.inputWrapper}>
@@ -341,6 +333,7 @@ export default function QuickAddModal({
                 </View>
               </View>
 
+
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Notes (Optional)</Text>
                 <TextInput
@@ -355,6 +348,7 @@ export default function QuickAddModal({
                 />
               </View>
             </ScrollView>
+
 
             {/* Buttons */}
             <View style={styles.buttonGroup}>
@@ -375,12 +369,13 @@ export default function QuickAddModal({
                 </Text>
               </TouchableOpacity>
             </View>
-          </Animated.View>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
   );
 }
+
 
 const styles = StyleSheet.create({
   modalOverlay: {

@@ -107,7 +107,7 @@ export const signInWithEmail = async (
   }
 };
 
-// Sign Out
+// Sign Out (Changed from 'logout' to 'logOut' for consistency)
 export const logOut = async (): Promise<void> => {
   try {
     console.log('🔐 Signing out...');
@@ -150,3 +150,14 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
     throw new Error('Failed to load user profile.');
   }
 };
+
+// Default export object for easier imports
+export const authService = {
+  signUpWithEmail,
+  signInWithEmail,
+  logOut,  // Changed from 'logout' to 'logOut'
+  resetPassword,
+  getUserProfile,
+};
+
+export default authService;

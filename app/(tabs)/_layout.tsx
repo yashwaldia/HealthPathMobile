@@ -18,8 +18,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => 
       style={[
         styles.tabBarContainer,
         {
-          height: 85 + (insets.bottom > 0 ? insets.bottom : 8),
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+          paddingBottom: insets.bottom,  // ✅ ONLY USE SAFE AREA PADDING
         },
       ]}
     >
@@ -53,10 +52,10 @@ const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => 
         onPress={() => navigation.navigate('vitals')}
       />
       <TabButton
-        iconName="compass"
-        label="Explore"
+        iconName="person-circle"
+        label="Profile"
         isFocused={state.index === 3}
-        onPress={() => navigation.navigate('explore')}
+        onPress={() => navigation.navigate('profile')}
       />
     </View>
   );
@@ -91,7 +90,8 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" />
       <Tabs.Screen name="track" />
       <Tabs.Screen name="vitals" />
-      <Tabs.Screen name="explore" />
+      <Tabs.Screen name="profile" />
+      <Tabs.Screen name="learning" />
     </Tabs>
   );
 }
@@ -103,6 +103,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
     paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingVertical: 1,  // ✅ FIXED: CONSISTENT PADDING
     alignItems: 'center',
     justifyContent: 'space-around',
   },
@@ -110,22 +112,21 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 2,
   },
   tabLabel: {
     fontSize: 11,
     fontWeight: '600',
-    marginTop: 9,
+    marginTop: 4,
   },
   centerButtonContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -30,
+    marginTop: -35,
   },
   centerButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 34,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: Colors.light.primary,
     justifyContent: 'center',
     alignItems: 'center',
@@ -141,6 +142,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: Colors.light.primary,
-    marginTop: 6,
+    marginTop: 4,
   },
 });
