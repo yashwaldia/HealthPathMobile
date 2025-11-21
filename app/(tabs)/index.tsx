@@ -1,3 +1,5 @@
+// app/(tabs)/index.tsx
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -88,6 +90,10 @@ export default function HomeScreen() {
     } else if (route === 'learning') {
       // @ts-ignore - Route will exist after creating the folder
       router.push('/(tabs)/learning');
+    } else if (route === 'smart-upload') {
+      // ✅ NEW: Smart Upload navigation
+      // @ts-ignore
+      router.push('/smart-upload');
     } else {
       Alert.alert('Coming Soon', `${label} feature will be available soon!`);
     }
@@ -198,7 +204,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100, // ✅ Increased from 16 to 100 to clear bottom tab bar
+    paddingBottom: 100,
   },
   header: {
     flexDirection: 'row',
