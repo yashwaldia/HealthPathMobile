@@ -1,5 +1,7 @@
+// services/aiService.ts
+
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import Constants from 'expo-constants';
 
 // Initialize Gemini AI
@@ -22,6 +24,20 @@ export interface ExtractedVitals {
   heightCm?: number;
   bmi?: number;
   notes?: string;
+}
+
+// NEW: Extracted Medication Interface
+export interface ExtractedMedication {
+  name: string;
+  strength?: string;
+  dosageForm?: string;
+  frequency?: string;
+  duration?: string;
+  mealRelation?: string;
+  instructions?: string;
+  prescribedBy?: string;
+  startDate?: string;
+  confidence?: number;
 }
 
 /**
@@ -109,7 +125,7 @@ Return ONLY a valid JSON object with extracted vital signs. Example:
   "bloodPressureSystolic": 120,
   "bloodPressureDiastolic": 80,
   "heartRate": 72,
-  "temperature": 37.0 in celcius,
+  "temperature": 37.0,
   "oxygenSaturation": 98,
   "weightKg": 70.5
 }
@@ -184,6 +200,127 @@ IMPORTANT RULES:
     }
     
     throw new Error(error?.message || 'Failed to analyze document. Please try again.');
+  }
+}
+
+/**
+ * NEW: Extract medications from prescription image/PDF
+ */
+export async function extractMedicationsFromDocument(
+  uri: string,
+  type: 'image' | 'pdf'
+): Promise<ExtractedMedication[]> {
+  try {
+    console.log('💊 Starting medication extraction...');
+    console.log('📄 File URI:', uri);
+    console.log('📋 File type:', type);
+    
+    // Convert file to base64
+    const base64Data = await fileToBase64(uri);
+    const mimeType = getMimeType(uri, type);
+    console.log('🎯 MIME type:', mimeType);
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+    const prompt = `You are a medical prescription extraction AI. Analyze this prescription document and extract ALL medications with their details.
+
+INFORMATION TO EXTRACT (for each medication):
+- Medication name (generic or brand)
+- Strength/dosage (e.g., "500mg", "10mg/5ml")
+- Dosage form (Tablet, Capsule, Syrup, Injection, Cream, etc.)
+- Frequency (e.g., "Twice a day", "Once daily", "Every 8 hours")
+- Duration (e.g., "7 days", "2 weeks", "1 month")
+- Meal relation (Before meals, After meals, With meals, Empty stomach, Any time)
+- Special instructions
+- Doctor's name (if visible)
+- Prescription date (if visible)
+
+RESPONSE FORMAT:
+Return ONLY a valid JSON array of medications. Example:
+[
+  {
+    "name": "Paracetamol",
+    "strength": "500mg",
+    "dosageForm": "Tablet",
+    "frequency": "Twice a day",
+    "duration": "7 days",
+    "mealRelation": "After meals",
+    "instructions": "Take with plenty of water",
+    "prescribedBy": "Dr. John Smith",
+    "startDate": "2025-11-22",
+    "confidence": 0.95
+  },
+  {
+    "name": "Amoxicillin",
+    "strength": "250mg",
+    "dosageForm": "Capsule",
+    "frequency": "Thrice a day",
+    "duration": "5 days",
+    "mealRelation": "Before meals",
+    "prescribedBy": "Dr. John Smith",
+    "startDate": "2025-11-22",
+    "confidence": 0.92
+  }
+]
+
+IMPORTANT RULES:
+1. Return [] if NO medications found
+2. Include all medications listed in the prescription
+3. confidence score between 0.0 and 1.0 based on clarity
+4. startDate in YYYY-MM-DD format (use prescription date or today if not visible)
+5. Only include fields with actual values
+6. NO markdown, NO explanations, ONLY valid JSON array`;
+
+    const imagePart = {
+      inlineData: {
+        data: base64Data,
+        mimeType: mimeType,
+      },
+    };
+
+    console.log('🤖 Calling Gemini AI for medication extraction...');
+    const result = await model.generateContent([prompt, imagePart]);
+    const response = await result.response;
+    const text = response.text();
+    
+    console.log('📝 AI Response:', text);
+
+    // Clean up the response
+    let cleanedText = text.trim();
+    cleanedText = cleanedText.replace(/```json\n?/g, '');
+    cleanedText = cleanedText.replace(/```\n?/g, '');
+    cleanedText = cleanedText.trim();
+
+    console.log('🧹 Cleaned response:', cleanedText);
+
+    // Parse JSON response
+    const extractedMedications: ExtractedMedication[] = JSON.parse(cleanedText);
+
+    // Validate extracted data
+    if (!Array.isArray(extractedMedications) || extractedMedications.length === 0) {
+      console.log('⚠️ No medications extracted from document');
+      return [];
+    }
+
+    console.log(`✅ Extracted ${extractedMedications.length} medications:`, extractedMedications);
+    return extractedMedications;
+
+  } catch (error: any) {
+    console.error('❌ Error extracting medications from document:', error);
+    console.error('Error details:', error?.message, error?.stack);
+    
+    if (error instanceof SyntaxError) {
+      console.warn('⚠️ Failed to parse medication data, returning empty array');
+      return [];
+    }
+    
+    if (error?.message?.includes('API key')) {
+      throw new Error('AI service configuration error. Please check your API key.');
+    }
+    
+    // Return empty array instead of throwing for medication extraction
+    console.warn('⚠️ Medication extraction failed, returning empty array');
+    return [];
   }
 }
 

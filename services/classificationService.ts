@@ -2,11 +2,151 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ClassificationResult, DocumentCategory } from '../types/upload';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import { extractMedicationsFromDocument, ExtractedMedication } from './aiService';
+import { addMedication } from './medicationService';
 
 // Initialize Gemini AI (use your existing API key from aiService.ts)
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || 'YOUR_API_KEY_HERE';
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+/**
+ * Helper function to parse duration string to number of days
+ */
+const parseDuration = (duration?: string): number | undefined => {
+  if (!duration) return undefined;
+  const match = duration.match(/(\d+)/);
+  return match ? parseInt(match[1]) : undefined;
+};
+
+/**
+ * Map AI frequency string to app's FrequencyType
+ */
+const mapFrequency = (aiFrequency?: string): 'Once a day' | 'Twice a day' | 'Thrice a day' | 'Four times a day' | 'Every 4 hours' | 'Every 6 hours' | 'Every 8 hours' | 'Every 12 hours' | 'As needed' | 'Weekly' | 'Custom' => {
+  if (!aiFrequency) return 'Once a day';
+  const freq = aiFrequency.toLowerCase();
+  
+  if (freq.includes('once') || freq.includes('1 time') || freq === 'daily') return 'Once a day';
+  if (freq.includes('twice') || freq.includes('2 time')) return 'Twice a day';
+  if (freq.includes('thrice') || freq.includes('three') || freq.includes('3 time')) return 'Thrice a day';
+  if (freq.includes('four') || freq.includes('4 time')) return 'Four times a day';
+  if (freq.includes('every 4 hour')) return 'Every 4 hours';
+  if (freq.includes('every 6 hour')) return 'Every 6 hours';
+  if (freq.includes('every 8 hour')) return 'Every 8 hours';
+  if (freq.includes('every 12 hour')) return 'Every 12 hours';
+  if (freq.includes('week')) return 'Weekly';
+  if (freq.includes('as needed') || freq.includes('prn')) return 'As needed';
+  
+  // Default to 'Custom' for unrecognized patterns (including monthly)
+  return 'Custom';
+};
+
+/**
+ * Map AI dosage form string to app's DosageForm
+ */
+const mapDosageForm = (form?: string): 'Tablet' | 'Capsule' | 'Syrup' | 'Injection' | 'Drops' | 'Cream' | 'Ointment' | 'Inhaler' | 'Patch' | 'Suppository' | 'Other' => {
+  if (!form) return 'Tablet';
+  const lower = form.toLowerCase();
+  
+  if (lower.includes('tablet') || lower.includes('tab')) return 'Tablet';
+  if (lower.includes('capsule') || lower.includes('cap')) return 'Capsule';
+  if (lower.includes('syrup') || lower.includes('liquid') || lower.includes('suspension')) return 'Syrup';
+  if (lower.includes('injection') || lower.includes('inj')) return 'Injection';
+  if (lower.includes('drop')) return 'Drops';
+  if (lower.includes('ointment')) return 'Ointment';
+  if (lower.includes('cream') || lower.includes('gel')) return 'Cream';
+  if (lower.includes('inhaler') || lower.includes('puff')) return 'Inhaler';
+  if (lower.includes('patch')) return 'Patch';
+  if (lower.includes('suppository')) return 'Suppository';
+  
+  return 'Other';
+};
+
+/**
+ * Map AI meal relation string to app's MealRelation
+ * FIXED: Changed to match exact type definition (plural forms and "Any time")
+ */
+const mapMealRelation = (relation?: string): 'Before meals' | 'After meals' | 'With meals' | 'Empty stomach' | 'Any time' => {
+  if (!relation) return 'Any time';
+  const lower = relation.toLowerCase();
+  
+  if (lower.includes('before meal') || lower.includes('before food')) return 'Before meals';
+  if (lower.includes('after meal') || lower.includes('after food')) return 'After meals';
+  if (lower.includes('with meal') || lower.includes('with food')) return 'With meals';
+  if (lower.includes('empty stomach')) return 'Empty stomach';
+  
+  return 'Any time';
+};
+
+/**
+ * Helper function to map extracted medication data to Firestore format
+ */
+const mapMedicationForSave = (
+  med: ExtractedMedication,
+  classification: ClassificationResult,
+  fileURL?: string
+) => {
+  const durationDays = parseDuration(med.duration);
+  const startDate = med.startDate || new Date().toISOString().split('T')[0];
+  let endDate: string | undefined;
+
+  if (durationDays) {
+    const start = new Date(startDate);
+    start.setDate(start.getDate() + durationDays);
+    endDate = start.toISOString().split('T')[0];
+  }
+
+  return {
+    name: med.name,
+    strength: med.strength || 'As prescribed',
+    dosageForm: mapDosageForm(med.dosageForm),
+    frequency: mapFrequency(med.frequency),
+    mealRelation: mapMealRelation(med.mealRelation),
+    startDate,
+    durationDays,
+    endDate,
+    prescribedBy: med.prescribedBy || classification.doctorName,
+    instructions: med.instructions,
+    reminderEnabled: false,
+    prescriptionImage: fileURL,
+    isActive: true,
+  };
+};
+
+/**
+ * Save extracted medications to Firestore
+ */
+export const saveMedicationsToFirestore = async (
+  userId: string,
+  medications: ExtractedMedication[],
+  classification: ClassificationResult,
+  fileURL?: string
+): Promise<{ savedCount: number; failedCount: number; errors: string[] }> => {
+  const errors: string[] = [];
+  let savedCount = 0;
+  let failedCount = 0;
+
+  console.log(`💊 Saving ${medications.length} medications to Firestore...`);
+
+  for (const med of medications) {
+    try {
+      const medicationData = mapMedicationForSave(med, classification, fileURL);
+      console.log(`💊 Saving medication: ${med.name}`, medicationData);
+
+      await addMedication(userId, medicationData);
+      savedCount++;
+      console.log(`✅ Successfully saved: ${med.name}`);
+    } catch (error) {
+      failedCount++;
+      const errorMsg = `Failed to save ${med.name}: ${error}`;
+      console.error(`❌ ${errorMsg}`);
+      errors.push(errorMsg);
+    }
+  }
+
+  console.log(`💊 Save complete: ${savedCount} saved, ${failedCount} failed`);
+  return { savedCount, failedCount, errors };
+};
 
 /**
  * Extract text from image using OCR (via Gemini Vision)
@@ -17,7 +157,7 @@ export const extractTextFromImage = async (imageUri: string): Promise<string> =>
 
     // Read image as base64
     const base64 = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: 'base64',
+      encoding: FileSystem.EncodingType.Base64,
     });
 
     const imagePart = {
@@ -39,15 +179,18 @@ export const extractTextFromImage = async (imageUri: string): Promise<string> =>
 };
 
 /**
- * Classify medical document using AI
+ * Classify medical document using AI and always extract medications if any exist
  */
 export const classifyDocument = async (
   fileUri: string,
-  fileName: string
+  fileName: string,
+  userId?: string,
+  fileURL?: string,
+  autoSaveMedications: boolean = false
 ): Promise<ClassificationResult> => {
   try {
     const isPdf = fileName.toLowerCase().endsWith('.pdf');
-    
+
     // For images, extract text first
     let documentText = '';
     if (!isPdf) {
@@ -108,20 +251,53 @@ Rules:
 
     // Ensure confidence is between 0 and 1
     classification.confidence = Math.max(0, Math.min(1, classification.confidence));
-
+    
     // Store extracted text
     classification.extractedText = documentText;
+
+    // Extract medications from any document type
+    try {
+      const fileType = isPdf ? 'pdf' : 'image';
+      const medications = await extractMedicationsFromDocument(fileUri, fileType);
+      (classification as any).extractedMedications = medications;
+
+      if (medications && medications.length > 0) {
+        console.log(`✅ Medications extracted (${medications.length}) from document`);
+
+        // Auto-save medications if requested and userId is provided
+        if (autoSaveMedications && userId) {
+          console.log('💾 Auto-saving medications to Firestore...');
+          const saveResult = await saveMedicationsToFirestore(
+            userId,
+            medications,
+            classification,
+            fileURL
+          );
+          (classification as any).medicationsSaveResult = saveResult;
+
+          if (saveResult.savedCount > 0) {
+            console.log(`✅ Auto-saved ${saveResult.savedCount} medications to Firestore`);
+          }
+          if (saveResult.failedCount > 0) {
+            console.warn(`⚠️ Failed to save ${saveResult.failedCount} medications`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('⚠️ Failed to extract medications:', error);
+      (classification as any).extractedMedications = [];
+    }
 
     return classification;
   } catch (error) {
     console.error('Error classifying document:', error);
-    
     // Return fallback classification
     return {
       category: 'other' as DocumentCategory,
       confidence: 0.5,
       reasoning: 'Failed to classify document automatically',
       extractedText: '',
+      extractedMedications: [],
     };
   }
 };
@@ -255,7 +431,7 @@ Rules:
       keyFindings: [],
       recommendations: [],
       riskLevel: 'low',
-      analyzedAt: new Date(),
+      analyzedAt: new Date()
     };
   }
 };

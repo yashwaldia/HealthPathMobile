@@ -270,7 +270,7 @@ export default function ReportDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.light.primary} />
           <Text style={styles.loadingText}>Loading report...</Text>
@@ -281,7 +281,7 @@ export default function ReportDetailScreen() {
 
   if (!report) {
     return (
-      <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={80} color={Colors.light.error} />
           <Text style={styles.errorTitle}>Report Not Found</Text>

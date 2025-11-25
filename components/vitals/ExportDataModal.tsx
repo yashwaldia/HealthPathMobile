@@ -12,24 +12,32 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { vitalsService } from '../../services/vitalsService';
-import * as FileSystem from 'expo-file-system';
+import { getAllLabReports } from '../../services/labReportService';
+import {
+  generatePDFReport,
+  generateDOCXReport,
+  generateCSVReport as generateReportCSV,
+  shareExportedFile,
+} from '../../services/reportExportService';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-
 
 interface ExportDataModalProps {
   visible: boolean;
   onClose: () => void;
   userId?: string;
+  exportType?: 'vitals' | 'reports'; // NEW: specify what to export
 }
-
 
 export default function ExportDataModal({
   visible,
   onClose,
   userId,
+  exportType = 'vitals', // NEW: default to vitals for backward compatibility
 }: ExportDataModalProps) {
   const [loading, setLoading] = useState(false);
 
+  // ==================== EXISTING VITALS EXPORT FUNCTIONS ====================
 
   const exportAsCSV = async () => {
     if (!userId) {
@@ -37,18 +45,15 @@ export default function ExportDataModal({
       return;
     }
 
-
     setLoading(true);
     try {
       const vitalsHistory = await vitalsService.getVitalsHistory(userId, 100);
-
 
       if (vitalsHistory.length === 0) {
         Alert.alert('No Data', 'No vitals data available to export.');
         setLoading(false);
         return;
       }
-
 
       const headers = [
         'Date',
@@ -62,7 +67,6 @@ export default function ExportDataModal({
         'Source',
       ];
 
-
       const rows = vitalsHistory.map(vital => [
         new Date(vital.date).toLocaleString(),
         vital.bloodPressureSystolic || '',
@@ -75,21 +79,17 @@ export default function ExportDataModal({
         vital.source || '',
       ]);
 
-
       const csvContent = [
         headers.join(','),
         ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
       ].join('\n');
 
-
       const fileName = `HealthPath_Vitals_${new Date().toISOString().split('T')[0]}.csv`;
       const filePath = `${FileSystem.documentDirectory}${fileName}`;
-
 
       await FileSystem.writeAsStringAsync(filePath, csvContent, {
         encoding: FileSystem.EncodingType.UTF8,
       });
-
 
       Alert.alert(
         'Export Successful',
@@ -123,18 +123,15 @@ export default function ExportDataModal({
     }
   };
 
-
   const exportAsJSON = async () => {
     if (!userId) {
       Alert.alert('Error', 'User not found');
       return;
     }
 
-
     setLoading(true);
     try {
       const vitalsHistory = await vitalsService.getVitalsHistory(userId, 100);
-
 
       if (vitalsHistory.length === 0) {
         Alert.alert('No Data', 'No vitals data available to export.');
@@ -142,22 +139,18 @@ export default function ExportDataModal({
         return;
       }
 
-
       const jsonData = {
         exportDate: new Date().toISOString(),
         totalRecords: vitalsHistory.length,
         vitals: vitalsHistory,
       };
 
-
       const fileName = `HealthPath_Vitals_${new Date().toISOString().split('T')[0]}.json`;
       const filePath = `${FileSystem.documentDirectory}${fileName}`;
-
 
       await FileSystem.writeAsStringAsync(filePath, JSON.stringify(jsonData, null, 2), {
         encoding: FileSystem.EncodingType.UTF8,
       });
-
 
       Alert.alert(
         'Export Successful',
@@ -191,6 +184,63 @@ export default function ExportDataModal({
     }
   };
 
+  // ==================== NEW REPORTS EXPORT FUNCTIONS ====================
+
+  const exportReports = async (format: 'pdf' | 'docx' | 'csv') => {
+    if (!userId) {
+      Alert.alert('Error', 'User not found');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const reports = await getAllLabReports(userId);
+      if (reports.length === 0) {
+        Alert.alert('No Data', 'No reports available to export.');
+        setLoading(false);
+        return;
+      }
+
+      let filePath: string;
+      const formatName = format.toUpperCase();
+
+      if (format === 'pdf') {
+        filePath = await generatePDFReport(reports);
+      } else if (format === 'docx') {
+        filePath = await generateDOCXReport(reports);
+      } else {
+        filePath = await generateReportCSV(reports);
+      }
+
+      Alert.alert(
+        'Export Successful',
+        `${reports.length} report(s) exported as ${formatName}. Would you like to share?`,
+        [
+          {
+            text: 'Share',
+            onPress: async () => {
+              try {
+                await shareExportedFile(filePath);
+                onClose();
+              } catch (error) {
+                Alert.alert('Error', 'Failed to share file.');
+              }
+            },
+          },
+          {
+            text: 'Done',
+            onPress: onClose,
+            style: 'cancel',
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error exporting reports:', error);
+      Alert.alert('Error', error.message || 'Failed to export reports.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Modal
@@ -212,59 +262,133 @@ export default function ExportDataModal({
             </TouchableOpacity>
           </View>
 
-
           {/* Content */}
           <ScrollView style={styles.content}>
             <Text style={styles.description}>
-              Export your vitals data in different formats for backup or sharing with your healthcare provider.
+              {exportType === 'vitals'
+                ? 'Export your vitals data in different formats for backup or sharing with your healthcare provider.'
+                : 'Export your medical reports with AI analysis summary in an easy-to-read format.'}
             </Text>
 
+            {/* VITALS EXPORT OPTIONS */}
+            {exportType === 'vitals' && (
+              <>
+                {/* CSV Option */}
+                <TouchableOpacity
+                  style={[styles.exportOption, loading && styles.disabled]}
+                  onPress={exportAsCSV}
+                  disabled={loading}
+                >
+                  <View style={styles.optionIcon}>
+                    <Ionicons name="document-text" size={28} color={Colors.light.primary} />
+                  </View>
+                  <View style={styles.optionContent}>
+                    <Text style={styles.optionTitle}>Export as CSV</Text>
+                    <Text style={styles.optionSubtitle}>
+                      Excel-compatible format, easy to open in spreadsheets
+                    </Text>
+                  </View>
+                  {loading ? (
+                    <ActivityIndicator size="small" color={Colors.light.primary} />
+                  ) : (
+                    <Ionicons name="chevron-forward" size={24} color={Colors.light.textSecondary} />
+                  )}
+                </TouchableOpacity>
 
-            {/* CSV Option */}
-            <TouchableOpacity
-              style={[styles.exportOption, loading && styles.disabled]}
-              onPress={exportAsCSV}
-              disabled={loading}
-            >
-              <View style={styles.optionIcon}>
-                <Ionicons name="document-text" size={28} color={Colors.light.primary} />
-              </View>
-              <View style={styles.optionContent}>
-                <Text style={styles.optionTitle}>Export as CSV</Text>
-                <Text style={styles.optionSubtitle}>
-                  Excel-compatible format, easy to open in spreadsheets
-                </Text>
-              </View>
-              {loading ? (
-                <ActivityIndicator size="small" color={Colors.light.primary} />
-              ) : (
-                <Ionicons name="chevron-forward" size={24} color={Colors.light.textSecondary} />
-              )}
-            </TouchableOpacity>
+                {/* JSON Option */}
+                <TouchableOpacity
+                  style={[styles.exportOption, loading && styles.disabled]}
+                  onPress={exportAsJSON}
+                  disabled={loading}
+                >
+                  <View style={styles.optionIcon}>
+                    <Ionicons name="code-slash" size={28} color={Colors.light.primary} />
+                  </View>
+                  <View style={styles.optionContent}>
+                    <Text style={styles.optionTitle}>Export as JSON</Text>
+                    <Text style={styles.optionSubtitle}>
+                      Standard data format, preserves all information
+                    </Text>
+                  </View>
+                  {loading ? (
+                    <ActivityIndicator size="small" color={Colors.light.primary} />
+                  ) : (
+                    <Ionicons name="chevron-forward" size={24} color={Colors.light.textSecondary} />
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
 
+            {/* REPORTS EXPORT OPTIONS (NEW) */}
+            {exportType === 'reports' && (
+              <>
+                {/* PDF Option */}
+                <TouchableOpacity
+                  style={[styles.exportOption, loading && styles.disabled]}
+                  onPress={() => exportReports('pdf')}
+                  disabled={loading}
+                >
+                  <View style={styles.optionIcon}>
+                    <Ionicons name="document-text" size={28} color={Colors.light.primary} />
+                  </View>
+                  <View style={styles.optionContent}>
+                    <Text style={styles.optionTitle}>Export as PDF</Text>
+                    <Text style={styles.optionSubtitle}>
+                      Beautiful formatted document with AI summary
+                    </Text>
+                  </View>
+                  {loading ? (
+                    <ActivityIndicator size="small" color={Colors.light.primary} />
+                  ) : (
+                    <Ionicons name="chevron-forward" size={24} color={Colors.light.textSecondary} />
+                  )}
+                </TouchableOpacity>
 
-            {/* JSON Option */}
-            <TouchableOpacity
-              style={[styles.exportOption, loading && styles.disabled]}
-              onPress={exportAsJSON}
-              disabled={loading}
-            >
-              <View style={styles.optionIcon}>
-                <Ionicons name="code-slash" size={28} color={Colors.light.primary} />
-              </View>
-              <View style={styles.optionContent}>
-                <Text style={styles.optionTitle}>Export as JSON</Text>
-                <Text style={styles.optionSubtitle}>
-                  Standard data format, preserves all information
-                </Text>
-              </View>
-              {loading ? (
-                <ActivityIndicator size="small" color={Colors.light.primary} />
-              ) : (
-                <Ionicons name="chevron-forward" size={24} color={Colors.light.textSecondary} />
-              )}
-            </TouchableOpacity>
+                {/* DOCX Option */}
+                <TouchableOpacity
+                  style={[styles.exportOption, loading && styles.disabled]}
+                  onPress={() => exportReports('docx')}
+                  disabled={loading}
+                >
+                  <View style={styles.optionIcon}>
+                    <Ionicons name="document" size={28} color={Colors.light.primary} />
+                  </View>
+                  <View style={styles.optionContent}>
+                    <Text style={styles.optionTitle}>Export as Word (DOCX)</Text>
+                    <Text style={styles.optionSubtitle}>
+                      Editable document for easy customization
+                    </Text>
+                  </View>
+                  {loading ? (
+                    <ActivityIndicator size="small" color={Colors.light.primary} />
+                  ) : (
+                    <Ionicons name="chevron-forward" size={24} color={Colors.light.textSecondary} />
+                  )}
+                </TouchableOpacity>
 
+                {/* CSV Option for Reports */}
+                <TouchableOpacity
+                  style={[styles.exportOption, loading && styles.disabled]}
+                  onPress={() => exportReports('csv')}
+                  disabled={loading}
+                >
+                  <View style={styles.optionIcon}>
+                    <Ionicons name="grid" size={28} color={Colors.light.primary} />
+                  </View>
+                  <View style={styles.optionContent}>
+                    <Text style={styles.optionTitle}>Export as CSV</Text>
+                    <Text style={styles.optionSubtitle}>
+                      Spreadsheet format for data analysis
+                    </Text>
+                  </View>
+                  {loading ? (
+                    <ActivityIndicator size="small" color={Colors.light.primary} />
+                  ) : (
+                    <Ionicons name="chevron-forward" size={24} color={Colors.light.textSecondary} />
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
 
             {/* Info Section */}
             <View style={styles.infoSection}>
@@ -274,7 +398,11 @@ export default function ExportDataModal({
               </View>
               <View style={styles.infoBullet}>
                 <Ionicons name="shield-checkmark" size={20} color={Colors.light.primary} />
-                <Text style={styles.infoText}>Last 100 vital records will be included</Text>
+                <Text style={styles.infoText}>
+                  {exportType === 'vitals'
+                    ? 'Last 100 vital records will be included'
+                    : 'All reports with AI analysis included'}
+                </Text>
               </View>
               <View style={styles.infoBullet}>
                 <Ionicons name="share-social" size={20} color={Colors.light.primary} />
@@ -282,7 +410,6 @@ export default function ExportDataModal({
               </View>
             </View>
           </ScrollView>
-
 
           {/* Footer Button */}
           <TouchableOpacity style={styles.button} onPress={onClose} disabled={loading}>
@@ -293,7 +420,6 @@ export default function ExportDataModal({
     </Modal>
   );
 }
-
 
 const styles = StyleSheet.create({
   modalOverlay: {

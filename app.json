@@ -14,7 +14,8 @@
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload medical documents.",
         "NSCameraUsageDescription": "This app needs access to your camera to capture medical documents.",
         "NSPhotoLibraryAddUsageDescription": "This app needs access to save processed medical documents."
-      }
+      },
+      "bundleIdentifier": "com.ab1224.HealthPathMobile"
     },
     "android": {
       "adaptiveIcon": {
@@ -28,7 +29,10 @@
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.USE_EXACT_ALARM"
       ],
       "package": "com.ab1224.HealthPathMobile"
     },
@@ -56,11 +60,29 @@
           "photosPermission": "The app needs access to your photos to upload medical documents.",
           "cameraPermission": "The app needs access to your camera to capture medical documents."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#007AFF",
+          "sounds": [
+            "./assets/sounds/notification.wav"
+          ],
+          "androidMode": "default",
+          "androidCollapsedTitle": "HealthPath Reminder"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "notification": {
+      "icon": "./assets/images/notification-icon.png",
+      "color": "#007AFF",
+      "androidMode": "default",
+      "androidCollapsedTitle": "HealthPath Reminder"
     }
   }
 }

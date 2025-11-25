@@ -1,5 +1,3 @@
-// app/reports.tsx
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -10,14 +8,15 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
-import { useAuth } from '../context/AuthContext';
-import { getAllLabReports } from '../services/labReportService';
-import { LabReport } from '../types/upload';
+import { Colors } from '../../constants/colors';
+import { useAuth } from '../../context/AuthContext';
+import { getAllLabReports, deleteLabReport } from '../../services/labReportService';
+import { LabReport } from '../../types/upload';
 
 export default function ReportsScreen() {
   const router = useRouter();
@@ -39,7 +38,6 @@ export default function ReportsScreen() {
 
   const loadReports = async () => {
     if (!user?.uid) return;
-    
     try {
       setLoading(true);
       const data = await getAllLabReports(user.uid);
@@ -62,7 +60,6 @@ export default function ReportsScreen() {
       setFilteredReports(reports);
       return;
     }
-
     const query = searchQuery.toLowerCase();
     const filtered = reports.filter(report => 
       report.labName.toLowerCase().includes(query) ||
@@ -71,7 +68,6 @@ export default function ReportsScreen() {
       ) ||
       report.tags.some(tag => tag.toLowerCase().includes(query))
     );
-    
     setFilteredReports(filtered);
   };
 
@@ -94,6 +90,27 @@ export default function ReportsScreen() {
     }
   };
 
+  // Delete report with confirmation
+  const handleDeleteReport = async (reportId: string) => {
+    if (!user?.uid) return;
+    Alert.alert(
+      'Delete Report',
+      'Are you sure you want to delete this lab report? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
+            try {
+              await deleteLabReport(user.uid, reportId);
+              await loadReports(); // reload data
+            } catch (error) {
+              Alert.alert('Error', 'Could not delete report. Please try again.');
+            }
+          } 
+        },
+      ]
+    );
+  };
+
   const renderReportCard = ({ item }: { item: LabReport }) => (
     <TouchableOpacity
       style={styles.reportCard}
@@ -105,6 +122,8 @@ export default function ReportsScreen() {
         });
       }}
       activeOpacity={0.7}
+      onLongPress={() => handleDeleteReport(item.reportId)}
+      delayLongPress={500}
     >
       <View style={styles.cardHeader}>
         <View style={styles.cardIcon}>
@@ -187,7 +206,7 @@ export default function ReportsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.light.primary} />
           <Text style={styles.loadingText}>Loading reports...</Text>
@@ -197,7 +216,7 @@ export default function ReportsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>

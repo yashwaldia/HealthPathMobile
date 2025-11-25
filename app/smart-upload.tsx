@@ -15,26 +15,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 
-// Components
 import { UploadButton } from '../components/upload/UploadButton';
 import { FilePreview } from '../components/upload/FilePreview';
 import { UploadProgressBar } from '../components/upload/UploadProgressBar';
 import { ClassificationCard } from '../components/upload/ClassificationCard';
 
-// Services
 import { showFilePickerOptions, PickedFile } from '../services/filePickerService';
 import { uploadFileToStorage } from '../services/uploadService';
 import { classifyDocument, extractLabResults, generateInterpretation } from '../services/classificationService';
-import { saveLabReport } from '../services/labReportService';
+import { saveLabReport, checkDuplicateReport } from '../services/labReportService';
+import { addMedication } from '../services/medicationService';
 
-// Types
 import { UploadProgress, ClassificationResult, UploadedFile } from '../types/upload';
+import { DosageForm, FrequencyType, MealRelation } from '../types/medication';
 
 export default function SmartUploadScreen() {
   const router = useRouter();
   const { user } = useAuth();
 
-  // State
   const [selectedFiles, setSelectedFiles] = useState<PickedFile[]>([]);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress>({
     status: 'idle',
@@ -44,12 +42,9 @@ export default function SmartUploadScreen() {
   const [classification, setClassification] = useState<ClassificationResult | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
-  /**
-   * Handle file selection
-   */
   const handleSelectFiles = async () => {
     try {
-      const files = await showFilePickerOptions(false); // Single file for now
+      const files = await showFilePickerOptions(false);
       if (files.length > 0) {
         setSelectedFiles(files);
         setClassification(null);
@@ -61,25 +56,49 @@ export default function SmartUploadScreen() {
     }
   };
 
-  /**
-   * Remove selected file
-   */
   const handleRemoveFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
     setClassification(null);
     setUploadedFiles([]);
   };
 
-  /**
-   * Upload and analyze file
-   */
   const handleUploadAndAnalyze = async () => {
     if (selectedFiles.length === 0 || !user?.uid) return;
+    const file = selectedFiles[0];
 
     try {
-      const file = selectedFiles[0];
+      setUploadProgress({
+        status: 'uploading',
+        progress: 0,
+        message: 'Checking for duplicate...',
+        currentFile: file.name,
+      });
 
-      // Step 1: Upload to Firebase Storage
+      const isDuplicate = await checkDuplicateReport(user.uid, file.name);
+      if (isDuplicate) {
+        setUploadProgress({
+          status: 'idle',
+          progress: 0,
+          message: '',
+        });
+        Alert.alert(
+          'Duplicate File',
+          'A report with this file name has already been uploaded. Please upload a different file.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+    } catch (error) {
+      setUploadProgress({
+        status: 'idle',
+        progress: 0,
+        message: '',
+      });
+      Alert.alert('Error', 'Could not verify if file is duplicate. Try again.');
+      return;
+    }
+
+    try {
       setUploadProgress({
         status: 'uploading',
         progress: 0,
@@ -92,12 +111,18 @@ export default function SmartUploadScreen() {
         file.name,
         user.uid,
         'lab_reports',
-        setUploadProgress
+        (prog) => {
+          setUploadProgress({
+            status: 'uploading',
+            progress: Math.min(50, Math.round((prog.progress / 100) * 50)),
+            message: prog.message ?? 'Uploading file...',
+            currentFile: file.name,
+          });
+        }
       );
 
       setUploadedFiles([uploadedFile]);
 
-      // Step 2: AI Classification
       setUploadProgress({
         status: 'analyzing',
         progress: 50,
@@ -106,13 +131,13 @@ export default function SmartUploadScreen() {
       });
 
       const classificationResult = await classifyDocument(file.uri, file.name);
+      console.log('📊 Classification result:', JSON.stringify(classificationResult, null, 2));
       setClassification(classificationResult);
 
-      // Step 3: Complete
       setUploadProgress({
         status: 'complete',
-        progress: 100,
-        message: 'Analysis complete!',
+        progress: 90,
+        message: 'Ready to save!',
       });
 
     } catch (error) {
@@ -126,11 +151,71 @@ export default function SmartUploadScreen() {
     }
   };
 
-  /**
-   * Confirm and save to Firestore
-   */
+  const mapFrequency = (aiFrequency?: string): FrequencyType => {
+    if (!aiFrequency) return 'Once a day';
+    const freq = aiFrequency.toLowerCase();
+    if (freq.includes('once') || freq.includes('1 time')) return 'Once a day';
+    if (freq.includes('twice') || freq.includes('2 time')) return 'Twice a day';
+    if (freq.includes('thrice') || freq.includes('three') || freq.includes('3 time')) return 'Thrice a day';
+    if (freq.includes('four') || freq.includes('4 time')) return 'Four times a day';
+    if (freq.includes('every 4 hour')) return 'Every 4 hours';
+    if (freq.includes('every 6 hour')) return 'Every 6 hours';
+    if (freq.includes('every 8 hour')) return 'Every 8 hours';
+    if (freq.includes('every 12 hour')) return 'Every 12 hours';
+    if (freq.includes('needed') || freq.includes('sos')) return 'As needed';
+    if (freq.includes('week')) return 'Weekly';
+    return 'Once a day';
+  };
+
+  const mapDosageForm = (aiForm?: string): DosageForm => {
+    if (!aiForm) return 'Tablet';
+    const form = aiForm.toLowerCase();
+    if (form.includes('tablet')) return 'Tablet';
+    if (form.includes('capsule') || form.includes('cap')) return 'Capsule';
+    if (form.includes('syrup') || form.includes('liquid')) return 'Syrup';
+    if (form.includes('injection') || form.includes('inject')) return 'Injection';
+    if (form.includes('cream')) return 'Cream';
+    if (form.includes('ointment')) return 'Ointment';
+    if (form.includes('drop')) return 'Drops';
+    if (form.includes('inhaler')) return 'Inhaler';
+    if (form.includes('patch')) return 'Patch';
+    return 'Other';
+  };
+
+  const mapMealRelation = (aiRelation?: string): MealRelation => {
+    if (!aiRelation) return 'After meals';
+    const relation = aiRelation.toLowerCase();
+    if (relation.includes('before') || relation.includes('pre')) return 'Before meals';
+    if (relation.includes('after') || relation.includes('post')) return 'After meals';
+    if (relation.includes('with') || relation.includes('during')) return 'With meals';
+    if (relation.includes('empty stomach') || relation.includes('empty')) return 'Empty stomach';
+    return 'Any time';
+  };
+
+  const parseDuration = (duration?: string): number | undefined => {
+    if (!duration) return undefined;
+    const durationLower = duration.toLowerCase();
+    const match = durationLower.match(/(\d+)\s*(day|week|month)/);
+    if (match) {
+      const value = parseInt(match[1]);
+      const unit = match[2];
+      if (unit === 'day') return value;
+      if (unit === 'week') return value * 7;
+      if (unit === 'month') return value * 30;
+    }
+    return undefined;
+  };
+
   const handleConfirmAndSave = async () => {
-    if (!classification || !user?.uid || uploadedFiles.length === 0) return;
+    console.log('🚀 Starting handleConfirmAndSave...');
+    console.log('Classification:', classification);
+    console.log('User ID:', user?.uid);
+    console.log('Uploaded files:', uploadedFiles);
+
+    if (!classification || !user?.uid || uploadedFiles.length === 0) {
+      console.log('❌ Missing required data for save');
+      return;
+    }
 
     try {
       setUploadProgress({
@@ -139,31 +224,86 @@ export default function SmartUploadScreen() {
         message: 'Saving to your health records...',
       });
 
-      // Extract structured data for pathology reports
+      // Check if medications exist
+      const extractedMeds = (classification as any).extractedMedications;
+      console.log('💊 Extracted medications:', extractedMeds);
+      console.log('💊 Medications count:', extractedMeds?.length || 0);
+
+      let medicationsSaved = 0;
+
+      // Save medications if found
+      if (Array.isArray(extractedMeds) && extractedMeds.length > 0) {
+        console.log('💊 Starting to save', extractedMeds.length, 'medications...');
+        
+        const medicationPromises = extractedMeds.map(async (med: any, index: number) => {
+          try {
+            console.log(`💊 Saving medication ${index + 1}/${extractedMeds.length}:`, med.name);
+            
+            const durationDays = parseDuration(med.duration);
+            const startDate = med.startDate || new Date().toISOString().split('T')[0];
+            let endDate: string | undefined;
+            if (durationDays) {
+              const start = new Date(startDate);
+              start.setDate(start.getDate() + durationDays);
+              endDate = start.toISOString().split('T')[0];
+            }
+
+            const medicationData = {
+              name: med.name,
+              strength: med.strength || 'As prescribed',
+              dosageForm: mapDosageForm(med.dosageForm),
+              frequency: mapFrequency(med.frequency),
+              mealRelation: mapMealRelation(med.mealRelation),
+              startDate,
+              durationDays,
+              endDate,
+              prescribedBy: med.prescribedBy || classification.doctorName,
+              instructions: med.instructions,
+              reminderEnabled: false,
+              prescriptionImage: uploadedFiles[0]?.fileURL,
+              isActive: true,
+            };
+
+            console.log(`💊 Medication data for ${med.name}:`, medicationData);
+            await addMedication(user.uid, medicationData);
+            console.log(`✅ Successfully saved medication: ${med.name}`);
+            return true;
+          } catch (error) {
+            console.error(`❌ Failed to save medication ${med.name}:`, error);
+            return false;
+          }
+        });
+
+        const results = await Promise.all(medicationPromises);
+        medicationsSaved = results.filter(r => r === true).length;
+        console.log(`✅ Saved ${medicationsSaved}/${extractedMeds.length} medications`);
+      }
+
+      // ALWAYS save lab report (regardless of medications)
+      console.log('📄 Saving lab report to Firestore...');
       let testResults = [];
       let aiInterpretation = undefined;
-
+      
       if (classification.category === 'pathology_report' && classification.extractedText) {
-        // Extract lab results
         const labData = await extractLabResults(classification.extractedText);
         testResults = labData.testResults || [];
-
-        // Generate AI interpretation
         aiInterpretation = await generateInterpretation(testResults);
       }
 
-      // Save to Firestore
-      const reportId = await saveLabReport(user.uid, {
+      const reportData: any = {
         testDate: classification.testDate || new Date().toISOString().split('T')[0],
         reportType: classification.category === 'pathology_report' ? 'pathology' : 'other',
         labName: classification.labName || 'Unknown Lab',
         doctorName: classification.doctorName,
         files: uploadedFiles,
         testResults,
-        aiInterpretation,
         tags: classification.detectedTests || [],
         notes: classification.reasoning || '',
-      });
+      };
+      if (aiInterpretation !== undefined) reportData.aiInterpretation = aiInterpretation;
+
+      await saveLabReport(user.uid, reportData);
+      console.log('✅ Lab report saved successfully');
 
       setUploadProgress({
         status: 'complete',
@@ -172,31 +312,35 @@ export default function SmartUploadScreen() {
       });
 
       // Show success message
-      Alert.alert(
-        'Success!',
-        'Your document has been analyzed and saved to your health records.',
-        [
-          {
-            text: 'View Report',
-            onPress: () => {
-              router.push('/(tabs)');
-            },
-          },
-          {
-            text: 'Upload Another',
-            onPress: () => {
-              setSelectedFiles([]);
-              setClassification(null);
-              setUploadedFiles([]);
-              setUploadProgress({ status: 'idle', progress: 0, message: '' });
-            },
-          },
-        ]
-      );
-
+      if (medicationsSaved > 0) {
+        Alert.alert(
+          'Success!',
+          `✅ Lab report saved\n💊 ${medicationsSaved} medication${medicationsSaved > 1 ? 's' : ''} added to tracker`,
+          [
+            { text: 'View Medications', onPress: () => router.push('/(tabs)/medication-tracker') },
+            { text: 'View Reports', onPress: () => router.push('/(tabs)') },
+            { text: 'Upload Another', onPress: () => {
+                setSelectedFiles([]); setClassification(null); setUploadedFiles([]);
+                setUploadProgress({ status: 'idle', progress: 0, message: '' });
+            }},
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Success!',
+          'Your document has been analyzed and saved to your health records.',
+          [
+            { text: 'View Report', onPress: () => router.push('/(tabs)') },
+            { text: 'Upload Another', onPress: () => {
+                setSelectedFiles([]); setClassification(null); setUploadedFiles([]);
+                setUploadProgress({ status: 'idle', progress: 0, message: '' });
+            }},
+          ]
+        );
+      }
     } catch (error) {
-      console.error('Error saving report:', error);
-      Alert.alert('Error', 'Failed to save report. Please try again.');
+      console.error('❌ Error in handleConfirmAndSave:', error);
+      Alert.alert('Error', 'Failed to save. Please try again.');
       setUploadProgress({
         status: 'error',
         progress: 0,
@@ -206,9 +350,6 @@ export default function SmartUploadScreen() {
     }
   };
 
-  /**
-   * Edit classification
-   */
   const handleEditClassification = () => {
     Alert.alert(
       'Edit Classification',
@@ -218,8 +359,7 @@ export default function SmartUploadScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
@@ -233,7 +373,6 @@ export default function SmartUploadScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Description */}
         <View style={styles.descriptionCard}>
           <Ionicons name="sparkles" size={28} color={Colors.light.primary} />
           <Text style={styles.descriptionTitle}>
@@ -244,7 +383,6 @@ export default function SmartUploadScreen() {
           </Text>
         </View>
 
-        {/* Upload Button */}
         {selectedFiles.length === 0 && (
           <UploadButton
             onPress={handleSelectFiles}
@@ -252,7 +390,6 @@ export default function SmartUploadScreen() {
           />
         )}
 
-        {/* File Preview */}
         {selectedFiles.length > 0 && !classification && (
           <>
             <FilePreview
@@ -282,12 +419,10 @@ export default function SmartUploadScreen() {
           </>
         )}
 
-        {/* Upload Progress */}
         {uploadProgress.status !== 'idle' && (
           <UploadProgressBar progress={uploadProgress} />
         )}
 
-        {/* Classification Result */}
         {classification && uploadProgress.status === 'complete' && (
           <ClassificationCard
             classification={classification}
@@ -296,30 +431,24 @@ export default function SmartUploadScreen() {
           />
         )}
 
-        {/* Info Section */}
         <View style={styles.infoSection}>
           <Text style={styles.infoTitle}>Supported Documents</Text>
-          
           <View style={styles.infoItem}>
             <Ionicons name="flask" size={20} color={Colors.light.upload.categories.pathology} />
             <Text style={styles.infoText}>Lab Reports (Blood, Urine, etc.)</Text>
           </View>
-
           <View style={styles.infoItem}>
             <Ionicons name="scan" size={20} color={Colors.light.upload.categories.radiology} />
             <Text style={styles.infoText}>Radiology Scans (X-Ray, CT, MRI)</Text>
           </View>
-
           <View style={styles.infoItem}>
             <Ionicons name="medical" size={20} color={Colors.light.upload.categories.medication} />
             <Text style={styles.infoText}>Prescriptions & Medications</Text>
           </View>
-
           <View style={styles.infoItem}>
             <Ionicons name="pulse" size={20} color={Colors.light.upload.categories.vitals} />
             <Text style={styles.infoText}>Vital Signs Records</Text>
           </View>
-
           <View style={styles.infoItem}>
             <Ionicons name="bandage" size={20} color={Colors.light.upload.categories.vaccination} />
             <Text style={styles.infoText}>Vaccination Cards</Text>

@@ -1,6 +1,7 @@
 // types/upload.ts
 
 import { Timestamp } from 'firebase/firestore';
+import { ExtractedMedication } from '../services/aiService';
 
 /**
  * Document categories that AI can classify
@@ -36,10 +37,11 @@ export interface ClassificationResult {
   labName?: string;         // For lab reports
   testDate?: string;        // YYYY-MM-DD format
   doctorName?: string;      // Prescribing doctor
-  medications?: string[];   // For prescriptions
+  medications?: string[];   // For prescriptions (names - legacy, not used in new Smart Upload)
   scanType?: string;        // For radiology (e.g., "X-Ray", "CT Scan")
   extractedText?: string;   // OCR extracted text
   reasoning?: string;       // Why AI chose this category
+  extractedMedications?: ExtractedMedication[]; // <-- ADDED: for AI prescription extraction
 }
 
 /**
@@ -80,14 +82,16 @@ export interface TestResult {
 
 /**
  * AI-generated interpretation of health data
+ * UPDATED: Added optional fields for report analysis
  */
 export interface AIInterpretation {
   summary: string;          // Brief overview (2-3 sentences)
   keyFindings: string[];    // Important findings (bullets)
   recommendations: string[]; // Actionable advice
   riskLevel: 'low' | 'moderate' | 'high';
-  analyzedAt: Timestamp | Date;
-  confidenceScore?: number; // How confident the AI is
+  abnormalTests?: string[]; // ✅ ADDED: List of abnormal test names
+  analyzedAt: Date;         // ✅ FIXED: Changed to Date type (can be stored as Timestamp in Firestore)
+  confidence?: number;      // ✅ ADDED: How confident the AI is (0-1)
 }
 
 /**
@@ -135,20 +139,9 @@ export interface RadiologyReport {
   updatedAt: Timestamp | Date;
 }
 
-/**
- * Medication extracted from prescription
- */
-export interface Medication {
-  medicationId?: string;
-  name: string;
-  dosage: string;           // e.g., "500mg"
-  frequency: string;        // e.g., "Twice daily"
-  duration: string;         // e.g., "7 days"
-  instructions?: string;    // Special instructions
-  sideEffects?: string[];
-  prescribedBy?: string;
-  prescribedDate?: string;  // YYYY-MM-DD
-}
+// --- DO NOT redefine Medication structure here! ---
+// Medication types for your services/database should live in types/medication.ts
+// ExtractedMedication type for AI extraction is imported from services/aiService.ts
 
 /**
  * Medication prescription document
@@ -161,7 +154,7 @@ export interface PrescriptionDocument {
   doctorName: string;
   clinicName?: string;
   files: UploadedFile[];
-  medications: Medication[];
+  medications: ExtractedMedication[]; // Use extracted medications for new AI-powered flows
   diagnosis?: string;
   tags: string[];
   notes: string;

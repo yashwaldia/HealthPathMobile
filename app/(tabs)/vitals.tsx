@@ -383,7 +383,7 @@ export default function VitalsScreen() {
   ]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Modals */}
       <QuickAddModal 
         visible={isAddModalVisible}

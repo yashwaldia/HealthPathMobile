@@ -2,7 +2,35 @@
 
 import { collection, doc, setDoc, getDoc, getDocs, query, where, orderBy, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebaseConfig';
-import { LabReport } from '../types/upload';
+import { LabReport, UploadedFile } from '../types/upload';
+import { ReportAIAnalysis } from './reportAnalysisAIService';
+
+/**
+ * Check for report with duplicate file name
+ */
+export const checkDuplicateReport = async (
+  userId: string,
+  fileName: string
+): Promise<boolean> => {
+  try {
+    const reportsRef = collection(db, `users/${userId}/lab_reports`);
+    const q = query(reportsRef);
+
+    const querySnapshot = await getDocs(q);
+    for (const docSnap of querySnapshot.docs) {
+      const report = docSnap.data() as LabReport;
+      if (report.files && Array.isArray(report.files)) {
+        for (const file of report.files as UploadedFile[]) {
+          if (file.fileName === fileName) return true;
+        }
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error('Error checking duplicate report:', error);
+    throw error;
+  }
+};
 
 /**
  * Save lab report to Firestore
@@ -15,16 +43,15 @@ export const saveLabReport = async (
     const reportsRef = collection(db, `users/${userId}/lab_reports`);
     const newReportRef = doc(reportsRef);
 
-    const report: LabReport = {
+    // Build report object without undefined fields
+    const report: any = {
       reportId: newReportRef.id,
       userId,
       uploadDate: new Date(),
       testDate: reportData.testDate || new Date().toISOString().split('T')[0],
       reportType: reportData.reportType || 'pathology',
       labName: reportData.labName || '',
-      doctorName: reportData.doctorName,
       files: reportData.files || [],
-      aiInterpretation: reportData.aiInterpretation,
       testResults: reportData.testResults || [],
       tags: reportData.tags || [],
       isFavorite: false,
@@ -33,6 +60,14 @@ export const saveLabReport = async (
       createdAt: new Date(),
       updatedAt: new Date(),
     };
+
+    // Only add optional fields if they are defined
+    if (reportData.doctorName !== undefined) {
+      report.doctorName = reportData.doctorName;
+    }
+    if (reportData.aiInterpretation !== undefined) {
+      report.aiInterpretation = reportData.aiInterpretation;
+    }
 
     await setDoc(newReportRef, {
       ...report,
@@ -102,9 +137,15 @@ export const updateLabReport = async (
 ): Promise<void> => {
   try {
     const reportRef = doc(db, `users/${userId}/lab_reports`, reportId);
-    
+    // Filter out undefined values from updates
+    const cleanedUpdates: any = {};
+    Object.keys(updates).forEach(key => {
+      if (updates[key as keyof LabReport] !== undefined) {
+        cleanedUpdates[key] = updates[key as keyof LabReport];
+      }
+    });
     await setDoc(reportRef, {
-      ...updates,
+      ...cleanedUpdates,
       updatedAt: serverTimestamp(),
     }, { merge: true });
   } catch (error) {
@@ -138,7 +179,6 @@ export const searchLabReports = async (
 ): Promise<LabReport[]> => {
   try {
     const allReports = await getAllLabReports(userId);
-    
     // Client-side search (Firestore doesn't support full-text search natively)
     return allReports.filter(report => 
       report.labName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -171,15 +211,121 @@ export const getReportsByDateRange = async (
       where('testDate', '<=', endDate),
       orderBy('testDate', 'desc')
     );
-    
     const querySnapshot = await getDocs(q);
-    
     return querySnapshot.docs.map(doc => ({
       ...doc.data(),
       reportId: doc.id,
     } as LabReport));
   } catch (error) {
     console.error('Error getting reports by date range:', error);
+    throw error;
+  }
+};
+
+/**
+ * Save AI analysis to existing lab report
+ * This function updates a report with AI-generated analysis results
+ */
+export const saveAIAnalysisToReport = async (
+  userId: string,
+  reportId: string,
+  aiAnalysis: ReportAIAnalysis
+): Promise<void> => {
+  try {
+    console.log('Saving AI analysis to report:', reportId);
+
+    const reportRef = doc(db, `users/${userId}/lab_reports`, reportId);
+
+    // Convert ReportAIAnalysis to aiInterpretation format
+    const aiInterpretation = {
+      summary: aiAnalysis.summary,
+      keyFindings: aiAnalysis.keyFindings,
+      recommendations: aiAnalysis.recommendations,
+      riskLevel: aiAnalysis.riskLevel,
+      abnormalTests: aiAnalysis.abnormalTests,
+      analyzedAt: aiAnalysis.analyzedAt.toISOString(),
+      confidence: aiAnalysis.confidence,
+    };
+
+    // Update report with AI analysis and set status to 'analyzed'
+    await setDoc(reportRef, {
+      aiInterpretation,
+      status: 'analyzed',
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    console.log('AI analysis saved successfully');
+  } catch (error) {
+    console.error('Error saving AI analysis:', error);
+    throw error;
+  }
+};
+
+/**
+ * Remove AI analysis from report (for re-analysis)
+ */
+export const removeAIAnalysisFromReport = async (
+  userId: string,
+  reportId: string
+): Promise<void> => {
+  try {
+    const reportRef = doc(db, `users/${userId}/lab_reports`, reportId);
+    
+    await setDoc(reportRef, {
+      aiInterpretation: null,
+      status: 'pending',
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    console.log('AI analysis removed successfully');
+  } catch (error) {
+    console.error('Error removing AI analysis:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get reports that need AI analysis (status: pending)
+ */
+export const getPendingAnalysisReports = async (userId: string): Promise<LabReport[]> => {
+  try {
+    const reportsRef = collection(db, `users/${userId}/lab_reports`);
+    const q = query(
+      reportsRef,
+      where('status', '==', 'pending'),
+      orderBy('uploadDate', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+
+    return querySnapshot.docs.map(doc => ({
+      ...doc.data(),
+      reportId: doc.id,
+    } as LabReport));
+  } catch (error) {
+    console.error('Error getting pending reports:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get reports that have been analyzed
+ */
+export const getAnalyzedReports = async (userId: string): Promise<LabReport[]> => {
+  try {
+    const reportsRef = collection(db, `users/${userId}/lab_reports`);
+    const q = query(
+      reportsRef,
+      where('status', '==', 'analyzed'),
+      orderBy('uploadDate', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+
+    return querySnapshot.docs.map(doc => ({
+      ...doc.data(),
+      reportId: doc.id,
+    } as LabReport));
+  } catch (error) {
+    console.error('Error getting analyzed reports:', error);
     throw error;
   }
 };

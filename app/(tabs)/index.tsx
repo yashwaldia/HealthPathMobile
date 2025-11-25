@@ -61,41 +61,38 @@ export default function HomeScreen() {
     }
   };
 
+  // Updated: all buttons active, including AI Report enabled
   const actionButtons = [
-    { id: 1, icon: 'fitness-outline', label: 'Vitals', route: '/(tabs)/vitals' },
-    { id: 2, icon: 'cloud-upload-outline', label: 'Upload', route: 'smart-upload' },
-    { id: 3, icon: 'heart-outline', label: 'Symptoms', route: 'symptom-selector' },
-    { id: 4, icon: 'flask-outline', label: 'Lab Tests', route: 'interpreter' },
-    { id: 5, icon: 'bar-chart-outline', label: 'Reports', route: 'dashboard' },
-    { id: 6, icon: 'scan-outline', label: 'Radiology', route: 'radiology-analyzer' },
-    { id: 7, icon: 'sparkles-outline', label: 'AI Report', route: 'ai-report' },
-    { id: 8, icon: 'pulse-outline', label: 'Biohacking', route: 'biohacking' },
-    { id: 9, icon: 'restaurant-outline', label: 'Nutrition', route: 'nutrition-tracker' },
-    { id: 10, icon: 'medical-outline', label: 'Medication', route: 'medication-tracker' },
-    { id: 11, icon: 'shield-checkmark-outline', label: 'Screening', route: 'screening-tracker' },
-    { id: 12, icon: 'people-outline', label: 'Child Health', route: 'child-health' },
-    { id: 13, icon: 'time-outline', label: 'History', route: 'historical' },
-    { id: 14, icon: 'barbell-outline', label: 'FitCalc', route: 'fitcalc' },
-    { id: 15, icon: 'nutrition-outline', label: 'MacroMaster', route: 'macromaster' },
-    { id: 16, icon: 'library-outline', label: 'Health Library', route: 'learning' },
-    { id: 17, icon: 'settings-outline', label: 'Settings', route: 'settings' },
+    { id: 1, icon: 'fitness-outline', label: 'Vitals', route: '/(tabs)/vitals', active: true },
+    { id: 2, icon: 'cloud-upload-outline', label: 'Upload', route: '/smart-upload', active: true },
+    { id: 3, icon: 'heart-outline', label: 'Symptoms', route: 'symptom-selector', active: true },
+    { id: 4, icon: 'flask-outline', label: 'Lab Tests', route: 'interpreter', active: true },
+    { id: 5, icon: 'bar-chart-outline', label: 'Reports', route: '/(tabs)/reports', active: true },
+    { id: 6, icon: 'scan-outline', label: 'Radiology', route: 'radiology-analyzer', active: true },
+    { id: 7, icon: 'sparkles-outline', label: 'AI Report', route: '/(tabs)/ai-report', active: true },
+    { id: 8, icon: 'pulse-outline', label: 'Biohacking', route: 'biohacking', active: true },
+    { id: 9, icon: 'restaurant-outline', label: 'Nutrition', route: 'nutrition-tracker', active: true },
+    { id: 10, icon: 'medical-outline', label: 'Medication', route: '/(tabs)/medication-tracker', active: true },
+    { id: 11, icon: 'shield-checkmark-outline', label: 'Screening', route: 'screening-tracker', active: true },
+    { id: 12, icon: 'people-outline', label: 'Child Health', route: 'child-health', active: true },
+    { id: 13, icon: 'time-outline', label: 'History', route: 'historical', active: true },
+    { id: 14, icon: 'barbell-outline', label: 'FitCalc', route: 'fitcalc', active: true },
+    { id: 15, icon: 'nutrition-outline', label: 'MacroMaster', route: 'macromaster', active: true },
+    { id: 16, icon: 'library-outline', label: 'Health Library', route: '/(tabs)/learning', active: true },
+    { id: 17, icon: 'settings-outline', label: 'Settings', route: 'settings', active: true },
   ];
 
-  const handleActionPress = (label: string, route: string) => {
-    console.log('Action pressed:', label);
+  const handleActionPress = (button: typeof actionButtons[0]) => {
+    console.log('Action pressed:', button.label);
+
+    // No longer disabled, so no alert for coming soon
     
-    // Navigate to working screens
-    if (route === '/(tabs)/vitals') {
-      router.push('/(tabs)/vitals');
-    } else if (route === 'learning') {
-      // @ts-ignore - Route will exist after creating the folder
-      router.push('/(tabs)/learning');
-    } else if (route === 'smart-upload') {
-      // ✅ NEW: Smart Upload navigation
-      // @ts-ignore
-      router.push('/smart-upload');
-    } else {
-      Alert.alert('Coming Soon', `${label} feature will be available soon!`);
+    try {
+      // @ts-ignore - Dynamic routes
+      router.push(button.route);
+    } catch (error) {
+      console.error('Navigation error:', error);
+      Alert.alert('Error', 'Could not navigate to this screen');
     }
   };
 
@@ -175,13 +172,19 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={button.id}
                 style={styles.actionButton}
-                onPress={() => handleActionPress(button.label, button.route)}
+                onPress={() => handleActionPress(button)}
                 activeOpacity={0.7}
               >
                 <View style={styles.iconContainer}>
-                  <Ionicons name={button.icon as any} size={24} color={Colors.light.primary} />
+                  <Ionicons 
+                    name={button.icon as any} 
+                    size={24} 
+                    color={Colors.light.primary} 
+                  />
                 </View>
-                <Text style={styles.actionLabel}>{button.label}</Text>
+                <Text style={styles.actionLabel}>
+                  {button.label}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -321,6 +324,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 3,
+    position: 'relative',
   },
   iconContainer: {
     width: 48,
