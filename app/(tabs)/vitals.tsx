@@ -5,13 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  Alert,
   TouchableOpacity,
   ActivityIndicator,
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../context/AuthContext';
@@ -26,8 +26,11 @@ import QuickAddModal from '../../components/vitals/QuickAddModal';
 import VitalDetailsModal from '../../components/vitals/VitalDetailsModal';
 import AIInsightsModal from '../../components/vitals/AIInsightsModal';
 import ExportDataModal from '../../components/vitals/ExportDataModal';
+import CustomToast from '../../components/ui/CustomToast';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 
 export default function VitalsScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const [latestVitals, setLatestVitals] = useState<Partial<VitalRecord>>({});
   const [vitalsHistory, setVitalsHistory] = useState<VitalRecord[]>([]);
@@ -41,6 +44,19 @@ export default function VitalsScreen() {
   const [isAIInsightsModalVisible, setAIInsightsModalVisible] = useState(false);
   const [isExportModalVisible, setExportModalVisible] = useState(false);
   const [selectedVitalId, setSelectedVitalId] = useState<string | null>(null);
+  const [showUploadChoice, setShowUploadChoice] = useState(false);
+
+  // Toast State
+  const [toast, setToast] = useState<{
+    visible: boolean;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({ visible: false, message: '', type: 'info' });
+
+  // Show toast helper
+  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning') => {
+    setToast({ visible: true, message, type });
+  };
 
   // --- ANIMATION VALUES ---
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -57,7 +73,6 @@ export default function VitalsScreen() {
     if (!loading) {
       // Staggered animation sequence
       Animated.sequence([
-        // Header animation (already visible, so we animate upload button first)
         Animated.parallel([
           Animated.timing(fadeAnim, {
             toValue: 1,
@@ -72,7 +87,6 @@ export default function VitalsScreen() {
         ]),
       ]).start();
 
-      // Smart Upload button with slight delay
       setTimeout(() => {
         Animated.parallel([
           Animated.timing(uploadFadeAnim, {
@@ -88,7 +102,6 @@ export default function VitalsScreen() {
         ]).start();
       }, 100);
 
-      // Cards with more delay
       setTimeout(() => {
         Animated.parallel([
           Animated.timing(cardsFadeAnim, {
@@ -104,7 +117,6 @@ export default function VitalsScreen() {
         ]).start();
       }, 200);
 
-      // Actions with most delay
       setTimeout(() => {
         Animated.parallel([
           Animated.timing(actionsFadeAnim, {
@@ -132,7 +144,7 @@ export default function VitalsScreen() {
       setVitalsHistory(history);
     } catch (error) {
       console.error("Error fetching vitals:", error);
-      Alert.alert('Error', 'Failed to load vitals data.');
+      showToast('Failed to load vitals data', 'error');
     } finally {
       setLoading(false);
     }
@@ -158,48 +170,36 @@ export default function VitalsScreen() {
     if (!user) return;
     
     try {
-      // Merge new data with existing vitals to preserve untouched values
       const mergedData = {
-        ...latestVitals, // Keep all existing vitals
-        ...data, // Overwrite only the fields user changed
+        ...latestVitals,
+        ...data,
         date: new Date().toISOString(),
         source: 'manual' as const,
       };
 
-      // Update latest vitals (merges with existing)
       await vitalsService.updateLatestVitals(user.uid, mergedData);
-      
-      // Save to history
       await vitalsService.addVitalToHistory(user.uid, mergedData);
       
       setAddModalVisible(false);
       onRefresh();
-      Alert.alert('Success', 'Vital record saved successfully.');
+      showToast('Vital record saved successfully', 'success');
     } catch (err) {
-      Alert.alert('Error', 'Failed to save record.');
+      showToast('Failed to save record', 'error');
       console.error(err);
     }
   };
 
   // --- SMART UPLOAD FEATURE ---
   const handleSmartUpload = () => {
-    Alert.alert(
-      'Smart Upload',
-      'Choose how to upload your medical document',
-      [
-        { text: 'Take Photo', onPress: handleCameraUpload },
-        { text: 'Choose from Gallery', onPress: handleImageUpload },
-        { text: 'Upload PDF', onPress: handleDocumentUpload },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    setShowUploadChoice(true);
   };
 
   const handleCameraUpload = async () => {
+    setShowUploadChoice(false);
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission Required', 'Camera permission is needed.');
+        showToast('Camera permission is needed', 'warning');
         return;
       }
 
@@ -213,15 +213,16 @@ export default function VitalsScreen() {
         await processUploadedDocument(result.assets[0].uri, 'image');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to access camera.');
+      showToast('Failed to access camera', 'error');
     }
   };
 
   const handleImageUpload = async () => {
+    setShowUploadChoice(false);
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission Required', 'Photo library permission is needed.');
+        showToast('Photo library permission is needed', 'warning');
         return;
       }
 
@@ -235,11 +236,12 @@ export default function VitalsScreen() {
         await processUploadedDocument(result.assets[0].uri, 'image');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to pick image.');
+      showToast('Failed to pick image', 'error');
     }
   };
 
   const handleDocumentUpload = async () => {
+    setShowUploadChoice(false);
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf', 'image/*'],
@@ -251,7 +253,7 @@ export default function VitalsScreen() {
         await processUploadedDocument(result.assets[0].uri, type);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to pick document.');
+      showToast('Failed to pick document', 'error');
     }
   };
 
@@ -268,7 +270,6 @@ export default function VitalsScreen() {
       console.log('📊 Extracted data:', extractedData);
       
       if (extractedData && Object.keys(extractedData).length > 0) {
-        // Merge with existing vitals
         const mergedData = {
           ...latestVitals,
           ...extractedData,
@@ -276,35 +277,28 @@ export default function VitalsScreen() {
           source: 'imported' as const,
         };
 
-        // Save to Firebase
         await vitalsService.updateLatestVitals(user.uid, mergedData);
-
-        // Also save to history
         await vitalsService.addVitalToHistory(user.uid, mergedData);
-
-        // Refresh dashboard
         await fetchLatestVitals();
 
-        // Show AI insights automatically for uploaded documents
-        Alert.alert(
-          'Success!', 
-          `Medical document analyzed successfully.\n\nExtracted: ${Object.keys(extractedData).filter(k => k !== 'notes').join(', ')}\n\nGenerating AI insights...`,
-          [{ 
-            text: 'View Insights', 
-            onPress: () => setAIInsightsModalVisible(true)
-          }]
+        showToast(
+          `Document analyzed! Extracted: ${Object.keys(extractedData).filter(k => k !== 'notes').join(', ')}`,
+          'success'
         );
+        
+        // Auto-open AI insights
+        setTimeout(() => setAIInsightsModalVisible(true), 1000);
       } else {
-        Alert.alert(
-          'No Vital Signs Found',
-          'This document appears to be a lab report. Please upload a document with BP, HR, temp, SpO2, or add data manually.'
+        showToast(
+          'No vital signs found. Please upload a document with BP, HR, temp, SpO2, or add manually',
+          'warning'
         );
       }
     } catch (error: any) {
       console.error('❌ Document processing error:', error);
-      Alert.alert(
-        'Processing Error',
-        error?.message || 'Failed to analyze the document. Please try a clearer image.'
+      showToast(
+        error?.message || 'Failed to analyze document. Please try a clearer image',
+        'error'
       );
     } finally {
       setUploadingDocument(false);
@@ -370,7 +364,6 @@ export default function VitalsScreen() {
     },
   ];
 
-  // Memoize currentVitals to prevent unnecessary re-renders of the modal
   const memoizedCurrentVitals = useMemo(() => latestVitals, [
     latestVitals.bloodPressureSystolic,
     latestVitals.bloodPressureDiastolic,
@@ -384,6 +377,26 @@ export default function VitalsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Custom Toast */}
+      <CustomToast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
+
+      {/* Upload Choice Dialog */}
+      <ConfirmDialog
+        visible={showUploadChoice}
+        title="Smart Upload"
+        message="Choose how you'd like to upload your medical document"
+        confirmText="Take Photo"
+        cancelText="Cancel"
+        type="info"
+        onConfirm={handleCameraUpload}
+        onCancel={() => setShowUploadChoice(false)}
+      />
+
       {/* Modals */}
       <QuickAddModal 
         visible={isAddModalVisible}
@@ -417,9 +430,11 @@ export default function VitalsScreen() {
           }
         ]}
       >
-        <View>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
+        </TouchableOpacity>
+        <View style={styles.headerTextContainer}>
           <Text style={styles.headerTitle}>Vitals Dashboard</Text>
-          <Text style={styles.headerSubtitle}>Track your health metrics</Text>
         </View>
         <TouchableOpacity style={styles.addButton} onPress={() => setAddModalVisible(true)}>
           <Ionicons name="add-circle" size={32} color={Colors.light.primary} />
@@ -461,6 +476,26 @@ export default function VitalsScreen() {
               <Ionicons name="chevron-forward" size={24} color={Colors.light.textSecondary} />
             )}
           </TouchableOpacity>
+
+          {/* Additional Upload Options */}
+          <View style={styles.uploadOptions}>
+            <TouchableOpacity 
+              style={styles.uploadOptionButton}
+              onPress={handleImageUpload}
+              disabled={uploadingDocument}
+            >
+              <Ionicons name="images-outline" size={20} color={Colors.light.primary} />
+              <Text style={styles.uploadOptionText}>Gallery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.uploadOptionButton}
+              onPress={handleDocumentUpload}
+              disabled={uploadingDocument}
+            >
+              <Ionicons name="document-text-outline" size={20} color={Colors.light.primary} />
+              <Text style={styles.uploadOptionText}>PDF</Text>
+            </TouchableOpacity>
+          </View>
         </Animated.View>
 
         {/* VITALS CARDS GRID - Animated */}
@@ -482,7 +517,7 @@ export default function VitalsScreen() {
           </Animated.View>
         )}
 
-        {/* QUICK ACTIONS - THREE BUTTONS AT BOTTOM - Animated */}
+        {/* QUICK ACTIONS - Animated */}
         {!loading && (
           <Animated.View 
             style={[
@@ -493,7 +528,6 @@ export default function VitalsScreen() {
               }
             ]}
           >
-
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => setAIInsightsModalVisible(true)}
@@ -525,24 +559,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.light.cardBackground,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
   },
+  backButton: {
+    padding: 4,
+  },
+  headerTextContainer: {
+    flex: 1,
+    alignItems: 'center', // ✅ CENTER THE TEXT
+  },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.light.text,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.light.textSecondary,
     marginTop: 2,
   },
   addButton: {
     padding: 4,
+        width: 40, // Fixed width to balance with back button
+
   },
   scrollView: {
     flex: 1,
@@ -552,7 +595,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.light.cardBackground,
     borderRadius: 16,
-    padding: 18,
+    padding: 16,
     marginHorizontal: 16,
     marginTop: 16,
     marginBottom: 8,
@@ -587,6 +630,30 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     marginTop: 2,
   },
+  uploadOptions: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    gap: 8,
+  },
+  uploadOptionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light.cardBackground,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  uploadOptionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.light.text,
+  },
   cardsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -607,18 +674,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.light.cardBackground,
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 8,
     borderRadius: 12,
-    gap: 6,
+    gap: 8,
     shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
   actionText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.light.text,
   },

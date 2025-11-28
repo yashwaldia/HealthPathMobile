@@ -22,6 +22,13 @@ import {
   DoseLog 
 } from '../types/medication';
 
+// ✅ NEW: Import notification service
+import {
+  scheduleMedicationReminder,
+  cancelMedicationReminder,
+  scheduleAllMedicationReminders,
+} from './notificationService';
+
 /**
  * Helper function to remove undefined values from an object.
  * Firestore does not support 'undefined' as a value.
@@ -38,6 +45,7 @@ const cleanData = (data: any) => {
 
 /**
  * Add a new medication
+ * ✅ ENHANCED: Now automatically schedules notification reminders
  */
 export const addMedication = async (
   userId: string,
@@ -55,7 +63,7 @@ export const addMedication = async (
       updatedAt: new Date(),
     };
 
-    // FIX: Clean data to remove undefined fields before saving
+    // Clean data to remove undefined fields before saving
     const cleanedMedication = cleanData({
       ...medication,
       createdAt: serverTimestamp(),
@@ -64,7 +72,20 @@ export const addMedication = async (
 
     console.log('💾 Saving cleaned medication data:', JSON.stringify(cleanedMedication, null, 2));
 
+    // Save to Firestore
     await setDoc(newMedRef, cleanedMedication);
+
+    // ✅ NEW: Schedule notification reminders for this medication
+    try {
+      if (medication.isActive && medication.frequency !== 'As needed') {
+        console.log('📅 Scheduling reminders for new medication...');
+        await scheduleMedicationReminder(medication);
+        console.log('✅ Reminders scheduled successfully');
+      }
+    } catch (notificationError) {
+      // Don't fail the entire operation if notification scheduling fails
+      console.warn('⚠️ Failed to schedule notification, but medication was saved:', notificationError);
+    }
 
     return newMedRef.id;
   } catch (error) {
@@ -148,6 +169,7 @@ export const getMedication = async (
 
 /**
  * Update medication
+ * ✅ ENHANCED: Now updates notification reminders automatically
  */
 export const updateMedication = async (
   userId: string,
@@ -163,7 +185,28 @@ export const updateMedication = async (
       updatedAt: serverTimestamp(),
     });
 
+    // Update in Firestore
     await updateDoc(medRef, cleanedUpdates);
+
+    // ✅ NEW: Update notification reminders
+    try {
+      // Get the updated medication data
+      const updatedMed = await getMedication(userId, medicationId);
+      
+      if (updatedMed) {
+        // Cancel old reminders
+        await cancelMedicationReminder(medicationId);
+        
+        // Schedule new reminders if medication is active
+        if (updatedMed.isActive && updatedMed.frequency !== 'As needed') {
+          console.log('🔄 Rescheduling reminders after update...');
+          await scheduleMedicationReminder(updatedMed);
+          console.log('✅ Reminders rescheduled successfully');
+        }
+      }
+    } catch (notificationError) {
+      console.warn('⚠️ Failed to update notifications, but medication was updated:', notificationError);
+    }
   } catch (error) {
     console.error('Error updating medication:', error);
     throw error;
@@ -172,12 +215,23 @@ export const updateMedication = async (
 
 /**
  * Delete medication
+ * ✅ ENHANCED: Now cancels notification reminders automatically
  */
 export const deleteMedication = async (
   userId: string,
   medicationId: string
 ): Promise<void> => {
   try {
+    // ✅ NEW: Cancel notification reminders first
+    try {
+      console.log('🗑️ Cancelling reminders for deleted medication...');
+      await cancelMedicationReminder(medicationId);
+      console.log('✅ Reminders cancelled successfully');
+    } catch (notificationError) {
+      console.warn('⚠️ Failed to cancel notifications:', notificationError);
+    }
+
+    // Delete from Firestore
     const medRef = doc(db, `users/${userId}/medications`, medicationId);
     await deleteDoc(medRef);
   } catch (error) {
@@ -188,15 +242,26 @@ export const deleteMedication = async (
 
 /**
  * Mark medication as inactive (soft delete)
+ * ✅ ENHANCED: Now cancels notification reminders automatically
  */
 export const deactivateMedication = async (
   userId: string,
   medicationId: string
 ): Promise<void> => {
   try {
+    // Update medication status
     await updateMedication(userId, medicationId, {
       isActive: false,
     });
+
+    // ✅ NEW: Cancel notification reminders
+    try {
+      console.log('🔕 Cancelling reminders for deactivated medication...');
+      await cancelMedicationReminder(medicationId);
+      console.log('✅ Reminders cancelled successfully');
+    } catch (notificationError) {
+      console.warn('⚠️ Failed to cancel notifications:', notificationError);
+    }
   } catch (error) {
     console.error('Error deactivating medication:', error);
     throw error;
@@ -222,13 +287,15 @@ export const logDose = async (
       createdAt: new Date(),
     };
 
-    // Also clean dose data just in case
+    // Clean dose data
     const cleanedDoseLog = cleanData({
       ...doseLog,
       createdAt: serverTimestamp(),
     });
 
     await setDoc(newDoseRef, cleanedDoseLog);
+
+    console.log('✅ Dose logged successfully');
 
     return newDoseRef.id;
   } catch (error) {
@@ -281,5 +348,20 @@ export const calculateAdherence = async (
   } catch (error) {
     console.error('Error calculating adherence:', error);
     return 0;
+  }
+};
+
+/**
+ * ✅ NEW: Reschedule all medication reminders
+ * Useful for when user changes notification preferences or after app update
+ */
+export const rescheduleAllReminders = async (userId: string): Promise<void> => {
+  try {
+    console.log('🔄 Rescheduling all medication reminders...');
+    await scheduleAllMedicationReminders(userId);
+    console.log('✅ All reminders rescheduled successfully');
+  } catch (error) {
+    console.error('Error rescheduling all reminders:', error);
+    throw error;
   }
 };

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
 import TestDirectoryScreen from './directory';
@@ -10,6 +11,7 @@ import LearningZoneScreen from './learning';
 type TabType = 'directory' | 'radiology' | 'learning';
 
 export default function LearningLayout() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('directory');
   const [comparisonList, setComparisonList] = useState<string[]>([]);
 
@@ -56,6 +58,17 @@ export default function LearningLayout() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
+          </TouchableOpacity>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>Health Library</Text>
+          </View>
+          <View style={styles.placeholderButton} />
+        </View>
+
         {/* Custom Top Tabs */}
         <View style={styles.tabBar}>
           {tabs.map((tab) => (
@@ -92,13 +105,43 @@ export default function LearningLayout() {
 
 const styles = StyleSheet.create({
   safeArea: {
-    paddingVertical: 5,
     flex: 1,
     backgroundColor: Colors.light.background,
   },
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.light.cardBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  backButton: {
+    padding: 4,
+    width: 40,
+  },
+  headerTextContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
+  },
+  placeholderButton: {
+    width: 40,
   },
   tabBar: {
     flexDirection: 'row',
@@ -134,6 +177,8 @@ const styles = StyleSheet.create({
     right: 0,
     height: 3,
     backgroundColor: Colors.light.primary,
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
   },
   content: {
     flex: 1,

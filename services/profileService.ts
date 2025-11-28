@@ -11,7 +11,6 @@ import {
   getDoc, 
   setDoc, 
   updateDoc,
-  serverTimestamp 
 } from 'firebase/firestore';
 import { UserProfile, ProfileData, ProfileUpdateData, getDefaultProfile } from '../types/profile';
 
@@ -57,6 +56,14 @@ export const profileService = {
   ): Promise<void> {
     try {
       const docRef = doc(db, 'users', userId);
+
+      // Detect timezone from device (fallback if unavailable on backend)
+      let timezone = 'UTC';
+      try {
+        timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      } catch {
+        timezone = 'UTC';
+      }
       
       const newProfile: UserProfile = {
         uid: userId,
@@ -65,6 +72,11 @@ export const profileService = {
         photoURL: initialData.photoURL,
         createdAt: new Date().toISOString(),
         lastActive: new Date().toISOString(),
+
+        // New push notification fields
+        pushToken: null,   // Will be set from device later
+        timezone,          // Store user's timezone once
+
         profile: getDefaultProfile(),
       };
 
@@ -86,7 +98,7 @@ export const profileService = {
     try {
       const docRef = doc(db, 'users', userId);
       
-      // Prepare update data
+      // Prepare update data (top-level)
       const updateData: any = {
         ...data,
         lastActive: new Date().toISOString(),
@@ -161,6 +173,44 @@ export const profileService = {
     } catch (error) {
       console.error('❌ Error updating last active:', error);
       // Don't throw - this is a non-critical update
+    }
+  },
+
+  /**
+   * Save / update Expo push token for the user
+   * @param userId - Firebase Auth UID
+   * @param pushToken - Expo push token (or null to clear)
+   */
+  async updatePushToken(userId: string, pushToken: string | null): Promise<void> {
+    try {
+      const docRef = doc(db, 'users', userId);
+      await updateDoc(docRef, {
+        pushToken,
+        lastActive: new Date().toISOString(),
+      });
+      console.log('✅ Push token updated successfully');
+    } catch (error) {
+      console.error('❌ Error updating push token:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Update user's timezone (e.g., after they change device settings)
+   * @param userId - Firebase Auth UID
+   * @param timezone - IANA timezone string
+   */
+  async updateTimezone(userId: string, timezone: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'users', userId);
+      await updateDoc(docRef, {
+        timezone,
+        lastActive: new Date().toISOString(),
+      });
+      console.log('✅ Timezone updated successfully');
+    } catch (error) {
+      console.error('❌ Error updating timezone:', error);
+      throw error;
     }
   },
 

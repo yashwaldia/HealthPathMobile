@@ -1,5 +1,6 @@
 // app/(tabs)/index.tsx
 
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -19,7 +20,15 @@ import { Colors } from '../../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { UserProfile } from '../../types/profile';
 
+
+// --- Notification Imports ---
+import { NotificationBell, NotificationModal } from '../../components/Notification/NotificationCenter';
+import { getNotifications, markAsRead, clearAllNotifications } from '../../services/appNotificationService';
+// ----------------------------
+
+
 const { width } = Dimensions.get('window');
+
 
 // Sample health data (will be replaced with real data from Firestore later)
 const HEALTH_STATS = {
@@ -29,11 +38,19 @@ const HEALTH_STATS = {
   sleep: { hours: 7, minutes: 23 },
 };
 
+
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [greeting, setGreeting] = useState('Good Evening');
   const [profile, setProfile] = useState<UserProfile | null>(null);
+
+
+  // --- Notification State ---
+  const [isNotifVisible, setNotifVisible] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
 
   // Set greeting based on time
   useEffect(() => {
@@ -43,12 +60,15 @@ export default function HomeScreen() {
     else setGreeting('Good Evening');
   }, []);
 
-  // Load user profile
+
+  // Load user profile & Notifications
   useEffect(() => {
     if (user?.uid) {
       loadProfile();
+      loadNotifications(); // Load notifications when user is ready
     }
   }, [user]);
+
 
   const loadProfile = async () => {
     if (!user?.uid) return;
@@ -61,11 +81,39 @@ export default function HomeScreen() {
     }
   };
 
+
+  // --- Notification Handlers ---
+  const loadNotifications = async () => {
+    if (!user?.uid) return;
+    const data = await getNotifications(user.uid);
+    setNotifications(data);
+    setUnreadCount(data.filter(n => !n.read).length);
+  };
+
+
+  const handleMarkRead = async (id: string) => {
+    if (!user?.uid) return;
+    await markAsRead(user.uid, id);
+    // Optimistic update
+    const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n);
+    setNotifications(updated);
+    setUnreadCount(updated.filter(n => !n.read).length);
+  };
+  
+  const handleClearAll = async () => {
+    if (!user?.uid) return;
+    await clearAllNotifications(user.uid);
+    setNotifications([]);
+    setUnreadCount(0);
+  };
+  // -----------------------------
+
+
   // Updated: all buttons active, including AI Report enabled
   const actionButtons = [
     { id: 1, icon: 'fitness-outline', label: 'Vitals', route: '/(tabs)/vitals', active: true },
     { id: 2, icon: 'cloud-upload-outline', label: 'Upload', route: '/smart-upload', active: true },
-    { id: 3, icon: 'heart-outline', label: 'Symptoms', route: 'symptom-selector', active: true },
+    { id: 3, icon: 'heart-outline', label: 'Symptoms', route: '/(tabs)/symptoms', active: true },
     { id: 4, icon: 'flask-outline', label: 'Lab Tests', route: 'interpreter', active: true },
     { id: 5, icon: 'bar-chart-outline', label: 'Reports', route: '/(tabs)/reports', active: true },
     { id: 6, icon: 'scan-outline', label: 'Radiology', route: 'radiology-analyzer', active: true },
@@ -75,18 +123,16 @@ export default function HomeScreen() {
     { id: 10, icon: 'medical-outline', label: 'Medication', route: '/(tabs)/medication-tracker', active: true },
     { id: 11, icon: 'shield-checkmark-outline', label: 'Screening', route: 'screening-tracker', active: true },
     { id: 12, icon: 'people-outline', label: 'Child Health', route: 'child-health', active: true },
-    { id: 13, icon: 'time-outline', label: 'History', route: 'historical', active: true },
+    { id: 13, icon: 'time-outline', label: 'History', route: '/(tabs)/history', active: true },
     { id: 14, icon: 'barbell-outline', label: 'FitCalc', route: 'fitcalc', active: true },
     { id: 15, icon: 'nutrition-outline', label: 'MacroMaster', route: 'macromaster', active: true },
     { id: 16, icon: 'library-outline', label: 'Health Library', route: '/(tabs)/learning', active: true },
     { id: 17, icon: 'settings-outline', label: 'Settings', route: 'settings', active: true },
   ];
 
+
   const handleActionPress = (button: typeof actionButtons[0]) => {
     console.log('Action pressed:', button.label);
-
-    // No longer disabled, so no alert for coming soon
-    
     try {
       // @ts-ignore - Dynamic routes
       router.push(button.route);
@@ -96,9 +142,11 @@ export default function HomeScreen() {
     }
   };
 
+
   const handleProfilePress = () => {
     router.push('/(tabs)/profile');
   };
+
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -111,18 +159,29 @@ export default function HomeScreen() {
           {/* Header Section */}
           <View style={styles.header}>
             <Text style={styles.appName}>HealthPath</Text>
-            <TouchableOpacity onPress={handleProfilePress} style={styles.profileButton}>
-              {profile?.photoURL ? (
-                <Image source={{ uri: profile.photoURL }} style={styles.profileImage} />
-              ) : (
-                <View style={styles.profilePlaceholder}>
-                  <Text style={styles.profileInitial}>
-                    {(user?.displayName?.[0] || profile?.profile?.fullName?.[0] || 'U').toUpperCase()}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            
+            {/* --- Updated Header Right Side --- */}
+            <View style={styles.headerRight}>
+              <NotificationBell 
+                onPress={() => setNotifVisible(true)} 
+                unreadCount={unreadCount} 
+              />
+              
+              <TouchableOpacity onPress={handleProfilePress} style={styles.profileButton}>
+                {profile?.photoURL ? (
+                  <Image source={{ uri: profile.photoURL }} style={styles.profileImage} />
+                ) : (
+                  <View style={styles.profilePlaceholder}>
+                    <Text style={styles.profileInitial}>
+                      {(user?.displayName?.[0] || profile?.profile?.fullName?.[0] || 'U').toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+            {/* --------------------------------- */}
           </View>
+
 
           {/* Greeting Section */}
           <View style={styles.greetingContainer}>
@@ -130,6 +189,7 @@ export default function HomeScreen() {
               {greeting}, {user?.displayName || profile?.profile?.fullName || 'User'}
             </Text>
           </View>
+
 
           {/* Quick Stats Grid - 1x4 Layout */}
           <View style={styles.statsContainer}>
@@ -141,6 +201,7 @@ export default function HomeScreen() {
               <Text style={styles.statGoal}>/{HEALTH_STATS.calories.goal}</Text>
             </View>
 
+
             {/* Steps Card */}
             <View style={styles.statCard}>
               <Ionicons name="footsteps-outline" size={24} color={Colors.light.primary} style={styles.statIcon} />
@@ -148,6 +209,7 @@ export default function HomeScreen() {
               <Text style={styles.statValue}>{(HEALTH_STATS.steps.current / 1000).toFixed(1)}k</Text>
               <Text style={styles.statGoal}>/{(HEALTH_STATS.steps.goal / 1000).toFixed(0)}k</Text>
             </View>
+
 
             {/* Heart Rate Card */}
             <View style={styles.statCard}>
@@ -157,6 +219,7 @@ export default function HomeScreen() {
               <Text style={styles.statUnit}>bpm</Text>
             </View>
 
+
             {/* Sleep Card */}
             <View style={styles.statCard}>
               <Ionicons name="moon-outline" size={24} color={Colors.light.primary} style={styles.statIcon} />
@@ -165,6 +228,7 @@ export default function HomeScreen() {
               <Text style={styles.statUnit}>{HEALTH_STATS.sleep.minutes}m</Text>
             </View>
           </View>
+
 
           {/* Action Buttons Grid - 4x5 Layout */}
           <View style={styles.actionsContainer}>
@@ -189,10 +253,24 @@ export default function HomeScreen() {
             ))}
           </View>
         </ScrollView>
+
+
+        {/* --- Notification Modal --- */}
+        <NotificationModal
+          visible={isNotifVisible}
+          onClose={() => setNotifVisible(false)}
+          notifications={notifications}
+          onMarkRead={handleMarkRead}
+          onClearAll={handleClearAll}
+        />
+        {/* -------------------------- */}
+
+
       </View>
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -216,6 +294,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 8,
+  },
+  // Added style for the right side container
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   appName: {
     fontSize: 22,
@@ -342,4 +426,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 12,
   },
-});
+}); 

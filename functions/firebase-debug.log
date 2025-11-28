@@ -1,0 +1,30 @@
+[debug] [2025-11-28T05:38:17.740Z] ----------------------------------------------------------------------
+[debug] [2025-11-28T05:38:17.741Z] Command:       /usr/local/bin/node /usr/local/bin/firebase deploy --only functions
+[debug] [2025-11-28T05:38:17.741Z] CLI Version:   14.26.0
+[debug] [2025-11-28T05:38:17.741Z] Platform:      darwin
+[debug] [2025-11-28T05:38:17.741Z] Node Version:  v24.11.1
+[debug] [2025-11-28T05:38:17.742Z] Time:          Fri Nov 28 2025 11:08:17 GMT+0530 (India Standard Time)
+[debug] [2025-11-28T05:38:17.742Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-11-28T05:38:17.742Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2025-11-28T05:38:17.857Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-11-28T05:38:17.857Z] > authorizing via signed-in user (narisnarender@gmail.com)
+[debug] [2025-11-28T05:38:17.857Z] [iam] checking project healthpathmobile for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2025-11-28T05:38:17.857Z] Checked if tokens are valid: false, expires at: 1764242096949
+[debug] [2025-11-28T05:38:17.857Z] Checked if tokens are valid: false, expires at: 1764242096949
+[debug] [2025-11-28T05:38:17.857Z] > refreshing access token with scopes: []
+[debug] [2025-11-28T05:38:17.858Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2025-11-28T05:38:17.858Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-11-28T05:38:18.311Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2025-11-28T05:38:18.311Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-11-28T05:38:18.322Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/healthpathmobile:testIamPermissions [none]
+[debug] [2025-11-28T05:38:18.322Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/healthpathmobile:testIamPermissions x-goog-quota-user=projects/healthpathmobile
+[debug] [2025-11-28T05:38:18.322Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/healthpathmobile:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2025-11-28T05:38:18.637Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2025-11-28T05:38:18.637Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2025-11-28T05:38:20.370Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/healthpathmobile:testIamPermissions 200
+[debug] [2025-11-28T05:38:20.371Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/healthpathmobile:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2025-11-28T05:38:20.371Z] Checked if tokens are valid: true, expires at: 1764311897312
+[debug] [2025-11-28T05:38:20.372Z] Checked if tokens are valid: true, expires at: 1764311897312
+[debug] [2025-11-28T05:38:20.372Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/healthpathmobile/serviceAccounts/healthpathmobile@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2025-11-28T05:38:20.372Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/healthpathmobile/serviceAccounts/healthpathmobile@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}

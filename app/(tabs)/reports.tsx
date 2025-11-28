@@ -223,15 +223,7 @@ export default function ReportsScreen() {
           <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Lab Reports</Text>
-        <TouchableOpacity 
-          onPress={() => {
-            // @ts-ignore
-            router.push('/smart-upload');
-          }}
-          style={styles.addButton}
-        >
-          <Ionicons name="add" size={24} color={Colors.light.primary} />
-        </TouchableOpacity>
+        <View style={styles.addButton} />
       </View>
 
       {/* Search Bar */}
@@ -315,7 +307,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.light.text,
   },

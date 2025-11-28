@@ -1,3 +1,5 @@
+// app/(tabs)/profile.tsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -10,6 +12,7 @@ import {
   Alert,
   ActivityIndicator,
   Animated,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +25,17 @@ import { storageService } from '../../services/storageService';
 import { UserProfile } from '../../types/profile';
 import EditProfileModal from '../../components/profile/EditProfileModal';
 
+// ✅ NEW: Import notification services
+import {
+  checkNotificationPermissions,
+  requestNotificationPermissions,
+  scheduleAllMedicationReminders,
+  cancelAllMedicationReminders,
+  sendTestNotification,
+  getAllScheduledNotifications,
+} from '../../services/notificationService';
+import { getActiveMedications } from '../../services/medicationService'; // at the top, if not already present
+
 export default function ProfileScreen() {
   const { user } = useAuth();
   const router = useRouter();
@@ -31,6 +45,11 @@ export default function ProfileScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
+  // ✅ NEW: Notification states
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [hasPermission, setHasPermission] = useState(false);
+  const [scheduledCount, setScheduledCount] = useState(0);
+
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -38,6 +57,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (user) {
       loadProfile();
+      checkNotificationStatus(); // ✅ NEW
     }
   }, [user]);
 
@@ -87,9 +107,148 @@ export default function ProfileScreen() {
     }
   };
 
+  // ✅ NEW: Check notification status
+  const checkNotificationStatus = async () => {
+    try {
+      const permission = await checkNotificationPermissions();
+      setHasPermission(permission);
+      
+      if (permission) {
+        const notifications = await getAllScheduledNotifications();
+        setScheduledCount(notifications.length);
+        setNotificationsEnabled(notifications.length > 0);
+      }
+    } catch (error) {
+      console.error('Error checking notification status:', error);
+    }
+  };
+
+  // ✅ NEW: Toggle notifications
+  const handleToggleNotifications = async (value: boolean) => {
+    if (!user?.uid) return;
+
+    try {
+      if (value) {
+        // Enable notifications
+        const permission = await requestNotificationPermissions();
+        
+        if (!permission) {
+          Alert.alert(
+            'Permission Required',
+            'Please enable notifications in your device settings to receive medication reminders.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+
+        // Schedule all medication reminders
+        Alert.alert(
+          'Enabling Notifications',
+          'Scheduling medication reminders...',
+          [{ text: 'OK' }]
+        );
+        
+        await scheduleAllMedicationReminders(user.uid);
+        setNotificationsEnabled(true);
+        setHasPermission(true);
+        
+        // Update profile
+        await profileService.updateProfile(user.uid, {
+          profile: {
+            notificationsEnabled: true,
+          },
+        });
+
+        
+        // Reload to get count
+        await checkNotificationStatus();
+        
+        Alert.alert(
+          'Success',
+          'Medication reminders have been scheduled! You will receive notifications at your medication times.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        // Disable notifications
+        Alert.alert(
+          'Disable Notifications',
+          'This will cancel all medication reminders. Are you sure?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Disable',
+              style: 'destructive',
+              onPress: async () => {
+                await cancelAllMedicationReminders();
+                setNotificationsEnabled(false);
+                
+                // Update profile
+                await profileService.updateProfile(user.uid, {
+                  profile: {
+                    notificationsEnabled: false,
+                  },
+                });
+                
+                await checkNotificationStatus();
+                
+                Alert.alert('Success', 'All medication reminders have been cancelled.');
+              },
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error toggling notifications:', error);
+      Alert.alert('Error', 'Failed to update notification settings');
+    }
+  };
+
+  // ✅ NEW: Test notification
+  const handleTestNotification = async () => {
+    try {
+      await sendTestNotification();
+      Alert.alert(
+        'Test Notification Sent',
+        'You should receive a test notification in 2 seconds!',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+      Alert.alert('Error', 'Failed to send test notification');
+    }
+  };
+
+  // ✅ NEW: View scheduled notifications
+  const handleViewScheduledNotifications = async () => {
+    try {
+      const notifications = await getAllScheduledNotifications();
+      
+      if (notifications.length === 0) {
+        Alert.alert('No Scheduled Notifications', 'You don\'t have any scheduled medication reminders.');
+        return;
+      }
+
+      const notificationList = notifications.map((n, index) => {
+        const data = n.content.data as any;
+        const trigger = n.trigger as any;
+        return `${index + 1}. ${data?.medicationName || 'Medication'}\n   Time: ${trigger?.hour || 'N/A'}:00`;
+      }).join('\n\n');
+
+      Alert.alert(
+        `Scheduled Notifications (${notifications.length})`,
+        notificationList,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error viewing notifications:', error);
+      Alert.alert('Error', 'Failed to load scheduled notifications');
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadProfile();
+    await checkNotificationStatus(); // ✅ NEW
     setRefreshing(false);
   };
 
@@ -164,7 +323,7 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.light.primary} />
           <Text style={styles.loadingText}>Loading profile...</Text>
@@ -308,15 +467,72 @@ export default function ProfileScreen() {
             />
           </View>
 
-          {/* App Settings */}
+          {/* ✅ ENHANCED: App Settings with Notification Controls */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>App Settings</Text>
             
-            <SettingCard
-              icon="notifications-outline"
-              label="Notifications"
-              value={profile?.profile?.notificationsEnabled ? 'Enabled' : 'Disabled'}
-            />
+            {/* Notification Toggle */}
+            <View style={styles.notificationCard}>
+              <View style={styles.notificationLeft}>
+                <Ionicons 
+                  name={notificationsEnabled ? "notifications" : "notifications-off"} 
+                  size={24} 
+                  color={notificationsEnabled ? Colors.light.primary : Colors.light.textSecondary} 
+                />
+                <View style={styles.notificationTextContainer}>
+                  <Text style={styles.notificationLabel}>Medication Reminders</Text>
+                  <Text style={styles.notificationSubtext}>
+                    {notificationsEnabled 
+                      ? `${scheduledCount} reminders scheduled` 
+                      : 'Enable to receive reminders'}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={notificationsEnabled}
+                onValueChange={handleToggleNotifications}
+                trackColor={{ false: '#E5E5EA', true: Colors.light.primary + '50' }}
+                thumbColor={notificationsEnabled ? Colors.light.primary : '#F4F3F4'}
+                ios_backgroundColor="#E5E5EA"
+              />
+            </View>
+
+            {/* Notification Actions */}
+            {notificationsEnabled && (
+              <>
+                <TouchableOpacity 
+                  style={styles.actionCard}
+                  onPress={handleViewScheduledNotifications}
+                >
+                  <View style={styles.actionLeft}>
+                    <Ionicons name="list-outline" size={20} color={Colors.light.primary} />
+                    <Text style={styles.actionLabel}>View Scheduled Reminders</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.light.textSecondary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.actionCard}
+                  onPress={handleTestNotification}
+                >
+                  <View style={styles.actionLeft}>
+                    <Ionicons name="flask-outline" size={20} color={Colors.light.primary} />
+                    <Text style={styles.actionLabel}>Send Test Notification</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.light.textSecondary} />
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Permission Warning */}
+            {!hasPermission && (
+              <View style={styles.warningCard}>
+                <Ionicons name="warning-outline" size={20} color="#FF9500" />
+                <Text style={styles.warningText}>
+                  Notification permissions not granted. Enable in device settings to receive reminders.
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Logout Button */}
@@ -353,17 +569,6 @@ const InfoCard = ({ icon, label, value }: { icon: string; label: string; value: 
       <Text style={styles.infoLabel}>{label}</Text>
     </View>
     <Text style={styles.infoValue}>{value}</Text>
-  </View>
-);
-
-// Setting Card Component
-const SettingCard = ({ icon, label, value }: { icon: string; label: string; value: string }) => (
-  <View style={styles.settingCard}>
-    <View style={styles.settingLeft}>
-      <Ionicons name={icon as any} size={20} color={Colors.light.primary} />
-      <Text style={styles.settingLabel}>{label}</Text>
-    </View>
-    <Text style={styles.settingValue}>{value}</Text>
   </View>
 );
 
@@ -491,7 +696,38 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     flex: 1,
   },
-  settingCard: {
+  // ✅ NEW: Notification card styles
+  notificationCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: Colors.light.cardBackground,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  notificationLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  notificationTextContainer: {
+    flex: 1,
+  },
+  notificationLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 2,
+  },
+  notificationSubtext: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+  },
+  actionCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -502,20 +738,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.light.border,
   },
-  settingLeft: {
+  actionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  settingLabel: {
+  actionLabel: {
     fontSize: 14,
     fontWeight: '500',
     color: Colors.light.text,
   },
-  settingValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.primary,
+  warningCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FF950015',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#FF950050',
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#FF9500',
+    lineHeight: 16,
   },
   logoutButton: {
     flexDirection: 'row',

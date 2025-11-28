@@ -32,7 +32,8 @@
         "android.permission.CAMERA",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.SCHEDULE_EXACT_ALARM",
-        "android.permission.USE_EXACT_ALARM"
+        "android.permission.USE_EXACT_ALARM",
+        "android.permission.RECORD_AUDIO"
       ],
       "package": "com.ab1224.HealthPathMobile"
     },
@@ -64,13 +65,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/notification-icon.png",
-          "color": "#007AFF",
-          "sounds": [
-            "./assets/sounds/notification.wav"
-          ],
-          "androidMode": "default",
-          "androidCollapsedTitle": "HealthPath Reminder"
+          "color": "#fa8a61ff"
         }
       ]
     ],
@@ -78,11 +73,10 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "notification": {
-      "icon": "./assets/images/notification-icon.png",
-      "color": "#007AFF",
-      "androidMode": "default",
-      "androidCollapsedTitle": "HealthPath Reminder"
+    "extra": {
+      "eas": {
+        "projectId": "257de601-8d25-4a11-9419-5c12b0d7d1ca"
+      }
     }
   }
 }

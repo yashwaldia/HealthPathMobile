@@ -13,7 +13,11 @@ export interface UserProfile {
   photoURL: string | null;
   createdAt: string;
   lastActive: string;
-  
+
+  // Push Notifications
+  pushToken?: string | null;     // Expo push token for this device/user
+  timezone?: string;             // IANA timezone, e.g. "Asia/Kolkata", "America/New_York"
+
   // Nested Profile Object
   profile: ProfileData;
 }
@@ -73,7 +77,18 @@ export type Gender =
   | 'Prefer not to say';
 
 // Helper type for updating profile
-export type ProfileUpdateData = Partial<UserProfile> & {
+export type ProfileUpdateData = {
+  uid?: string;
+  email?: string;
+  displayName?: string;
+  photoURL?: string | null;
+  createdAt?: string;
+  lastActive?: string;
+
+  // New push notification fields (optional on update)
+  pushToken?: string | null;
+  timezone?: string;
+
   profile?: Partial<ProfileData>;
 };
 

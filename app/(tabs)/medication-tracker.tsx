@@ -7,7 +7,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
@@ -18,12 +17,15 @@ import { useAuth } from '../../context/AuthContext';
 import { Colors } from '../../constants/colors';
 import {
   getAllMedications,
-  getActiveMedications,
   deleteMedication,
   logDose,
   getDoseHistory,
 } from '../../services/medicationService';
 import { Medication, DoseLog } from '../../types/medication';
+
+// UI components
+import CustomToast from '../../components/ui/CustomToast';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 
 // Frequency map to calculate expected daily doses
 const FREQUENCY_MAP: Record<string, number> = {
@@ -32,12 +34,12 @@ const FREQUENCY_MAP: Record<string, number> = {
   'Thrice a day': 3,
   'Four times a day': 4,
   'As needed': 0,
-  'Custom': 0,
+  Custom: 0,
   'Every 4 hours': 6,
   'Every 6 hours': 4,
   'Every 8 hours': 3,
   'Every 12 hours': 2,
-  'Weekly': 0,
+  Weekly: 0,
 };
 
 export default function MedicationTrackerScreen() {
@@ -50,9 +52,23 @@ export default function MedicationTrackerScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
-  
-  // Store dose history for each medication locally for immediate UI updates
+
+  // Store dose history for each medication locally
   const [dosesMap, setDosesMap] = useState<{ [key: string]: DoseLog[] }>({});
+
+  // Toast state
+  const [toast, setToast] = useState<{
+    visible: boolean;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({ visible: false, message: '', type: 'info' });
+
+  // Delete confirm dialog
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning') => {
+    setToast({ visible: true, message, type });
+  };
 
   /**
    * Load medications and their dose history
@@ -62,32 +78,28 @@ export default function MedicationTrackerScreen() {
 
     try {
       setLoading(true);
-      
-      // 1. Get all medications
+
       const allMeds = await getAllMedications(user.uid);
       setMedications(allMeds);
-      setActiveMedications(allMeds.filter(med => med.isActive));
+      setActiveMedications(allMeds.filter((med) => med.isActive));
 
-      // 2. Fetch dose history for each active medication (last 100 doses)
       const dosesPromises = allMeds.map(async (med) => {
         if (!med.isActive) return { medicationId: med.medicationId, doses: [] };
-        // Fetching history allows us to calculate adherence and check today's status
         const history = await getDoseHistory(user.uid!, med.medicationId, 100);
         return { medicationId: med.medicationId, doses: history };
       });
 
       const dosesResults = await Promise.all(dosesPromises);
-      
+
       const newDosesMap: { [key: string]: DoseLog[] } = {};
-      dosesResults.forEach(result => {
+      dosesResults.forEach((result) => {
         newDosesMap[result.medicationId] = result.doses;
       });
-      
-      setDosesMap(newDosesMap);
 
+      setDosesMap(newDosesMap);
     } catch (error) {
       console.error('Error loading medications:', error);
-      Alert.alert('Error', 'Failed to load medications');
+      showToast('Failed to load medications', 'error');
     } finally {
       setLoading(false);
     }
@@ -110,30 +122,25 @@ export default function MedicationTrackerScreen() {
   }, [loadMedications]);
 
   /**
-   * Handle delete medication
+   * Handle delete medication (open confirm dialog)
    */
   const handleDeleteMedication = (medicationId: string, name: string) => {
-    Alert.alert(
-      'Delete Medication',
-      `Are you sure you want to delete "${name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              if (!user?.uid) return;
-              await deleteMedication(user.uid, medicationId);
-              await loadMedications();
-              Alert.alert('Success', 'Medication deleted');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete medication');
-            }
-          },
-        },
-      ]
-    );
+    setDeleteTarget({ id: medicationId, name });
+  };
+
+  const confirmDeleteMedication = async () => {
+    if (!user?.uid || !deleteTarget) return;
+
+    try {
+      await deleteMedication(user.uid, deleteTarget.id);
+      await loadMedications();
+      showToast(`Medication "${deleteTarget.name}" deleted`, 'success');
+    } catch (error) {
+      console.error('Delete medication error:', error);
+      showToast('Failed to delete medication', 'error');
+    } finally {
+      setDeleteTarget(null);
+    }
   };
 
   /**
@@ -143,7 +150,7 @@ export default function MedicationTrackerScreen() {
     try {
       if (!user?.uid) return;
       const now = new Date();
-      
+
       await logDose(user.uid, medication.medicationId, {
         scheduledTime: now.toISOString(),
         takenTime: now.toISOString(),
@@ -151,18 +158,16 @@ export default function MedicationTrackerScreen() {
         skipped: false,
       });
 
-      Alert.alert('✅ Logged', `Dose of ${medication.name} marked as taken`);
-      
-      // Refresh to update the UI state
+      showToast(`Dose of ${medication.name} marked as taken`, 'success');
       await loadMedications();
     } catch (error) {
-      Alert.alert('Error', 'Failed to log dose');
+      console.error('Log dose error:', error);
+      showToast('Failed to log dose', 'error');
     }
   };
 
   /**
    * Calculate adherence and status for a single medication
-   * Logic matches website implementation
    */
   const getMedicationStatus = (medication: Medication) => {
     const doses = dosesMap[medication.medicationId] || [];
@@ -171,63 +176,59 @@ export default function MedicationTrackerScreen() {
     const start = new Date(startDate);
     const duration = durationDays ? parseInt(durationDays.toString(), 10) : 0;
 
-    // Safety check for valid dates
     if (isNaN(start.getTime()) || (durationDays && isNaN(duration))) {
       return { adherence: 0, dosesTakenToday: 0, expectedDoses: 0, isDue: false, isActive: false };
     }
 
     const today = new Date();
-    
-    // Check if medication is currently active based on dates
+
     let isActiveDateRange = true;
     if (duration > 0) {
       const end = new Date(start);
       end.setDate(start.getDate() + duration);
       isActiveDateRange = today >= start && today < end;
     }
-    
-    // Filter doses taken TODAY
+
     const todayStr = today.toDateString();
-    const dosesTakenToday = doses.filter(d => {
+    const dosesTakenToday = doses.filter((d) => {
       const dDate = d.takenTime ? new Date(d.takenTime) : new Date(d.createdAt);
       return dDate.toDateString() === todayStr;
     }).length;
 
-    // "As needed" / "Custom" logic - Always 100% adherence, always "Take Now" available
     if (frequency === 'As needed' || frequency === 'Custom' || frequency === 'Weekly') {
-      return { 
-        adherence: 100, 
-        dosesTakenToday, 
-        expectedDoses: 0, 
-        isDue: true, 
-        isActive: isActiveDateRange 
+      return {
+        adherence: 100,
+        dosesTakenToday,
+        expectedDoses: 0,
+        isDue: true,
+        isActive: isActiveDateRange,
       };
     }
 
-    // Regular schedule logic
     const expectedDosesPerDay = FREQUENCY_MAP[frequency] || 1;
-    
-    // Calculate total expected doses since start date
-    const daysSinceStart = Math.max(0, Math.floor((today.getTime() - start.getTime()) / (1000 * 3600 * 24)));
-    const totalExpectedDosesSoFar = Math.min(daysSinceStart + 1, duration || 9999) * expectedDosesPerDay;
-    
-    // Total taken historically
-    const totalTaken = doses.length;
-    
-    // Calculate adherence percentage
-    const adherence = totalExpectedDosesSoFar > 0 
-      ? Math.min(100, Math.round((totalTaken / totalExpectedDosesSoFar) * 100)) 
-      : 100;
 
-    // Determine if a dose is due NOW
+    const daysSinceStart = Math.max(
+      0,
+      Math.floor((today.getTime() - start.getTime()) / (1000 * 3600 * 24))
+    );
+    const totalExpectedDosesSoFar =
+      Math.min(daysSinceStart + 1, duration || 9999) * expectedDosesPerDay;
+
+    const totalTaken = doses.length;
+
+    const adherence =
+      totalExpectedDosesSoFar > 0
+        ? Math.min(100, Math.round((totalTaken / totalExpectedDosesSoFar) * 100))
+        : 100;
+
     const isDueNow = isActiveDateRange && dosesTakenToday < expectedDosesPerDay;
 
-    return { 
-      adherence, 
-      dosesTakenToday, 
-      expectedDoses: expectedDosesPerDay, 
-      isDue: isDueNow, 
-      isActive: isActiveDateRange 
+    return {
+      adherence,
+      dosesTakenToday,
+      expectedDoses: expectedDosesPerDay,
+      isDue: isDueNow,
+      isActive: isActiveDateRange,
     };
   };
 
@@ -235,9 +236,10 @@ export default function MedicationTrackerScreen() {
    * Render medication card
    */
   const renderMedicationCard = (medication: Medication) => {
-    const { adherence, dosesTakenToday, expectedDoses, isDue, isActive } = getMedicationStatus(medication);
-    
-    const adherenceColor = adherence >= 80 ? Colors.light.success : adherence >= 60 ? '#FFA500' : Colors.light.error;
+    const { adherence, dosesTakenToday, expectedDoses, isDue } = getMedicationStatus(medication);
+
+    const adherenceColor =
+      adherence >= 80 ? Colors.light.success : adherence >= 60 ? '#FFA500' : Colors.light.error;
     const isAsNeeded = medication.frequency === 'As needed' || medication.frequency === 'Custom';
 
     return (
@@ -246,7 +248,7 @@ export default function MedicationTrackerScreen() {
         <View style={styles.cardHeader}>
           <View style={styles.medicationInfo}>
             <View style={[styles.iconContainer, { backgroundColor: Colors.light.cardBackground }]}>
-               <Ionicons name="medkit" size={24} color={Colors.light.primary} />
+              <Ionicons name="medkit" size={24} color={Colors.light.primary} />
             </View>
             <View style={styles.medicationText}>
               <Text style={styles.medicationName}>{medication.name}</Text>
@@ -255,7 +257,7 @@ export default function MedicationTrackerScreen() {
               </Text>
             </View>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => handleDeleteMedication(medication.medicationId, medication.name)}
             style={styles.deleteButton}
           >
@@ -275,7 +277,11 @@ export default function MedicationTrackerScreen() {
           </View>
           {medication.purpose && (
             <View style={styles.detailRow}>
-              <Ionicons name="information-circle-outline" size={16} color={Colors.light.textSecondary} />
+              <Ionicons
+                name="information-circle-outline"
+                size={16}
+                color={Colors.light.textSecondary}
+              />
               <Text style={styles.detailText}>{medication.purpose}</Text>
             </View>
           )}
@@ -283,16 +289,18 @@ export default function MedicationTrackerScreen() {
 
         {/* Adherence Bar */}
         <View style={styles.adherenceContainer}>
-          <View style={{flexDirection: 'row', justifyContent: 'space-between'}}>
-             <Text style={styles.adherenceLabel}>Adherence</Text>
-             <Text style={[styles.adherencePercentage, { color: adherenceColor }]}>{adherence}%</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={styles.adherenceLabel}>Adherence</Text>
+            <Text style={[styles.adherencePercentage, { color: adherenceColor }]}>
+              {adherence}%
+            </Text>
           </View>
           <View style={styles.adherenceBarBackground}>
-            <View 
+            <View
               style={[
-                styles.adherenceBarFill, 
-                { width: `${adherence}%`, backgroundColor: adherenceColor }
-              ]} 
+                styles.adherenceBarFill,
+                { width: `${adherence}%`, backgroundColor: adherenceColor },
+              ]}
             />
           </View>
         </View>
@@ -301,35 +309,36 @@ export default function MedicationTrackerScreen() {
         <View style={styles.cardActions}>
           <TouchableOpacity
             style={[
-              styles.actionButton, 
+              styles.actionButton,
               styles.takeButton,
-              !isDue && !isAsNeeded && styles.disabledButton
+              !isDue && !isAsNeeded && styles.disabledButton,
             ]}
             onPress={() => handleMarkDoseTaken(medication)}
             disabled={!isDue && !isAsNeeded}
           >
-            <Ionicons 
-              name={isDue || isAsNeeded ? "checkmark-circle" : "checkmark-done-circle"} 
-              size={20} 
-              color={!isDue && !isAsNeeded ? Colors.light.textSecondary : "#FFFFFF"} 
+            <Ionicons
+              name={isDue || isAsNeeded ? 'checkmark-circle' : 'checkmark-done-circle'}
+              size={20}
+              color={!isDue && !isAsNeeded ? Colors.light.textSecondary : '#FFFFFF'}
             />
-            <Text style={[
-              styles.takeButtonText,
-              !isDue && !isAsNeeded && { color: Colors.light.textSecondary }
-            ]}>
-              {isAsNeeded 
-                ? `Take Now (${dosesTakenToday})` 
-                : isDue 
-                  ? `Take Now (${dosesTakenToday}/${expectedDoses})`
-                  : `All Done (${dosesTakenToday}/${expectedDoses})`
-              }
+            <Text
+              style={[
+                styles.takeButtonText,
+                !isDue && !isAsNeeded && { color: Colors.light.textSecondary },
+              ]}
+            >
+              {isAsNeeded
+                ? `Take Now (${dosesTakenToday})`
+                : isDue
+                ? `Take Now (${dosesTakenToday}/${expectedDoses})`
+                : `All Done (${dosesTakenToday}/${expectedDoses})`}
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.editButton}
             onPress={() => {
-               Alert.alert('Coming Soon', 'Edit medication feature');
+              showToast('Edit medication will be available soon', 'info');
             }}
           >
             <Ionicons name="create-outline" size={20} color={Colors.light.primary} />
@@ -348,27 +357,50 @@ export default function MedicationTrackerScreen() {
       <Ionicons name="medkit-outline" size={80} color={Colors.light.border} />
       <Text style={styles.emptyStateTitle}>No Medications Yet</Text>
       <Text style={styles.emptyStateText}>
-        Add your first medication to start tracking your doses and adherence
+        Add your first medication to start tracking your doses and adherence.
       </Text>
     </View>
   );
 
   const displayedMedications = showInactive ? medications : activeMedications;
 
-  // Calculate overall adherence for stats bar
   const overallAdherence = useMemo(() => {
-     const activeMeds = medications.filter(m => m.isActive);
-     if (activeMeds.length === 0) return 0;
-     
-     const sumAdherence = activeMeds.reduce((sum, med) => {
-        return sum + getMedicationStatus(med).adherence;
-     }, 0);
-     
-     return Math.round(sumAdherence / activeMeds.length);
+    const activeMeds = medications.filter((m) => m.isActive);
+    if (activeMeds.length === 0) return 0;
+
+    const sumAdherence = activeMeds.reduce((sum, med) => {
+      return sum + getMedicationStatus(med).adherence;
+    }, 0);
+
+    return Math.round(sumAdherence / activeMeds.length);
   }, [medications, dosesMap]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Toast */}
+      <CustomToast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
+
+      {/* Delete Confirm Dialog */}
+      <ConfirmDialog
+        visible={!!deleteTarget}
+        title="Delete Medication"
+        message={
+          deleteTarget
+            ? `Are you sure you want to delete "${deleteTarget.name}"? This cannot be undone.`
+            : ''
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        onConfirm={confirmDeleteMedication}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -391,8 +423,13 @@ export default function MedicationTrackerScreen() {
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: overallAdherence >= 80 ? Colors.light.success : Colors.light.primary }]}>
-             {overallAdherence}%
+          <Text
+            style={[
+              styles.statValue,
+              { color: overallAdherence >= 80 ? Colors.light.success : Colors.light.primary },
+            ]}
+          >
+            {overallAdherence}%
           </Text>
           <Text style={styles.statLabel}>Adherence</Text>
         </View>
@@ -404,17 +441,13 @@ export default function MedicationTrackerScreen() {
           style={[styles.filterButton, !showInactive && styles.filterButtonActive]}
           onPress={() => setShowInactive(false)}
         >
-          <Text style={[styles.filterText, !showInactive && styles.filterTextActive]}>
-            Active
-          </Text>
+          <Text style={[styles.filterText, !showInactive && styles.filterTextActive]}>Active</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.filterButton, showInactive && styles.filterButtonActive]}
           onPress={() => setShowInactive(true)}
         >
-          <Text style={[styles.filterText, showInactive && styles.filterTextActive]}>
-            All
-          </Text>
+          <Text style={[styles.filterText, showInactive && styles.filterTextActive]}>All</Text>
         </TouchableOpacity>
       </View>
 
@@ -430,11 +463,7 @@ export default function MedicationTrackerScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           showsVerticalScrollIndicator={false}
         >
-          {displayedMedications.length === 0 ? (
-            renderEmptyState()
-          ) : (
-            displayedMedications.map(renderMedicationCard)
-          )}
+          {displayedMedications.length === 0 ? renderEmptyState() : displayedMedications.map(renderMedicationCard)}
         </ScrollView>
       )}
 
@@ -442,7 +471,7 @@ export default function MedicationTrackerScreen() {
       <TouchableOpacity
         style={styles.addButton}
         onPress={() => {
-          Alert.alert('Coming Soon', 'Add medication feature will be implemented next');
+          showToast('Add medication will be available soon', 'info');
         }}
       >
         <Ionicons name="add" size={28} color="#FFFFFF" />
@@ -639,7 +668,7 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.light.border,
   },
   actionButton: {
-    flex: 1, // Makes width same as edit button
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -651,7 +680,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.primary,
   },
   disabledButton: {
-    backgroundColor: '#D1D5DB', // Disabled gray color
+    backgroundColor: '#D1D5DB',
   },
   takeButtonText: {
     fontSize: 14,
@@ -659,7 +688,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   editButton: {
-    flex: 1, // Makes width same as take button
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
