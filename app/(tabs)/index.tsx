@@ -116,7 +116,7 @@ export default function HomeScreen() {
     { id: 3, icon: 'heart-outline', label: 'Symptoms', route: '/(tabs)/symptoms', active: true },
     { id: 4, icon: 'flask-outline', label: 'Lab Tests', route: 'interpreter', active: true },
     { id: 5, icon: 'bar-chart-outline', label: 'Reports', route: '/(tabs)/reports', active: true },
-    { id: 6, icon: 'scan-outline', label: 'Radiology', route: 'radiology-analyzer', active: true },
+    { id: 6, icon: 'scan-outline', label: 'Radiology', route: '/(tabs)/radiology-analyzer', active: true },
     { id: 7, icon: 'sparkles-outline', label: 'AI Report', route: '/(tabs)/ai-report', active: true },
     { id: 8, icon: 'pulse-outline', label: 'Biohacking', route: 'biohacking', active: true },
     { id: 9, icon: 'restaurant-outline', label: 'Nutrition', route: 'nutrition-tracker', active: true },
@@ -125,7 +125,7 @@ export default function HomeScreen() {
     { id: 12, icon: 'people-outline', label: 'Child Health', route: 'child-health', active: true },
     { id: 13, icon: 'time-outline', label: 'History', route: '/(tabs)/history', active: true },
     { id: 14, icon: 'barbell-outline', label: 'FitCalc', route: 'fitcalc', active: true },
-    { id: 15, icon: 'nutrition-outline', label: 'MacroMaster', route: 'macromaster', active: true },
+    // { id: 15, icon: 'nutrition-outline', label: 'MacroMaster', route: 'macromaster', active: true },
     { id: 16, icon: 'library-outline', label: 'Health Library', route: '/(tabs)/learning', active: true },
     { id: 17, icon: 'settings-outline', label: 'Settings', route: 'settings', active: true },
   ];

@@ -14,6 +14,7 @@ interface WeeklySummary {
   vitalsLogged: number;
   labsUploaded: number;
   symptomsLogged: number;
+  fitCalcUsed: number; // ✅ NEW: FitCalc calculations count
   aiSummary: string;
   generatedAt: admin.firestore.FieldValue;
   dataPoints: {
@@ -21,9 +22,11 @@ interface WeeklySummary {
     medications: number;
     labs: number;
     symptoms: number;
+    fitcalc: number; // ✅ NEW: FitCalc data point
   };
   topSymptoms?: string[];
   averageSeverity?: number;
+  fitCalcTypes?: string[]; // ✅ NEW: Calculator types used (optional)
 }
 
 /**
@@ -105,7 +108,26 @@ export const generateWeeklyReport = async (userId: string): Promise<string | nul
     const averageSeverity =
       symptomsCount > 0 ? Math.round((totalSeverity / symptomsCount) * 10) / 10 : 0;
 
-    const totalActivity = vitalsCount + labsCount + symptomsCount;
+    // ✅ E. FitCalc History (NEW!)
+    // ==========================================
+    const fitCalcSnapshot = await db
+      .collection(`users/${userId}/fitcalc_history`)
+      .where('savedAt', '>=', admin.firestore.Timestamp.fromDate(sevenDaysAgo))
+      .get();
+    const fitCalcCount = fitCalcSnapshot.size;
+
+    // Get calculator types used this week
+    const calculatorTypesSet = new Set<string>();
+    fitCalcSnapshot.docs.forEach((doc) => {
+      const calcId = doc.data().calculatorId;
+      if (calcId) {
+        calculatorTypesSet.add(calcId);
+      }
+    });
+    const fitCalcTypes = Array.from(calculatorTypesSet).slice(0, 3); // Top 3 most used
+
+    // ✅ UPDATED: Include FitCalc in total activity
+    const totalActivity = vitalsCount + labsCount + symptomsCount + fitCalcCount;
 
     // 2. Smart Check: Is user active?
     // ==========================================
@@ -145,6 +167,36 @@ export const generateWeeklyReport = async (userId: string): Promise<string | nul
         }
       }
 
+      // ✅ Build FitCalc context for AI (NEW!)
+      let fitCalcContext = '';
+      if (fitCalcCount > 0) {
+        // Map calculator IDs to user-friendly names
+        const calcNames: { [key: string]: string } = {
+          bmi: 'BMI',
+          bmr: 'BMR',
+          tdee: 'TDEE',
+          macros: 'Macros',
+          'one-rm': '1-Rep Max',
+          'body-fat': 'Body Fat',
+          'hr-zones': 'Heart Rate Zones',
+          vo2max: 'VO₂max',
+          'activity-calories': 'Activity Calories',
+          'body-ratios': 'Body Ratios',
+          'ideal-weight': 'Ideal Weight',
+          water: 'Water Intake',
+          running: 'Running Pace',
+          protein: 'Protein Intake',
+        };
+
+        const calcNamesUsed = fitCalcTypes
+          .map((id) => calcNames[id] || id)
+          .join(', ');
+
+        fitCalcContext = `
+- Fitness calculations performed: ${fitCalcCount}${fitCalcTypes.length > 0 ? ` (${calcNamesUsed})` : ''}
+`;
+      }
+
       const prompt = `
 You are HealthPath, a friendly and encouraging medical assistant.
 Write a concise 3-4 sentence weekly health summary for a user based on their data.
@@ -153,13 +205,14 @@ Write a concise 3-4 sentence weekly health summary for a user based on their dat
 - Vitals logged: ${vitalsCount} times
 - Lab reports uploaded: ${labsCount}
 - Active medications being tracked: ${activeMedsCount}
-- Symptom logs: ${symptomsCount}${symptomContext}
+- Symptom logs: ${symptomsCount}${symptomContext}${fitCalcContext}
 
 **Tone Instructions:**
 - If activity is LOW (0-2 total logs): Be encouraging, hype them up to build habits. Focus on "small steps matter."
 - If activity is HIGH (>3 logs): Praise their consistency and detailed tracking. Mention specific numbers to validate their effort.
 - If symptoms were logged: Acknowledge symptom tracking and provide empathetic, supportive feedback. If severity is high (>3), suggest consulting a healthcare provider.
 - If AI analyzed symptoms: Mention that they're using smart health insights.
+- If FitCalc was used: Acknowledge their fitness tracking efforts and encourage consistency.
 
 **Formatting:**
 - Conversational paragraph (no bullet points).
@@ -173,9 +226,11 @@ Write a concise 3-4 sentence weekly health summary for a user based on their dat
     } catch (aiError) {
       logger.error('AI Generation failed, falling back to rule-based summary', aiError);
 
-      // Fallback logic if AI fails
+      // ✅ UPDATED: Fallback logic with FitCalc support
       if (totalActivity > 5) {
-        aiSummary = `Outstanding week! You logged ${vitalsCount} vitals, ${symptomsCount} symptoms, and stayed on top of your health. ${
+        aiSummary = `Outstanding week! You logged ${vitalsCount} vitals, ${symptomsCount} symptoms${
+          fitCalcCount > 0 ? `, and performed ${fitCalcCount} fitness calculations` : ''
+        }, and stayed on top of your health. ${
           averageSeverity > 3
             ? 'Some symptoms showed higher severity - consider consulting your doctor if they persist.'
             : 'Keep up the great tracking!'
@@ -188,6 +243,8 @@ Write a concise 3-4 sentence weekly health summary for a user based on their dat
             ? 'Average severity was moderate - monitor closely and consult a doctor if needed.'
             : 'Great awareness of your body!'
         }`;
+      } else if (fitCalcCount > 0) {
+        aiSummary = `Great job tracking fitness! You performed ${fitCalcCount} calculations this week. Keep building those healthy habits! 💪`;
       } else {
         aiSummary =
           'A quiet week for logs, but every step counts. Try logging a few more vitals or symptoms next week to build your health history! 🌱';
@@ -204,6 +261,7 @@ Write a concise 3-4 sentence weekly health summary for a user based on their dat
       vitalsLogged: vitalsCount,
       labsUploaded: labsCount,
       symptomsLogged: symptomsCount,
+      fitCalcUsed: fitCalcCount, // ✅ NEW: FitCalc count
       aiSummary: aiSummary,
       generatedAt: admin.firestore.FieldValue.serverTimestamp(),
       dataPoints: {
@@ -211,23 +269,33 @@ Write a concise 3-4 sentence weekly health summary for a user based on their dat
         medications: activeMedsCount,
         labs: labsCount,
         symptoms: symptomsCount,
+        fitcalc: fitCalcCount, // ✅ NEW: FitCalc data point
       },
       topSymptoms: topSymptoms.length > 0 ? topSymptoms : undefined,
       averageSeverity: symptomsCount > 0 ? averageSeverity : undefined,
+      fitCalcTypes: fitCalcTypes.length > 0 ? fitCalcTypes : undefined, // ✅ NEW: Calculator types
     };
 
     await reportRef.set(reportData);
     logger.info(`Generated weekly report for ${userId}: ${reportRef.id}`);
 
+    // ✅ UPDATED: Notification message includes FitCalc if used
     // 5. Create In-App Notification (for History/Bell)
     // ==========================================
     const notificationRef = db.collection(`users/${userId}/notifications`).doc();
+    
+    let notificationBody = 'Tap to view your AI health summary for this week.';
+    if (symptomsCount > 0 && fitCalcCount > 0) {
+      notificationBody = `Your AI health summary is ready! Includes ${symptomsCount} symptom${symptomsCount > 1 ? 's' : ''} and ${fitCalcCount} fitness calculation${fitCalcCount > 1 ? 's' : ''}.`;
+    } else if (symptomsCount > 0) {
+      notificationBody = `Your AI health summary is ready! Includes ${symptomsCount} symptom${symptomsCount > 1 ? 's' : ''} tracked this week.`;
+    } else if (fitCalcCount > 0) {
+      notificationBody = `Your AI health summary is ready! Includes ${fitCalcCount} fitness calculation${fitCalcCount > 1 ? 's' : ''} this week.`;
+    }
+
     await notificationRef.set({
       title: '📊 Weekly Health Report Ready',
-      body:
-        symptomsCount > 0
-          ? `Your AI health summary is ready! Includes ${symptomsCount} symptom${symptomsCount > 1 ? 's' : ''} tracked this week.`
-          : 'Tap to view your AI health summary for this week.',
+      body: notificationBody,
       type: 'ai-insight',
       read: false,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),

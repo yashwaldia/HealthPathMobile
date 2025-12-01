@@ -155,8 +155,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
-    paddingHorizontal: 20, 
-    paddingVertical: 16,
+    paddingHorizontal: 16, 
+    paddingVertical: 12,
     backgroundColor: Colors.light.cardBackground,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border

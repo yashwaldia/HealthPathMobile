@@ -54,7 +54,7 @@ export const NotificationModal = ({
     { id: 'all', label: 'All' },
     { id: 'weekly', label: 'Weekly' },      // NEW: Weekly tab
     { id: 'vitals', label: 'Vitals' },
-    { id: 'ai-insight', label: 'AI Insight' },
+    // { id: 'ai-insight', label: 'AI Insight' },
     { id: 'reminder', label: 'Reminder' },
   ];
 

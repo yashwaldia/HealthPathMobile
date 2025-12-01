@@ -265,7 +265,7 @@ export default function RadiologyAnalysisModal({
           </View>
 
           {/* Technical Details */}
-          <View style={styles.technicalSection}>
+          {/* <View style={styles.technicalSection}>
             <Text style={styles.technicalTitle}>Technical Details</Text>
             <View style={styles.technicalRow}>
               <Text style={styles.technicalLabel}>AI Model:</Text>
@@ -281,7 +281,7 @@ export default function RadiologyAnalysisModal({
               <Text style={styles.technicalLabel}>Analyzed:</Text>
               <Text style={styles.technicalValue}>{formatDate(analysis.analyzedAt)}</Text>
             </View>
-          </View>
+          </View> */}
         </ScrollView>
       </View>
     </Modal>
@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF9E6',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 50,
     borderWidth: 1,
     borderColor: '#FFE082',
   },

@@ -1,35 +1,35 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
-  RefreshControl,
   FlatList,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../context/AuthContext';
-import { Colors } from '../../constants/colors';
-import { SYMPTOM_CATEGORIES } from '../../constants/symptomData';
-import { SymptomCategory, SymptomLog, SymptomFormData } from '../../types/symptom';
+import AIAnalysisModal from '../../components/symptoms/AIAnalysisModal';
 import CategoryCard from '../../components/symptoms/CategoryCard';
 import SelectedSymptomsBar from '../../components/symptoms/SelectedSymptomsBar';
-import SymptomPickerModal from '../../components/symptoms/SymptomPickerModal';
-import AIAnalysisModal from '../../components/symptoms/AIAnalysisModal';
 import SymptomLogCard from '../../components/symptoms/SymptomLogCard';
-import CustomToast from '../../components/ui/CustomToast';
+import SymptomPickerModal from '../../components/symptoms/SymptomPickerModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import CustomToast from '../../components/ui/CustomToast';
+import { Colors } from '../../constants/colors';
+import { SYMPTOM_CATEGORIES } from '../../constants/symptomData';
+import { useAuth } from '../../context/AuthContext';
 import {
-  analyzeSymptomWithAI,
   addSymptomLogWithAnalysis,
-  getRecentSymptomLogs,
+  analyzeSymptomWithAI,
   deleteSymptomLog,
+  getRecentSymptomLogs,
   SymptomAIAnalysis,
 } from '../../services/symptomService';
+import { SymptomCategory, SymptomFormData, SymptomLog } from '../../types/symptom';
 
 export default function SymptomsScreen() {
   const router = useRouter();

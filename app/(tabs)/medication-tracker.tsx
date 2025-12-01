@@ -114,6 +114,8 @@ export default function MedicationTrackerScreen() {
     setRefreshing(false);
   }, [loadMedications]);
 
+
+
   /**
    * Load medications on mount
    */
@@ -489,8 +491,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: Colors.light.cardBackground,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
@@ -502,7 +504,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.light.text,
   },
