@@ -32,12 +32,29 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# Local environment files
-.env*
-.env*.local
+# Local environment files - CRITICAL: Never commit these!
+.env
+.env.*
+.env.local
+.env.*.local
+!.env.example
+
+# Firebase config files - CRITICAL: Never commit these!
+google-services.json
+GoogleService-Info.plist
 
 # TypeScript
 *.tsbuildinfo
 
 # Example app folder
 app-example/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
