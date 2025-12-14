@@ -38,8 +38,7 @@
         "android.permission.USE_EXACT_ALARM",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.ab1224.HealthPathMobile",
-      "googleServicesFile": "./google-services.json"
+      "package": "com.ab1224.HealthPathMobile"
     },
     "web": {
       "output": "static",
@@ -80,8 +79,7 @@
     "extra": {
       "eas": {
         "projectId": "ab4e9c68-9397-41d9-aacc-f5b3153548c7"
-      },
-      "router": {}
+      }
     }
   }
 }
