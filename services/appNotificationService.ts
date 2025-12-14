@@ -1,15 +1,15 @@
 // services/appNotificationService.ts
 import {
+  addDoc,
   collection,
   doc,
   getDocs,
-  updateDoc,
-  query,
-  orderBy,
   limit,
-  writeBatch,
+  orderBy,
+  query,
   serverTimestamp,
-  addDoc,
+  updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../config/firebaseConfig';
 
@@ -31,6 +31,26 @@ export interface AppNotification {
 }
 
 /**
+ * Helper function to remove undefined values from an object
+ * Firestore does not support undefined as a value
+ */
+const cleanData = (data: any): any => {
+  if (!data || typeof data !== 'object') return data;
+  
+  const cleaned: any = {};
+  Object.keys(data).forEach((key) => {
+    if (data[key] !== undefined) {
+      if (typeof data[key] === 'object' && data[key] !== null && !Array.isArray(data[key])) {
+        cleaned[key] = cleanData(data[key]);
+      } else {
+        cleaned[key] = data[key];
+      }
+    }
+  });
+  return Object.keys(cleaned).length > 0 ? cleaned : null;
+};
+
+/**
  * Fetch notifications for a specific user
  */
 export const getNotifications = async (
@@ -46,7 +66,6 @@ export const getNotifications = async (
       return {
         id: d.id,
         ...data,
-        // Safely convert Firestore Timestamp to JS Date
         timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(),
       } as AppNotification;
     });
@@ -90,12 +109,6 @@ export const clearAllNotifications = async (userId: string) => {
 
 /**
  * Low-level helper to create a notification of any type
- * Make sure `type` matches NotificationCenter filters:
- *  - 'vitals'
- *  - 'ai-insight'
- *  - 'reminder'
- *  - 'child-health'
- *  - 'general'
  */
 export const createNotification = async (
   userId: string,
@@ -108,11 +121,14 @@ export const createNotification = async (
 ) => {
   try {
     const notificationsRef = collection(db, 'users', userId, 'notifications');
+    
+    const cleanedData = payload.data ? cleanData(payload.data) : null;
+    
     await addDoc(notificationsRef, {
       title: payload.title,
       body: payload.body,
       type: payload.type,
-      data: payload.data ?? null,
+      data: cleanedData,
       read: false,
       timestamp: serverTimestamp(),
     });
@@ -122,7 +138,7 @@ export const createNotification = async (
 };
 
 /**
- * Convenience: Vitals notification (shows under "Vitals" tab)
+ * Convenience: Vitals notification
  */
 export const createVitalsNotification = async (
   userId: string,
@@ -139,7 +155,7 @@ export const createVitalsNotification = async (
 };
 
 /**
- * Convenience: Reminder notification (shows under "Reminder" tab)
+ * Convenience: Reminder notification
  */
 export const createReminderNotification = async (
   userId: string,
@@ -156,37 +172,31 @@ export const createReminderNotification = async (
 };
 
 /**
- * Convenience: Weekly health report / AI insight notification
- * - Appears in:
- *   - "Weekly" tab when data.type === 'weekly-report'
+ * Convenience: Weekly health report notification
  */
 export const createWeeklyReportNotification = async (
   userId: string,
   options: {
     title?: string;
     body?: string;
-    // extra data for navigation / display
     reportId?: string;
     summary?: string;
   } = {}
 ) => {
   return createNotification(userId, {
-    title: options.title ?? 'Weekly Health Report Ready',
-    body:
-      options.body ??
-      'Your AI health summary is ready. Tap to view this week’s report.',
+    title: options.title || 'Weekly Health Report Ready',
+    body: options.body || 'Your AI health summary is ready. Tap to view this week report.',
     type: 'ai-insight',
     data: {
-      type: 'weekly-report', // IMPORTANT: used by NotificationCenter "Weekly" filter
-      reportId: options.reportId ?? null,
-      summary: options.summary ?? null,
+      type: 'weekly-report',
+      reportId: options.reportId || null,
+      summary: options.summary || null,
     },
   });
 };
 
 /**
- * (Optional) Create a generic test notification
- * - Will appear only in "All" (type = 'general')
+ * Create a generic test notification
  */
 export const createTestNotification = async (userId: string) => {
   try {

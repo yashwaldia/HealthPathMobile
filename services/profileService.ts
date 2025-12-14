@@ -1,7 +1,5 @@
 /**
  * Profile Service - Firebase Firestore CRUD Operations
- * Based on HealthPath Database Design Documentation
- * 
  * Firestore Path: users/{userId}
  */
 
@@ -11,6 +9,7 @@ import {
   getDoc, 
   setDoc, 
   updateDoc,
+  Timestamp,
 } from 'firebase/firestore';
 import { UserProfile, ProfileData, ProfileUpdateData, getDefaultProfile } from '../types/profile';
 
@@ -19,8 +18,6 @@ const db = getFirestore();
 export const profileService = {
   /**
    * Get user profile from Firestore
-   * @param userId - Firebase Auth UID
-   * @returns UserProfile object or null if not found
    */
   async getProfile(userId: string): Promise<UserProfile | null> {
     try {
@@ -28,9 +25,8 @@ export const profileService = {
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
-        const data = docSnap.data() as UserProfile;
         console.log('✅ Profile loaded successfully');
-        return data;
+        return docSnap.data() as UserProfile;
       }
       
       console.log('⚠️ Profile not found');
@@ -43,22 +39,15 @@ export const profileService = {
 
   /**
    * Create initial profile on signup
-   * @param userId - Firebase Auth UID
-   * @param initialData - Initial user data from auth
    */
   async createProfile(
     userId: string, 
-    initialData: {
-      email: string;
-      displayName: string;
-      photoURL: string | null;
-    }
+    initialData: { email: string; displayName: string; photoURL: string | null; }
   ): Promise<void> {
     try {
       const docRef = doc(db, 'users', userId);
-
-      // Detect timezone from device (fallback if unavailable on backend)
       let timezone = 'UTC';
+      
       try {
         timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
       } catch {
@@ -72,11 +61,8 @@ export const profileService = {
         photoURL: initialData.photoURL,
         createdAt: new Date().toISOString(),
         lastActive: new Date().toISOString(),
-
-        // New push notification fields
-        pushToken: null,   // Will be set from device later
-        timezone,          // Store user's timezone once
-
+        pushToken: null,
+        timezone,
         profile: getDefaultProfile(),
       };
 
@@ -89,32 +75,17 @@ export const profileService = {
   },
 
   /**
-   * Update user profile
-   * Merges with existing data
-   * @param userId - Firebase Auth UID
-   * @param data - Partial profile data to update
+   * Update user profile - merges with existing data
    */
   async updateProfile(userId: string, data: ProfileUpdateData): Promise<void> {
     try {
       const docRef = doc(db, 'users', userId);
-      
-      // Prepare update data (top-level)
-      const updateData: any = {
-        ...data,
-        lastActive: new Date().toISOString(),
-      };
+      const updateData: any = { ...data, lastActive: new Date().toISOString() };
 
-      // If updating nested profile object
       if (data.profile) {
-        // Get current profile first
         const currentProfile = await this.getProfile(userId);
-        
         if (currentProfile) {
-          // Merge nested profile data
-          updateData.profile = {
-            ...currentProfile.profile,
-            ...data.profile,
-          };
+          updateData.profile = { ...currentProfile.profile, ...data.profile };
         }
       }
 
@@ -128,28 +99,16 @@ export const profileService = {
 
   /**
    * Update only profile data (nested object)
-   * @param userId - Firebase Auth UID
-   * @param profileData - Partial profile data
    */
   async updateProfileData(userId: string, profileData: Partial<ProfileData>): Promise<void> {
     try {
       const docRef = doc(db, 'users', userId);
-      
-      // Get current profile
       const currentProfile = await this.getProfile(userId);
       
-      if (!currentProfile) {
-        throw new Error('Profile not found');
-      }
-
-      // Merge with existing profile data
-      const updatedProfile = {
-        ...currentProfile.profile,
-        ...profileData,
-      };
+      if (!currentProfile) throw new Error('Profile not found');
 
       await updateDoc(docRef, {
-        profile: updatedProfile,
+        profile: { ...currentProfile.profile, ...profileData },
         lastActive: new Date().toISOString(),
       });
 
@@ -162,24 +121,18 @@ export const profileService = {
 
   /**
    * Update user's last active timestamp
-   * @param userId - Firebase Auth UID
    */
   async updateLastActive(userId: string): Promise<void> {
     try {
       const docRef = doc(db, 'users', userId);
-      await updateDoc(docRef, {
-        lastActive: new Date().toISOString(),
-      });
+      await updateDoc(docRef, { lastActive: new Date().toISOString() });
     } catch (error) {
       console.error('❌ Error updating last active:', error);
-      // Don't throw - this is a non-critical update
     }
   },
 
   /**
-   * Save / update Expo push token for the user
-   * @param userId - Firebase Auth UID
-   * @param pushToken - Expo push token (or null to clear)
+   * Save/update Expo push token
    */
   async updatePushToken(userId: string, pushToken: string | null): Promise<void> {
     try {
@@ -196,9 +149,7 @@ export const profileService = {
   },
 
   /**
-   * Update user's timezone (e.g., after they change device settings)
-   * @param userId - Firebase Auth UID
-   * @param timezone - IANA timezone string
+   * Update user's timezone
    */
   async updateTimezone(userId: string, timezone: string): Promise<void> {
     try {
@@ -216,8 +167,6 @@ export const profileService = {
 
   /**
    * Calculate age from date of birth
-   * @param dob - Date of birth in YYYY-MM-DD format
-   * @returns Age as string
    */
   calculateAge(dob: string): string {
     if (!dob) return '';
@@ -235,14 +184,25 @@ export const profileService = {
   },
 
   /**
-   * Format date for display
-   * @param dateString - ISO date string
-   * @returns Formatted date string
+   * Format date for display - handles Firestore Timestamp and ISO strings
    */
-  formatDate(dateString: string): string {
-    if (!dateString) return 'Not set';
+  formatDate(dateInput: string | Timestamp | Date | any): string {
+    if (!dateInput) return 'Not set';
     
-    const date = new Date(dateString);
+    let date: Date;
+    
+    // Handle Firestore Timestamp object
+    if (dateInput?.toDate && typeof dateInput.toDate === 'function') {
+      date = dateInput.toDate();
+    } 
+    // Handle ISO string or Date object
+    else {
+      date = new Date(dateInput);
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',

@@ -53,7 +53,7 @@ export const NotificationModal = ({
   const filters = [
     { id: 'all', label: 'All' },
     { id: 'weekly', label: 'Weekly' },      // NEW: Weekly tab
-    { id: 'vitals', label: 'Vitals' },
+    // { id: 'vitals', label: 'Vitals' },
     // { id: 'ai-insight', label: 'AI Insight' },
     { id: 'reminder', label: 'Reminder' },
   ];
@@ -176,7 +176,7 @@ const getCategoryColor = (item: AppNotification) => {
   switch(item.type) {
     case 'reminder': return '#FFB199'; // Peach
     case 'ai-insight': return '#9F7AEA'; // Purple
-    case 'vitals': return '#F56565'; // Red
+    // case 'vitals': return '#F56565'; // Red
     default: return '#CBD5E0'; // Gray
   }
 };
@@ -189,7 +189,7 @@ const getCategoryIcon = (item: AppNotification) => {
   switch(item.type) {
     case 'reminder': return 'alarm-outline';
     case 'ai-insight': return 'sparkles-outline';
-    case 'vitals': return 'heart-outline';
+    // case 'vitals': return 'heart-outline';
     default: return 'information-circle-outline';
   }
 };

@@ -22,7 +22,7 @@ import {
   DoseLog 
 } from '../types/medication';
 
-// ✅ NEW: Import notification service
+// ✅ Import notification service
 import {
   scheduleMedicationReminder,
   cancelMedicationReminder,
@@ -75,11 +75,11 @@ export const addMedication = async (
     // Save to Firestore
     await setDoc(newMedRef, cleanedMedication);
 
-    // ✅ NEW: Schedule notification reminders for this medication
+    // ✅ UPDATED: Schedule notification reminders with userId parameter
     try {
       if (medication.isActive && medication.frequency !== 'As needed') {
         console.log('📅 Scheduling reminders for new medication...');
-        await scheduleMedicationReminder(medication);
+        await scheduleMedicationReminder(medication, userId);
         console.log('✅ Reminders scheduled successfully');
       }
     } catch (notificationError) {
@@ -188,7 +188,7 @@ export const updateMedication = async (
     // Update in Firestore
     await updateDoc(medRef, cleanedUpdates);
 
-    // ✅ NEW: Update notification reminders
+    // ✅ UPDATED: Update notification reminders with userId parameter
     try {
       // Get the updated medication data
       const updatedMed = await getMedication(userId, medicationId);
@@ -200,7 +200,7 @@ export const updateMedication = async (
         // Schedule new reminders if medication is active
         if (updatedMed.isActive && updatedMed.frequency !== 'As needed') {
           console.log('🔄 Rescheduling reminders after update...');
-          await scheduleMedicationReminder(updatedMed);
+          await scheduleMedicationReminder(updatedMed, userId);
           console.log('✅ Reminders rescheduled successfully');
         }
       }
@@ -222,7 +222,7 @@ export const deleteMedication = async (
   medicationId: string
 ): Promise<void> => {
   try {
-    // ✅ NEW: Cancel notification reminders first
+    // ✅ Cancel notification reminders first
     try {
       console.log('🗑️ Cancelling reminders for deleted medication...');
       await cancelMedicationReminder(medicationId);
@@ -254,7 +254,7 @@ export const deactivateMedication = async (
       isActive: false,
     });
 
-    // ✅ NEW: Cancel notification reminders
+    // ✅ Cancel notification reminders
     try {
       console.log('🔕 Cancelling reminders for deactivated medication...');
       await cancelMedicationReminder(medicationId);
@@ -352,7 +352,7 @@ export const calculateAdherence = async (
 };
 
 /**
- * ✅ NEW: Reschedule all medication reminders
+ * ✅ Reschedule all medication reminders
  * Useful for when user changes notification preferences or after app update
  */
 export const rescheduleAllReminders = async (userId: string): Promise<void> => {

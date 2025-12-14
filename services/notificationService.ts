@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { Medication } from '../types/medication';
 import { getActiveMedications } from './medicationService';
-import { createReminderNotification } from './appNotificationService'; // ✅ NEW IMPORT
+import { createReminderNotification } from './appNotificationService';
 
 // ============================================
 // NOTIFICATION CONFIGURATION
@@ -44,12 +44,12 @@ export interface ScheduledNotification {
 }
 
 // ============================================
-// ✅ NEW: NOTIFICATION LISTENER SETUP
+// ✅ NOTIFICATION LISTENER SETUP (BACKUP ONLY)
 // ============================================
 
 /**
  * Set up listeners to save notifications to Firestore when they're delivered
- * This bridges system notifications with in-app NotificationCenter
+ * NOTE: This is a backup - we now save notifications during scheduling
  */
 export const setupNotificationListeners = (userId: string) => {
   console.log('🎧 Setting up notification listeners for user:', userId);
@@ -92,7 +92,6 @@ export const setupNotificationListeners = (userId: string) => {
       console.log('👆 User tapped notification:', data);
       
       // You can add custom navigation logic here if needed
-      // For now, just log the action
       if (response.actionIdentifier === 'take-now') {
         console.log('✅ User wants to take medication now');
       } else if (response.actionIdentifier === 'snooze') {
@@ -201,8 +200,10 @@ const calculateSecondsUntilTime = (hour: number, minute: number): number => {
   return secondsUntil;
 };
 
+// ✅ UPDATED: Now accepts userId and saves to Firestore immediately
 export const scheduleMedicationReminder = async (
-  medication: Medication
+  medication: Medication,
+  userId: string
 ): Promise<string[]> => {
   try {
     console.log(`📅 Scheduling reminder for: ${medication.name}`);
@@ -267,6 +268,28 @@ export const scheduleMedicationReminder = async (
 
       scheduledIds.push(notificationId);
       console.log(`✅ Scheduled notification at ${hour}:00 - ID: ${notificationId}`);
+
+      // ✅ NEW: Save to Firestore immediately (in-app notification center)
+      try {
+        await createReminderNotification(
+          userId,
+          `💊 Time for ${medication.name}`,
+          `${medication.strength} • ${medication.mealRelation}`,
+          {
+            medicationId: medication.medicationId,
+            medicationName: medication.name,
+            strength: medication.strength,
+            mealRelation: medication.mealRelation,
+            instructions: medication.instructions,
+            scheduledTime: `${hour}:00`,
+            notificationId: notificationId,
+          }
+        );
+        console.log(`💾 Saved reminder to Firestore for ${medication.name} at ${hour}:00`);
+      } catch (firestoreError) {
+        console.error('❌ Error saving to Firestore:', firestoreError);
+        // Don't throw - notification is still scheduled on device
+      }
     }
 
     return scheduledIds;
@@ -276,6 +299,7 @@ export const scheduleMedicationReminder = async (
   }
 };
 
+// ✅ UPDATED: Now passes userId to scheduleMedicationReminder
 export const scheduleAllMedicationReminders = async (
   userId: string
 ): Promise<void> => {
@@ -293,7 +317,7 @@ export const scheduleAllMedicationReminders = async (
 
     let totalScheduled = 0;
     for (const medication of medications) {
-      const scheduledIds = await scheduleMedicationReminder(medication);
+      const scheduledIds = await scheduleMedicationReminder(medication, userId);
       totalScheduled += scheduledIds.length;
     }
 
@@ -402,7 +426,8 @@ export const handleNotificationResponse = (
 };
 
 export const snoozeMedicationReminder = async (
-  medication: Medication
+  medication: Medication,
+  userId: string
 ): Promise<string> => {
   try {
     const snoozeMinutes = 15;
@@ -427,6 +452,25 @@ export const snoozeMedicationReminder = async (
         date: snoozeDate,
       },
     });
+
+    // ✅ Save snooze notification to Firestore
+    try {
+      await createReminderNotification(
+        userId,
+        `💊 Reminder: ${medication.name}`,
+        `Snoozed for ${snoozeMinutes} minutes • ${medication.strength}`,
+        {
+          medicationId: medication.medicationId,
+          medicationName: medication.name,
+          strength: medication.strength,
+          mealRelation: medication.mealRelation,
+          snoozed: true,
+          snoozeMinutes: snoozeMinutes,
+        }
+      );
+    } catch (firestoreError) {
+      console.error('❌ Error saving snooze to Firestore:', firestoreError);
+    }
 
     console.log(`⏰ Snoozed ${medication.name} for ${snoozeMinutes} minutes`);
     return notificationId;

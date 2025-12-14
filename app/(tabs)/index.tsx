@@ -25,7 +25,7 @@ import { VitalRecord } from '../../types/vitals';
 // --- Notification Imports ---
 import { NotificationBell, NotificationModal } from '../../components/Notification/NotificationCenter';
 import { clearAllNotifications, getNotifications, markAsRead } from '../../services/appNotificationService';
-import { setupNotificationListeners } from '../../services/notificationService';
+// ✅ REMOVED: setupNotificationListeners import (no longer needed)
 // ----------------------------
 
 const { width } = Dimensions.get('window');
@@ -61,20 +61,9 @@ export default function HomeScreen() {
     }
   }, [user]);
 
-  // ✅ Initialize notification listener when user logs in
-  useEffect(() => {
-    if (!user?.uid) return;
-
-    console.log('🎧 Initializing notification listeners...');
-    const listenerSubscription = setupNotificationListeners(user.uid);
-
-    return () => {
-      if (listenerSubscription) {
-        listenerSubscription.remove();
-        console.log('🧹 Notification listeners cleaned up');
-      }
-    };
-  }, [user?.uid]);
+  // ✅ REMOVED: Notification listener setup
+  // We now save notifications directly when scheduling them, not when receiving
+  // This eliminates the issue of notifications not being saved when app is closed
 
   const loadProfile = async () => {
     if (!user?.uid) return;

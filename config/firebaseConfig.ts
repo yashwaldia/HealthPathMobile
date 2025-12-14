@@ -29,9 +29,11 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || !firebaseConfig.stora
 }
 
 // Validate Storage Bucket format (should be .firebasestorage.app or .appspot.com)
-if (firebaseConfig.storageBucket && 
-    !firebaseConfig.storageBucket.includes('.firebasestorage.app') && 
-    !firebaseConfig.storageBucket.includes('.appspot.com')) {
+if (
+  firebaseConfig.storageBucket &&
+  !firebaseConfig.storageBucket.includes('.firebasestorage.app') &&
+  !firebaseConfig.storageBucket.includes('.appspot.com')
+) {
   console.warn('⚠️ Storage bucket URL format may be incorrect');
   console.warn('   Expected: PROJECT_ID.firebasestorage.app or PROJECT_ID.appspot.com');
   console.warn('   Got:', firebaseConfig.storageBucket);
@@ -48,7 +50,9 @@ if (getApps().length === 0) {
 }
 
 // Initialize Firebase Auth
-// Note: React Native Firebase handles persistence automatically
+// Note: For React Native, auth state persistence is handled by @react-native-firebase/auth
+// The web SDK (firebase/auth) is used for email/password and Firestore operations
+// Phone authentication uses @react-native-firebase/auth which has native persistence
 const auth: Auth = getAuth(app);
 console.log('✅ Firebase Auth initialized');
 
