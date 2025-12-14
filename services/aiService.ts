@@ -5,8 +5,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import Constants from 'expo-constants';
 
 // Initialize Gemini AI
-const API_KEY = Constants.expoConfig?.extra?.EXPO_PUBLIC_GEMINI_REPORT_ANALYZE_KEY || 
-                process.env.EXPO_PUBLIC_GEMINI_REPORT_ANALYZE_KEY;
+const API_KEY = Constants.expoConfig?.extra?.EXPO_PUBLIC_HEALTHPATH_GEMINI_REPORT_ANALYZE_KEY || 
+                process.env.EXPO_PUBLIC_HEALTHPATH_GEMINI_REPORT_ANALYZE_KEY;
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 

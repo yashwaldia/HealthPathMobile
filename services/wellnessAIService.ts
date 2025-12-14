@@ -6,10 +6,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { DailyTracking, WeeklyReport, WellnessModuleType } from '../types/wellness';
 
-const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
+const API_KEY = process.env.EXPO_PUBLIC_HEALTHPATH_GEMINI_API_KEY || '';
 
 if (!API_KEY) {
-  console.warn('⚠️ EXPO_PUBLIC_GEMINI_API_KEY not found in environment variables');
+  console.warn('⚠️ EXPO_PUBLIC_HEALTHPATH_GEMINI_API_KEY not found in environment variables');
 }
 
 const genAI = new GoogleGenerativeAI(API_KEY);

@@ -7,7 +7,7 @@ import { ExtractedMedication, extractMedicationsFromDocument } from './aiService
 import { addMedication } from './medicationService';
 
 // Initialize Gemini AI (use your existing API key from aiService.ts)
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || 'YOUR_API_KEY_HERE';
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_HEALTHPATH_GEMINI_API_KEY || 'YOUR_API_KEY_HERE';
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 /**

@@ -6,8 +6,8 @@ import Constants from 'expo-constants';
 import { LabReport } from '../types/upload';
 
 // Initialize Gemini AI for Report Analysis
-const API_KEY = Constants.expoConfig?.extra?.EXPO_PUBLIC_GEMINI_REPORT_ANALYZE_KEY ||
-  process.env.EXPO_PUBLIC_GEMINI_REPORT_ANALYZE_KEY;
+const API_KEY = Constants.expoConfig?.extra?.EXPO_PUBLIC_HEALTHPATH_GEMINI_REPORT_ANALYZE_KEY ||
+  process.env.EXPO_PUBLIC_HEALTHPATH_GEMINI_REPORT_ANALYZE_KEY;
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 

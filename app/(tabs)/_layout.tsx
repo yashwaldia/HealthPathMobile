@@ -62,10 +62,10 @@ const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => 
         onPress={() => navigation.navigate('index')}
       />
       <TabButton
-        iconName="stats-chart"
-        label="Track"
+        iconName="time"
+        label="History"
         isFocused={state.index === 1}
-        onPress={() => navigation.navigate('track')}
+        onPress={() => navigation.navigate('history')}
       />
 
 

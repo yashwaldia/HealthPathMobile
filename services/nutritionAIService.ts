@@ -9,8 +9,8 @@ import { NutritionEntry, nutritionService } from './nutritionService';
 
 // Get API key from environment
 const API_KEY =
-  Constants.expoConfig?.extra?.EXPO_PUBLIC_GEMINI_REPORT_ANALYZE_KEY ||
-  process.env.EXPO_PUBLIC_GEMINI_REPORT_ANALYZE_KEY;
+  Constants.expoConfig?.extra?.EXPO_PUBLIC_HEALTHPATH_GEMINI_REPORT_ANALYZE_KEY ||
+  process.env.EXPO_PUBLIC_HEALTHPATH_GEMINI_REPORT_ANALYZE_KEY;
 
 if (!API_KEY) {
   console.warn('⚠️ Gemini API key not found for nutrition AI service');

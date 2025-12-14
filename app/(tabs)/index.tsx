@@ -7,6 +7,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,35 +18,31 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { profileService } from '../../services/profileService';
+import { vitalsService, getVitalStatus } from '../../services/vitalsService';
 import { UserProfile } from '../../types/profile';
+import { VitalRecord } from '../../types/vitals';
 
 // --- Notification Imports ---
 import { NotificationBell, NotificationModal } from '../../components/Notification/NotificationCenter';
 import { clearAllNotifications, getNotifications, markAsRead } from '../../services/appNotificationService';
-import { setupNotificationListeners } from '../../services/notificationService'; // ✅ NEW IMPORT
+import { setupNotificationListeners } from '../../services/notificationService';
 // ----------------------------
 
 const { width } = Dimensions.get('window');
-
-// Sample health data (will be replaced with real data from Firestore later)
-const HEALTH_STATS = {
-  calories: { current: 1200, goal: 2200 },
-  steps: { current: 6504, goal: 10000 },
-  heartRate: { current: 68, unit: 'bpm' },
-  sleep: { hours: 7, minutes: 23 },
-};
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [greeting, setGreeting] = useState('Good Evening');
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [latestVitals, setLatestVitals] = useState<Partial<VitalRecord>>({});
+  const [refreshing, setRefreshing] = useState(false);
 
   // --- Notification State ---
   const [isNotifVisible, setNotifVisible] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isClearing, setIsClearing] = useState(false); // ✅ NEW: Loading state for clear all
+  const [isClearing, setIsClearing] = useState(false);
 
   // Set greeting based on time
   useEffect(() => {
@@ -55,22 +52,22 @@ export default function HomeScreen() {
     else setGreeting('Good Evening');
   }, []);
 
-  // Load user profile & Notifications
+  // Load user profile, vitals & Notifications
   useEffect(() => {
     if (user?.uid) {
       loadProfile();
-      loadNotifications(); // Load notifications when user is ready
+      loadVitals();
+      loadNotifications();
     }
   }, [user]);
 
-  // ✅ NEW: Initialize notification listener when user logs in
+  // ✅ Initialize notification listener when user logs in
   useEffect(() => {
     if (!user?.uid) return;
 
     console.log('🎧 Initializing notification listeners...');
     const listenerSubscription = setupNotificationListeners(user.uid);
 
-    // Cleanup listener when component unmounts or user changes
     return () => {
       if (listenerSubscription) {
         listenerSubscription.remove();
@@ -90,6 +87,17 @@ export default function HomeScreen() {
     }
   };
 
+  const loadVitals = async () => {
+    if (!user?.uid) return;
+    
+    try {
+      const vitals = await vitalsService.getLatestVitals(user.uid);
+      setLatestVitals(vitals);
+    } catch (error) {
+      console.error('Error loading vitals:', error);
+    }
+  };
+
   // --- Notification Handlers ---
   const loadNotifications = async () => {
     if (!user?.uid) return;
@@ -102,12 +110,26 @@ export default function HomeScreen() {
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadProfile(),
+        loadVitals(),
+        loadNotifications(),
+      ]);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleMarkRead = async (id: string) => {
     if (!user?.uid) return;
     
     try {
       await markAsRead(user.uid, id);
-      // Optimistic update
       const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n);
       setNotifications(updated);
       setUnreadCount(updated.filter(n => !n.read).length);
@@ -116,50 +138,74 @@ export default function HomeScreen() {
     }
   };
   
-  // ✅ IMPROVED: Clear all with proper state management
   const handleClearAll = async () => {
     if (!user?.uid || isClearing) return;
     
     try {
       setIsClearing(true);
       console.log('🗑️ Clearing all notifications...');
-      
-      // Delete from Firestore
       await clearAllNotifications(user.uid);
-      
-      // Reload from Firestore to ensure sync
       await loadNotifications();
-      
       console.log('✅ All notifications cleared successfully');
     } catch (error) {
       console.error('❌ Error clearing notifications:', error);
       Alert.alert('Error', 'Failed to clear notifications. Please try again.');
-      
-      // Reload to get correct state from server
       await loadNotifications();
     } finally {
       setIsClearing(false);
     }
   };
-  // -----------------------------
+
+  // --- Helper Functions ---
+  const calculateBMI = (): number | null => {
+    const weight = latestVitals.weightKg || parseFloat(profile?.profile?.weight || '0');
+    const heightCm = latestVitals.heightCm || parseFloat(profile?.profile?.height || '0');
+    
+    if (weight > 0 && heightCm > 0) {
+      const heightM = heightCm / 100;
+      return parseFloat((weight / (heightM * heightM)).toFixed(1));
+    }
+    return null;
+  };
+
+  const getStatusColor = (status: 'normal' | 'alert' | 'critical'): string => {
+    switch (status) {
+      case 'normal': return '#34C759'; // Green
+      case 'alert': return '#FF9500'; // Orange
+      case 'critical': return '#FF3B30'; // Red
+      default: return Colors.light.primary;
+    }
+  };
+
+  // --- Health Stats Data ---
+  const bmi = calculateBMI();
+  
+  const heartRateValue = latestVitals.heartRate || null;
+  const heartRateStatus = heartRateValue ? getVitalStatus('heartRate', heartRateValue) : 'normal';
+  
+  const bpSystolic = latestVitals.bloodPressureSystolic;
+  const bpDiastolic = latestVitals.bloodPressureDiastolic;
+  const bpStatus = (bpSystolic && bpDiastolic) ? getVitalStatus('bloodPressure', bpSystolic, bpDiastolic) : 'normal';
+  
+  const bloodSugarValue = latestVitals.bloodSugarFasting || null;
+  const bloodSugarStatus = bloodSugarValue ? getVitalStatus('bloodSugar', bloodSugarValue) : 'normal';
+  
+  const weightValue = latestVitals.weightKg || parseFloat(profile?.profile?.weight || '0') || null;
 
   // Updated: all buttons active, including AI Report enabled
   const actionButtons = [
     { id: 1, icon: 'fitness-outline', label: 'Vitals', route: '/(tabs)/vitals', active: true },
     { id: 2, icon: 'cloud-upload-outline', label: 'Upload', route: '/smart-upload', active: true },
     { id: 3, icon: 'heart-outline', label: 'Symptoms', route: '/(tabs)/symptoms', active: true },
-    { id: 4, icon: 'flask-outline', label: 'Lab Tests', route: 'interpreter', active: true },
+    // { id: 4, icon: 'flask-outline', label: 'Lab Tests', route: 'interpreter', active: true },
     { id: 5, icon: 'bar-chart-outline', label: 'Reports', route: '/(tabs)/reports', active: true },
     { id: 6, icon: 'scan-outline', label: 'Radiology', route: '/(tabs)/radiology-analyzer', active: true },
     { id: 7, icon: 'sparkles-outline', label: 'AI Report', route: '/(tabs)/ai-report', active: true },
-    // { id: 8, icon: 'pulse-outline', label: 'Biohacking', route: 'biohacking', active: true },
     { id: 9, icon: 'restaurant-outline', label: 'Nutrition', route: 'nutrition-tracker', active: true },
     { id: 10, icon: 'medical-outline', label: 'Medication', route: '/(tabs)/medication-tracker', active: true },
-    // { id: 11, icon: 'shield-checkmark-outline', label: 'Screening', route: 'screening-tracker', active: true },
     { id: 12, icon: 'people-outline', label: 'Wellness', route: '/(tabs)/wellness', active: true },
     { id: 13, icon: 'time-outline', label: 'History', route: '/(tabs)/history', active: true },
     { id: 14, icon: 'barbell-outline', label: 'FitCalc', route: 'fitcalc', active: true },
-    // { id: 15, icon: 'nutrition-outline', label: 'MacroMaster', route: 'macromaster', active: true },
     { id: 16, icon: 'library-outline', label: 'Health Library', route: '/(tabs)/learning', active: true },
     { id: 17, icon: 'settings-outline', label: 'Settings', route: '/(tabs)/profile', active: true },
   ];
@@ -186,12 +232,19 @@ export default function HomeScreen() {
           style={styles.scrollView} 
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={Colors.light.primary}
+              colors={[Colors.light.primary]}
+            />
+          }
         >
           {/* Header Section */}
           <View style={styles.header}>
             <Text style={styles.appName}>HealthPath</Text>
             
-            {/* --- Updated Header Right Side --- */}
             <View style={styles.headerRight}>
               <NotificationBell 
                 onPress={() => setNotifVisible(true)} 
@@ -210,7 +263,6 @@ export default function HomeScreen() {
                 )}
               </TouchableOpacity>
             </View>
-            {/* --------------------------------- */}
           </View>
 
           {/* Greeting Section */}
@@ -222,36 +274,64 @@ export default function HomeScreen() {
 
           {/* Quick Stats Grid - 1x4 Layout */}
           <View style={styles.statsContainer}>
-            {/* Calories Card */}
-            <View style={styles.statCard}>
-              <Ionicons name="flame-outline" size={24} color={Colors.light.primary} style={styles.statIcon} />
-              <Text style={styles.statLabel}>Calories</Text>
-              <Text style={styles.statValue}>{HEALTH_STATS.calories.current}</Text>
-              <Text style={styles.statGoal}>/{HEALTH_STATS.calories.goal}</Text>
-            </View>
-
-            {/* Steps Card */}
-            <View style={styles.statCard}>
-              <Ionicons name="footsteps-outline" size={24} color={Colors.light.primary} style={styles.statIcon} />
-              <Text style={styles.statLabel}>Steps</Text>
-              <Text style={styles.statValue}>{(HEALTH_STATS.steps.current / 1000).toFixed(1)}k</Text>
-              <Text style={styles.statGoal}>/{(HEALTH_STATS.steps.goal / 1000).toFixed(0)}k</Text>
-            </View>
-
             {/* Heart Rate Card */}
             <View style={styles.statCard}>
-              <Ionicons name="heart-outline" size={24} color={Colors.light.primary} style={styles.statIcon} />
-              <Text style={styles.statLabel}>HR</Text>
-              <Text style={styles.statValue}>{HEALTH_STATS.heartRate.current}</Text>
+              <Ionicons 
+                name="pulse" 
+                size={24} 
+                color={getStatusColor(heartRateStatus)} 
+                style={styles.statIcon} 
+              />
+              <Text style={styles.statLabel}>Heart Rate</Text>
+              <Text style={styles.statValue}>
+                {heartRateValue || '--'}
+              </Text>
               <Text style={styles.statUnit}>bpm</Text>
             </View>
 
-            {/* Sleep Card */}
+            {/* Blood Pressure Card */}
             <View style={styles.statCard}>
-              <Ionicons name="moon-outline" size={24} color={Colors.light.primary} style={styles.statIcon} />
-              <Text style={styles.statLabel}>Sleep</Text>
-              <Text style={styles.statValue}>{HEALTH_STATS.sleep.hours}h</Text>
-              <Text style={styles.statUnit}>{HEALTH_STATS.sleep.minutes}m</Text>
+              <Ionicons 
+                name="heart-circle" 
+                size={24} 
+                color={getStatusColor(bpStatus)} 
+                style={styles.statIcon} 
+              />
+              <Text style={styles.statLabel}>BP</Text>
+              <Text style={styles.statValue}>
+                {(bpSystolic && bpDiastolic) ? `${bpSystolic}/${bpDiastolic}` : '--/--'}
+              </Text>
+              <Text style={styles.statUnit}>mmHg</Text>
+            </View>
+
+            {/* Blood Sugar Card */}
+            <View style={styles.statCard}>
+              <Ionicons 
+                name="water" 
+                size={24} 
+                color={getStatusColor(bloodSugarStatus)} 
+                style={styles.statIcon} 
+              />
+              <Text style={styles.statLabel}>Sugar</Text>
+              <Text style={styles.statValue}>
+                {bloodSugarValue || '--'}
+              </Text>
+              <Text style={styles.statUnit}>mg/dL</Text>
+            </View>
+
+            {/* Weight/BMI Card */}
+            <View style={styles.statCard}>
+              <Ionicons 
+                name="fitness" 
+                size={24} 
+                color={Colors.light.primary} 
+                style={styles.statIcon} 
+              />
+              <Text style={styles.statLabel}>{bmi ? 'BMI' : 'Weight'}</Text>
+              <Text style={styles.statValue}>
+                {bmi ? bmi : (weightValue ? weightValue.toFixed(1) : '--')}
+              </Text>
+              <Text style={styles.statUnit}>{bmi ? 'kg/m²' : 'kg'}</Text>
             </View>
           </View>
 
@@ -287,8 +367,6 @@ export default function HomeScreen() {
           onMarkRead={handleMarkRead}
           onClearAll={handleClearAll}
         />
-        {/* -------------------------- */}
-
       </View>
     </SafeAreaView>
   );
@@ -372,6 +450,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.cardBackground,
     borderRadius: 16,
     padding: 10,
+    paddingVertical: 12,
     shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -382,32 +461,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   statIcon: {
-    marginBottom: 4,
+    marginBottom: 6,
   },
   statLabel: {
     fontSize: 10,
     color: Colors.light.textSecondary,
-    marginBottom: 4,
+    marginBottom: 6,
     fontWeight: '600',
+    textAlign: 'center',
   },
   statValue: {
     fontSize: 18,
     fontWeight: '700',
     color: Colors.light.text,
     textAlign: 'center',
-    lineHeight: 20,
-  },
-  statGoal: {
-    fontSize: 10,
-    color: Colors.light.textLight,
-    fontWeight: '600',
-    marginTop: 2,
+    lineHeight: 22,
+    marginBottom: 2,
   },
   statUnit: {
     fontSize: 10,
     color: Colors.light.textSecondary,
     fontWeight: '600',
-    marginTop: 2,
+    textAlign: 'center',
   },
   actionsContainer: {
     flexDirection: 'row',
