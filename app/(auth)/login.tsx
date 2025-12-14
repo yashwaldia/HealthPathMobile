@@ -1,6 +1,6 @@
 // app/(auth)/login.tsx
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,28 +15,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
-import type { ConfirmationResult } from 'firebase/auth';
+import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { Colors } from '../../constants/colors';
 import { 
   signInWithEmail, 
   sendPhoneOTP, 
-  // NOTE: use the login-specific verify function
   verifyPhoneOTPForLogin,
   validatePhoneNumber 
 } from '../../services/authService';
-
-// ✅ FIX: Get Firebase config directly instead of importing app
-const getFirebaseConfig = () => {
-  return {
-    apiKey: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_API_KEY,
-    authDomain: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_APP_ID,
-  };
-};
 
 type AuthMethod = 'email' | 'phone';
 
@@ -56,12 +42,9 @@ export default function LoginScreen() {
   const [countryCode, setCountryCode] = useState('+91');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [confirmation, setConfirmation] = useState<FirebaseAuthTypes.ConfirmationResult | null>(null);
   const [otpSent, setOtpSent] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  
-  // Recaptcha
-  const recaptchaVerifier = useRef<any>(null);
 
   // ============================================
   // EMAIL LOGIN
@@ -129,12 +112,9 @@ export default function LoginScreen() {
     try {
       console.log('📞 Sending OTP to:', fullPhoneNumber);
       
-      const confirmation = await sendPhoneOTP(
-        fullPhoneNumber,
-        recaptchaVerifier.current
-      );
+      const confirmationResult = await sendPhoneOTP(fullPhoneNumber);
       
-      setConfirmationResult(confirmation);
+      setConfirmation(confirmationResult);
       setOtpSent(true);
       startResendTimer();
       
@@ -172,7 +152,7 @@ export default function LoginScreen() {
       return;
     }
 
-    if (!confirmationResult) {
+    if (!confirmation) {
       Alert.alert('Error', 'Please request a new verification code');
       return;
     }
@@ -181,15 +161,12 @@ export default function LoginScreen() {
     try {
       console.log('🔐 Verifying OTP code...');
       
-      // IMPORTANT: use login-specific verify that does NOT auto-create a profile
-      await verifyPhoneOTPForLogin(confirmationResult, verificationCode);
+      await verifyPhoneOTPForLogin(confirmation, verificationCode);
       
       console.log('✅ Phone login successful, navigating to app...');
       router.replace('/(tabs)');
     } catch (error: any) {
       console.error('Verify OTP error:', error);
-      // If profile is missing, authService should throw a message like:
-      // "No account found for this phone number. Please sign up first."
       Alert.alert('Verification Failed', error.message);
     } finally {
       setLoading(false);
@@ -218,7 +195,7 @@ export default function LoginScreen() {
     
     setVerificationCode('');
     setOtpSent(false);
-    setConfirmationResult(null);
+    setConfirmation(null);
     
     // Retry sending OTP
     await handleSendOTP();
@@ -235,7 +212,7 @@ export default function LoginScreen() {
       setPhoneNumber('');
       setVerificationCode('');
       setOtpSent(false);
-      setConfirmationResult(null);
+      setConfirmation(null);
       setResendTimer(0);
     } else {
       setEmail('');
@@ -249,13 +226,6 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* ✅ Recaptcha Verifier Modal (Required for Phone Auth) */}
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaVerifier}
-        firebaseConfig={getFirebaseConfig()}
-        attemptInvisibleVerification={true}
-      />
-
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -271,7 +241,7 @@ export default function LoginScreen() {
             <Text style={styles.subtitle}>Welcome back, you've been missed!</Text>
           </View>
 
-          {/* ✅ NEW: Tab Switcher */}
+          {/* Tab Switcher */}
           <View style={styles.tabContainer}>
             <TouchableOpacity
               style={[styles.tab, authMethod === 'email' && styles.activeTab]}
@@ -362,7 +332,7 @@ export default function LoginScreen() {
               </>
             ) : (
               // ============================================
-              // ✅ NEW: PHONE LOGIN FORM
+              // PHONE LOGIN FORM
               // ============================================
               <>
                 {!otpSent ? (
@@ -471,7 +441,7 @@ export default function LoginScreen() {
                       onPress={() => {
                         setOtpSent(false);
                         setVerificationCode('');
-                        setConfirmationResult(null);
+                        setConfirmation(null);
                         setResendTimer(0);
                       }}
                       disabled={loading}
@@ -533,7 +503,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   
-  // ✅ NEW: Tab Styles
   tabContainer: {
     flexDirection: 'row',
     marginBottom: 24,
@@ -585,7 +554,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   
-  // ✅ NEW: Phone Input Styles
   phoneLabel: {
     fontSize: 14,
     fontWeight: '600',
@@ -621,7 +589,6 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
   },
   
-  // ✅ NEW: OTP Styles
   otpLabel: {
     fontSize: 14,
     color: Colors.light.textSecondary,
@@ -639,7 +606,6 @@ const styles = StyleSheet.create({
     letterSpacing: 8,
   },
   
-  // ✅ NEW: Resend OTP Styles
   resendContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -659,7 +625,6 @@ const styles = StyleSheet.create({
     color: Colors.light.textLight,
   },
   
-  // ✅ NEW: Change Number Button
   changeNumberButton: {
     marginTop: 12,
     alignItems: 'center',

@@ -1,8 +1,9 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeAuth, getReactNativePersistence, getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// config/firebaseConfig.ts
+
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { getAuth, Auth } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 // Firebase configuration using environment variables
 const firebaseConfig = {
@@ -37,7 +38,7 @@ if (firebaseConfig.storageBucket &&
 }
 
 // Initialize Firebase App (avoid duplicate initialization)
-let app;
+let app: FirebaseApp;
 if (getApps().length === 0) {
   app = initializeApp(firebaseConfig);
   console.log('✅ Firebase App initialized');
@@ -46,29 +47,17 @@ if (getApps().length === 0) {
   console.log('✅ Using existing Firebase App instance');
 }
 
-// Initialize Firebase Auth with React Native persistence
-let auth;
-try {
-  auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage)
-  });
-  console.log('✅ Firebase Auth initialized with AsyncStorage persistence');
-} catch (error: any) {
-  if (error.code === 'auth/already-initialized') {
-    auth = getAuth(app);
-    console.log('✅ Using existing Firebase Auth instance');
-  } else {
-    console.error('❌ Error initializing Firebase Auth:', error);
-    throw error;
-  }
-}
+// Initialize Firebase Auth
+// Note: React Native Firebase handles persistence automatically
+const auth: Auth = getAuth(app);
+console.log('✅ Firebase Auth initialized');
 
 // Initialize Firestore
-const db = getFirestore(app);
+const db: Firestore = getFirestore(app);
 console.log('✅ Firestore initialized');
 
 // Initialize Firebase Storage
-const storage = getStorage(app);
+const storage: FirebaseStorage = getStorage(app);
 console.log('✅ Firebase Storage initialized');
 console.log('📦 Storage Bucket URL:', firebaseConfig.storageBucket);
 
@@ -81,6 +70,6 @@ if (!firebaseConfig.storageBucket || firebaseConfig.storageBucket === 'undefined
   console.log('✅ Storage bucket format verified');
 }
 
-// Export Firebase services
+// Export Firebase services with proper types
 export { auth, db, storage, app };
 export default app;

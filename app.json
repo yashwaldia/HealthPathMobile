@@ -35,7 +35,8 @@
         "android.permission.USE_EXACT_ALARM",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.ab1224.HealthPathMobile"
+      "package": "com.ab1224.HealthPathMobile",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -69,7 +70,8 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-firebase/app"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,9 +1,8 @@
 // app/(auth)/signup.tsx
 
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import { useRouter } from 'expo-router';
-import type { ConfirmationResult } from 'firebase/auth';
-import React, { useRef, useState } from 'react';
+import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,18 +23,6 @@ import {
   verifyPhoneOTPForSignup,
 } from '../../services/authService';
 
-// Get Firebase config directly
-const getFirebaseConfig = () => {
-  return {
-    apiKey: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_API_KEY,
-    authDomain: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_APP_ID,
-  };
-};
-
 export default function SignUpScreen() {
   const router = useRouter();
   
@@ -54,11 +41,8 @@ export default function SignUpScreen() {
   
   // OTP State
   const [verificationCode, setVerificationCode] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [confirmation, setConfirmation] = useState<FirebaseAuthTypes.ConfirmationResult | null>(null);
   const [resendTimer, setResendTimer] = useState(0);
-  
-  // Recaptcha
-  const recaptchaVerifier = useRef<any>(null);
 
   // ============================================
   // VALIDATION HELPER
@@ -141,12 +125,9 @@ export default function SignUpScreen() {
     try {
       console.log('📞 Sending OTP to:', fullPhoneNumber);
       
-      const confirmation = await sendPhoneOTP(
-        fullPhoneNumber,
-        recaptchaVerifier.current
-      );
+      const confirmationResult = await sendPhoneOTP(fullPhoneNumber);
       
-      setConfirmationResult(confirmation);
+      setConfirmation(confirmationResult);
       setOtpSent(true);
       startResendTimer();
       
@@ -184,7 +165,7 @@ export default function SignUpScreen() {
       return;
     }
 
-    if (!confirmationResult) {
+    if (!confirmation) {
       Alert.alert('Error', 'Please request a new verification code');
       return;
     }
@@ -193,11 +174,10 @@ export default function SignUpScreen() {
     try {
       console.log('🔐 Verifying OTP code...');
 
-      // ✅ FIXED: Now passing fullName as displayName to the credentials
-      await verifyPhoneOTPForSignup(confirmationResult, verificationCode, {
+      await verifyPhoneOTPForSignup(confirmation, verificationCode, {
         email: email.trim(),
         password: password,
-        displayName: fullName.trim(), // ✅ CHANGE: Added fullName here
+        displayName: fullName.trim(),
       });
       
       Alert.alert(
@@ -235,7 +215,7 @@ export default function SignUpScreen() {
     
     setVerificationCode('');
     setOtpSent(false);
-    setConfirmationResult(null);
+    setConfirmation(null);
     
     // Retry sending OTP
     await handleSendOTP();
@@ -247,13 +227,6 @@ export default function SignUpScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Recaptcha Verifier Modal (Required for Phone Auth) */}
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaVerifier}
-        firebaseConfig={getFirebaseConfig()}
-        attemptInvisibleVerification={true}
-      />
-
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -447,7 +420,7 @@ export default function SignUpScreen() {
                   onPress={() => {
                     setOtpSent(false);
                     setVerificationCode('');
-                    setConfirmationResult(null);
+                    setConfirmation(null);
                     setResendTimer(0);
                   }}
                   disabled={loading}

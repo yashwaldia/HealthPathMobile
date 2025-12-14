@@ -7,14 +7,13 @@ import {
   sendPasswordResetEmail,
   updateProfile,
   User,
-  RecaptchaVerifier,
-  ConfirmationResult,
-  signInWithPhoneNumber as firebaseSignInWithPhoneNumber,
   EmailAuthProvider,
   linkWithCredential,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebaseConfig';
+import rnFirebaseAuth from '@react-native-firebase/auth';
+import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 // ============================================
 // INTERFACES & TYPES
@@ -246,7 +245,7 @@ export const signInWithEmail = async (email: string, password: string): Promise<
 };
 
 // ============================================
-// PHONE AUTHENTICATION
+// PHONE AUTHENTICATION (REACT NATIVE FIREBASE)
 // ============================================
 
 export const validatePhoneNumber = (phoneNumber: string): boolean => {
@@ -255,21 +254,15 @@ export const validatePhoneNumber = (phoneNumber: string): boolean => {
 };
 
 export const sendPhoneOTP = async (
-  phoneNumber: string,
-  recaptchaVerifier: RecaptchaVerifier
-): Promise<ConfirmationResult> => {
+  phoneNumber: string
+): Promise<FirebaseAuthTypes.ConfirmationResult> => {
   try {
     if (!validatePhoneNumber(phoneNumber)) {
       throw new Error('Invalid phone number format. Use +[country code][number]');
     }
 
-    const confirmationResult = await firebaseSignInWithPhoneNumber(
-      auth,
-      phoneNumber,
-      recaptchaVerifier
-    );
-
-    return confirmationResult;
+    const confirmation = await rnFirebaseAuth().signInWithPhoneNumber(phoneNumber);
+    return confirmation;
   } catch (error: any) {
     console.error('❌ Send OTP error:', error.code, error.message);
     const userMessage = getErrorMessage(error.code);
@@ -278,27 +271,29 @@ export const sendPhoneOTP = async (
 };
 
 const confirmOTPAndGetUser = async (
-  confirmationResult: ConfirmationResult,
+  confirmation: FirebaseAuthTypes.ConfirmationResult,
   verificationCode: string
-): Promise<User> => {
+): Promise<FirebaseAuthTypes.User> => {
   if (!/^\d{6}$/.test(verificationCode)) {
     throw new Error('Verification code must be 6 digits');
   }
 
-  const userCredential = await confirmationResult.confirm(verificationCode);
-  const user = userCredential.user;
+  const userCredential = await confirmation.confirm(verificationCode);
+  if (!userCredential) {
+    throw new Error('Failed to verify code. Please try again.');
+  }
+  return userCredential.user;
 
-  return user;
 };
 
 const ensureEmailPasswordLinked = async (
-  user: User,
+  user: FirebaseAuthTypes.User,
   email: string,
   password: string
 ): Promise<void> => {
   try {
     const credential = EmailAuthProvider.credential(email, password);
-    await linkWithCredential(user, credential);
+    await linkWithCredential(auth.currentUser!, credential);
     
     const userDocRef = doc(db, 'users', user.uid);
     await updateDoc(userDocRef, { 
@@ -324,14 +319,13 @@ const ensureEmailPasswordLinked = async (
   }
 };
 
-// ✅ UPDATED: Now uses credentials.displayName
 export const verifyPhoneOTPForSignup = async (
-  confirmationResult: ConfirmationResult,
+  confirmation: FirebaseAuthTypes.ConfirmationResult,
   verificationCode: string,
   credentials: PhoneSignupCredentials
-): Promise<User> => {
+): Promise<FirebaseAuthTypes.User> => {
   try {
-    const user = await confirmOTPAndGetUser(confirmationResult, verificationCode);
+    const user = await confirmOTPAndGetUser(confirmation, verificationCode);
 
     const userDocRef = doc(db, 'users', user.uid);
     const userDocSnap = await getDoc(userDocRef);
@@ -340,7 +334,7 @@ export const verifyPhoneOTPForSignup = async (
       const userDoc: UserProfile = {
         uid: user.uid,
         email: credentials.email,
-        displayName: credentials.displayName, // ✅ CHANGE: Use credentials.displayName instead of user.displayName
+        displayName: credentials.displayName,
         phoneNumber: user.phoneNumber || undefined,
         createdAt: new Date(),
         photoURL: user.photoURL || null,
@@ -350,17 +344,13 @@ export const verifyPhoneOTPForSignup = async (
       };
 
       await setDoc(userDocRef, userDoc);
-      
-      // ✅ CHANGE: Update Firebase Auth displayName with the provided name
-      await updateProfile(user, { displayName: credentials.displayName });
+      await rnFirebaseAuth().currentUser?.updateProfile({ displayName: credentials.displayName });
     } else {
       await updateDoc(userDocRef, { 
         email: credentials.email,
-        displayName: credentials.displayName, // ✅ CHANGE: Update displayName if doc exists
+        displayName: credentials.displayName,
       });
-      
-      // ✅ CHANGE: Update Firebase Auth displayName
-      await updateProfile(user, { displayName: credentials.displayName });
+      await rnFirebaseAuth().currentUser?.updateProfile({ displayName: credentials.displayName });
     }
 
     await ensureEmailPasswordLinked(user, credentials.email, credentials.password);
@@ -379,11 +369,11 @@ export const verifyPhoneOTPForSignup = async (
 };
 
 export const verifyPhoneOTPForLogin = async (
-  confirmationResult: ConfirmationResult,
+  confirmation: FirebaseAuthTypes.ConfirmationResult,
   verificationCode: string
-): Promise<User> => {
+): Promise<FirebaseAuthTypes.User> => {
   try {
-    const user = await confirmOTPAndGetUser(confirmationResult, verificationCode);
+    const user = await confirmOTPAndGetUser(confirmation, verificationCode);
 
     const userDocRef = doc(db, 'users', user.uid);
     const userDocSnap = await getDoc(userDocRef);
@@ -484,11 +474,10 @@ export const signInWithPhoneAndPassword = async (
 // ============================================
 
 export const signUpWithPhone = async (
-  phoneNumber: string,
-  recaptchaVerifier: RecaptchaVerifier
-): Promise<ConfirmationResult> => {
+  phoneNumber: string
+): Promise<FirebaseAuthTypes.ConfirmationResult> => {
   try {
-    return await sendPhoneOTP(phoneNumber, recaptchaVerifier);
+    return await sendPhoneOTP(phoneNumber);
   } catch (error: any) {
     console.error('❌ Phone sign up error:', error);
     throw error;
@@ -497,21 +486,15 @@ export const signUpWithPhone = async (
 
 export const linkPhoneToAccount = async (
   user: User,
-  phoneNumber: string,
-  recaptchaVerifier: RecaptchaVerifier
-): Promise<ConfirmationResult> => {
+  phoneNumber: string
+): Promise<FirebaseAuthTypes.ConfirmationResult> => {
   try {
     if (!validatePhoneNumber(phoneNumber)) {
       throw new Error('Invalid phone number format');
     }
 
-    const confirmationResult = await firebaseSignInWithPhoneNumber(
-      auth,
-      phoneNumber,
-      recaptchaVerifier
-    );
-
-    return confirmationResult;
+    const confirmation = await rnFirebaseAuth().signInWithPhoneNumber(phoneNumber);
+    return confirmation;
   } catch (error: any) {
     console.error('❌ Link phone error:', error.code, error.message);
     const userMessage = getErrorMessage(error.code);
