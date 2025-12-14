@@ -7,13 +7,9 @@ import {
   sendPasswordResetEmail,
   updateProfile,
   User,
-  EmailAuthProvider,
-  linkWithCredential,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebaseConfig';
-import rnFirebaseAuth from '@react-native-firebase/auth';
-import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 // ============================================
 // INTERFACES & TYPES
@@ -74,28 +70,6 @@ const getErrorMessage = (errorCode: string): string => {
       return 'Network error. Please check your internet connection.';
     case 'auth/invalid-credential':
       return 'Invalid email or password. Please try again.';
-    case 'auth/invalid-phone-number':
-      return 'Invalid phone number. Please check the format (+[country code][number]).';
-    case 'auth/missing-phone-number':
-      return 'Please enter a phone number.';
-    case 'auth/quota-exceeded':
-      return 'SMS quota exceeded. Please try again later.';
-    case 'auth/invalid-verification-code':
-      return 'Invalid verification code. Please try again.';
-    case 'auth/code-expired':
-      return 'Verification code has expired. Please request a new one.';
-    case 'auth/session-expired':
-      return 'Session expired. Please restart the verification process.';
-    case 'auth/captcha-check-failed':
-      return 'reCAPTCHA verification failed. Please try again.';
-    case 'auth/missing-verification-code':
-      return 'Please enter the verification code.';
-    case 'auth/phone-number-already-exists':
-      return 'This phone number is already registered.';
-    case 'auth/provider-already-linked':
-      return 'This credential is already linked to your account.';
-    case 'auth/credential-already-in-use':
-      return 'This credential is already associated with a different account.';
     default:
       return 'An error occurred. Please try again.';
   }
@@ -245,166 +219,62 @@ export const signInWithEmail = async (email: string, password: string): Promise<
 };
 
 // ============================================
-// PHONE AUTHENTICATION (REACT NATIVE FIREBASE)
+// PHONE AUTHENTICATION - DISABLED IN EXPO GO
 // ============================================
+
+// ⚠️ IMPORTANT: Phone authentication requires @react-native-firebase/auth
+// which does NOT work with Expo Go. You need a development build to use phone auth.
+//
+// Options:
+// 1. Build with EAS (eas build --profile development)
+// 2. Use a third-party SMS service (Twilio, etc.)
+// 3. Remove phone authentication features
+//
+// For now, these functions will throw an error explaining the limitation.
 
 export const validatePhoneNumber = (phoneNumber: string): boolean => {
   const phoneRegex = /^\+\d{10,15}$/;
   return phoneRegex.test(phoneNumber);
 };
 
-export const sendPhoneOTP = async (
-  phoneNumber: string
-): Promise<FirebaseAuthTypes.ConfirmationResult> => {
-  try {
-    if (!validatePhoneNumber(phoneNumber)) {
-      throw new Error('Invalid phone number format. Use +[country code][number]');
-    }
-
-    const confirmation = await rnFirebaseAuth().signInWithPhoneNumber(phoneNumber);
-    return confirmation;
-  } catch (error: any) {
-    console.error('❌ Send OTP error:', error.code, error.message);
-    const userMessage = getErrorMessage(error.code);
-    throw new Error(userMessage);
-  }
-};
-
-const confirmOTPAndGetUser = async (
-  confirmation: FirebaseAuthTypes.ConfirmationResult,
-  verificationCode: string
-): Promise<FirebaseAuthTypes.User> => {
-  if (!/^\d{6}$/.test(verificationCode)) {
-    throw new Error('Verification code must be 6 digits');
-  }
-
-  const userCredential = await confirmation.confirm(verificationCode);
-  if (!userCredential) {
-    throw new Error('Failed to verify code. Please try again.');
-  }
-  return userCredential.user;
-
-};
-
-const ensureEmailPasswordLinked = async (
-  user: FirebaseAuthTypes.User,
-  email: string,
-  password: string
-): Promise<void> => {
-  try {
-    const credential = EmailAuthProvider.credential(email, password);
-    await linkWithCredential(auth.currentUser!, credential);
-    
-    const userDocRef = doc(db, 'users', user.uid);
-    await updateDoc(userDocRef, { 
-      hasPassword: true,
-      email: email
-    });
-  } catch (error: any) {
-    if (error.code === 'auth/provider-already-linked') {
-      return;
-    }
-    
-    if (error.code === 'auth/email-already-in-use') {
-      throw new Error('This email is already registered with another account. Please use a different email.');
-    }
-    
-    if (error.code === 'auth/credential-already-in-use') {
-      throw new Error('This email is already in use by another account.');
-    }
-    
-    console.error('❌ Linking email/password failed:', error.code, error.message);
-    const userMessage = getErrorMessage(error.code);
-    throw new Error(userMessage);
-  }
+export const sendPhoneOTP = async (phoneNumber: string): Promise<any> => {
+  throw new Error(
+    'Phone authentication is not available in Expo Go. Please use email/password authentication or build a development build with EAS.'
+  );
 };
 
 export const verifyPhoneOTPForSignup = async (
-  confirmation: FirebaseAuthTypes.ConfirmationResult,
+  confirmation: any,
   verificationCode: string,
   credentials: PhoneSignupCredentials
-): Promise<FirebaseAuthTypes.User> => {
-  try {
-    const user = await confirmOTPAndGetUser(confirmation, verificationCode);
-
-    const userDocRef = doc(db, 'users', user.uid);
-    const userDocSnap = await getDoc(userDocRef);
-
-    if (!userDocSnap.exists()) {
-      const userDoc: UserProfile = {
-        uid: user.uid,
-        email: credentials.email,
-        displayName: credentials.displayName,
-        phoneNumber: user.phoneNumber || undefined,
-        createdAt: new Date(),
-        photoURL: user.photoURL || null,
-        isNewUser: true,
-        isProfileComplete: false,
-        hasPassword: false,
-      };
-
-      await setDoc(userDocRef, userDoc);
-      await rnFirebaseAuth().currentUser?.updateProfile({ displayName: credentials.displayName });
-    } else {
-      await updateDoc(userDocRef, { 
-        email: credentials.email,
-        displayName: credentials.displayName,
-      });
-      await rnFirebaseAuth().currentUser?.updateProfile({ displayName: credentials.displayName });
-    }
-
-    await ensureEmailPasswordLinked(user, credentials.email, credentials.password);
-
-    return user;
-  } catch (error: any) {
-    console.error('❌ Verify OTP (signup) error:', error);
-    
-    if (error.message && !error.code) {
-      throw error;
-    }
-    
-    const userMessage = getErrorMessage(error.code || 'default');
-    throw new Error(userMessage);
-  }
+): Promise<User> => {
+  throw new Error(
+    'Phone authentication is not available in Expo Go. Please use email/password authentication or build a development build with EAS.'
+  );
 };
 
 export const verifyPhoneOTPForLogin = async (
-  confirmation: FirebaseAuthTypes.ConfirmationResult,
+  confirmation: any,
   verificationCode: string
-): Promise<FirebaseAuthTypes.User> => {
-  try {
-    const user = await confirmOTPAndGetUser(confirmation, verificationCode);
-
-    const userDocRef = doc(db, 'users', user.uid);
-    const userDocSnap = await getDoc(userDocRef);
-
-    if (!userDocSnap.exists()) {
-      throw new Error('No account found for this phone number. Please sign up first.');
-    }
-
-    const isComplete = await checkProfileCompleteness(user.uid);
-
-    if (isComplete && userDocSnap.data().isProfileComplete !== true) {
-      await updateDoc(userDocRef, {
-        isProfileComplete: true,
-        isNewUser: false,
-      });
-    }
-
-    return user;
-  } catch (error: any) {
-    if (error.code) {
-      console.error('❌ Verify OTP (login) error:', error.code, error.message);
-      const userMessage = getErrorMessage(error.code);
-      throw new Error(userMessage);
-    }
-
-    console.error('❌ Verify OTP (login) error:', error.message || error);
-    throw new Error(error.message || 'Failed to verify phone number. Please try again.');
-  }
+): Promise<User> => {
+  throw new Error(
+    'Phone authentication is not available in Expo Go. Please use email/password authentication or build a development build with EAS.'
+  );
 };
 
 export const verifyPhoneOTP = verifyPhoneOTPForSignup;
+
+export const signUpWithPhone = async (phoneNumber: string): Promise<any> => {
+  throw new Error(
+    'Phone authentication is not available in Expo Go. Please use email/password authentication or build a development build with EAS.'
+  );
+};
+
+export const linkPhoneToAccount = async (user: User, phoneNumber: string): Promise<any> => {
+  throw new Error(
+    'Phone authentication is not available in Expo Go. Please use email/password authentication or build a development build with EAS.'
+  );
+};
 
 // ============================================
 // PHONE + PASSWORD LOGIN (NO OTP)
@@ -418,25 +288,25 @@ export const signInWithPhoneAndPassword = async (
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('phoneNumber', '==', phoneNumber));
     const querySnapshot = await getDocs(q);
-    
+
     if (querySnapshot.empty) {
       throw new Error('No account found with this phone number. Please sign up first.');
     }
-    
+
     const userDoc = querySnapshot.docs[0];
     const userData = userDoc.data();
-    
+
     if (!userData.email) {
       throw new Error('No email linked to this account. Please contact support.');
     }
-    
+
     if (!userData.hasPassword) {
       throw new Error('No password set for this account. Please use OTP login or contact support.');
     }
-    
+
     const userCredential = await signInWithEmailAndPassword(auth, userData.email, password);
     const user = userCredential.user;
-    
+
     const isComplete = await checkProfileCompleteness(user.uid);
     if (isComplete) {
       const userDocRef = doc(db, 'users', user.uid);
@@ -445,11 +315,11 @@ export const signInWithPhoneAndPassword = async (
         isNewUser: false,
       });
     }
-    
+
     return user;
   } catch (error: any) {
     console.error('❌ Phone + password login error:', error);
-    
+
     if (error.code === 'auth/wrong-password') {
       throw new Error('Incorrect password. Please try again.');
     }
@@ -459,45 +329,12 @@ export const signInWithPhoneAndPassword = async (
     if (error.code === 'auth/invalid-credential') {
       throw new Error('Invalid credentials. Please check your password.');
     }
-    
+
     if (error.message && !error.code) {
       throw error;
     }
-    
+
     const userMessage = getErrorMessage(error.code || 'default');
-    throw new Error(userMessage);
-  }
-};
-
-// ============================================
-// PHONE SIGNUP / LINK HELPERS
-// ============================================
-
-export const signUpWithPhone = async (
-  phoneNumber: string
-): Promise<FirebaseAuthTypes.ConfirmationResult> => {
-  try {
-    return await sendPhoneOTP(phoneNumber);
-  } catch (error: any) {
-    console.error('❌ Phone sign up error:', error);
-    throw error;
-  }
-};
-
-export const linkPhoneToAccount = async (
-  user: User,
-  phoneNumber: string
-): Promise<FirebaseAuthTypes.ConfirmationResult> => {
-  try {
-    if (!validatePhoneNumber(phoneNumber)) {
-      throw new Error('Invalid phone number format');
-    }
-
-    const confirmation = await rnFirebaseAuth().signInWithPhoneNumber(phoneNumber);
-    return confirmation;
-  } catch (error: any) {
-    console.error('❌ Link phone error:', error.code, error.message);
-    const userMessage = getErrorMessage(error.code);
     throw new Error(userMessage);
   }
 };

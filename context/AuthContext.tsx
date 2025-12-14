@@ -2,8 +2,15 @@
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../config/firebaseConfig';
 import { getUserProfile, checkProfileCompleteness } from '../services/authService';
+
+// ============================================
+// CONSTANTS
+// ============================================
+
+const AUTH_PERSISTENCE_KEY = '@healthpath_auth_user';
 
 // ============================================
 // INTERFACES
@@ -14,7 +21,6 @@ interface AuthContextType {
   loading: boolean;
   isNewUser: boolean;
   isProfileComplete: boolean;
-  // Optional convenience flag for routing (new user OR incomplete profile)
   needsProfileSetup: boolean;
   refreshProfileStatus: () => Promise<void>;
 }
@@ -43,6 +49,46 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [isNewUser, setIsNewUser] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
+
+  // ============================================
+  // ASYNCSTORAGE PERSISTENCE HELPERS
+  // ============================================
+
+  // Save user UID to AsyncStorage
+  const saveUserToStorage = async (uid: string) => {
+    try {
+      await AsyncStorage.setItem(AUTH_PERSISTENCE_KEY, uid);
+      console.log('💾 User UID saved to AsyncStorage:', uid);
+    } catch (error) {
+      console.error('❌ Error saving user to AsyncStorage:', error);
+    }
+  };
+
+  // Remove user from AsyncStorage
+  const removeUserFromStorage = async () => {
+    try {
+      await AsyncStorage.removeItem(AUTH_PERSISTENCE_KEY);
+      console.log('🗑️ User removed from AsyncStorage');
+    } catch (error) {
+      console.error('❌ Error removing user from AsyncStorage:', error);
+    }
+  };
+
+  // Get stored user UID from AsyncStorage
+  const getStoredUserUID = async (): Promise<string | null> => {
+    try {
+      const uid = await AsyncStorage.getItem(AUTH_PERSISTENCE_KEY);
+      console.log('📥 Retrieved stored user UID:', uid || 'None');
+      return uid;
+    } catch (error) {
+      console.error('❌ Error retrieving user from AsyncStorage:', error);
+      return null;
+    }
+  };
+
+  // ============================================
+  // PROFILE STATUS CHECKS
+  // ============================================
 
   // Check profile status for a given user
   const checkUserProfileStatus = async (uid: string) => {
@@ -91,30 +137,69 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   // ============================================
-  // AUTH STATE LISTENER
+  // AUTH STATE INITIALIZATION
   // ============================================
 
   useEffect(() => {
-    console.log('👂 Setting up auth state listener...');
+    let isMounted = true;
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log('🔐 Auth state changed:', firebaseUser?.uid || 'No user');
+    const initializeAuth = async () => {
+      console.log('🚀 Initializing auth state...');
 
-      setUser(firebaseUser);
+      // Check if we have a stored user UID
+      const storedUID = await getStoredUserUID();
 
-      if (firebaseUser?.uid) {
-        await checkUserProfileStatus(firebaseUser.uid);
-      } else {
-        setIsNewUser(false);
-        setIsProfileComplete(false);
+      // Set up Firebase auth state listener
+      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (!isMounted) return;
+
+        console.log('🔐 Auth state changed:', firebaseUser?.uid || 'No user');
+
+        if (firebaseUser) {
+          // User is signed in
+          setUser(firebaseUser);
+          await saveUserToStorage(firebaseUser.uid);
+          await checkUserProfileStatus(firebaseUser.uid);
+        } else {
+          // User is signed out
+          setUser(null);
+          await removeUserFromStorage();
+          setIsNewUser(false);
+          setIsProfileComplete(false);
+        }
+
+        setLoading(false);
+      });
+
+      // If we have a stored UID but Firebase hasn't detected the user yet,
+      // wait a bit for Firebase to restore the session
+      if (storedUID && !auth.currentUser) {
+        console.log('⏳ Waiting for Firebase to restore session...');
+        // Give Firebase 2 seconds to restore the session
+        setTimeout(() => {
+          if (isMounted && !auth.currentUser) {
+            console.log('⚠️ Firebase session not restored, clearing storage');
+            removeUserFromStorage();
+            setLoading(false);
+          }
+        }, 2000);
       }
 
-      setLoading(false);
+      return unsubscribe;
+    };
+
+    let unsubscribe: (() => void) | undefined;
+
+    initializeAuth().then((unsub) => {
+      unsubscribe = unsub;
     });
 
     return () => {
-      console.log('🔌 Cleaning up auth state listener');
-      unsubscribe();
+      isMounted = false;
+      if (unsubscribe) {
+        console.log('🔌 Cleaning up auth state listener');
+        unsubscribe();
+      }
     };
   }, []);
 
