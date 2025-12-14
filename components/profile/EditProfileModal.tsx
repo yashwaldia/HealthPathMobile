@@ -32,6 +32,8 @@ export default function EditProfileModal({
 }: EditProfileModalProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<Partial<ProfileData>>({});
+  const [formEmail, setFormEmail] = useState<string>('');
+  const [formPhoneNumber, setFormPhoneNumber] = useState<string>('');
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -41,6 +43,8 @@ export default function EditProfileModal({
     if (visible && profile) {
       // Initialize form with current profile data
       setFormData(profile.profile || {});
+      setFormEmail(profile.email || '');
+      setFormPhoneNumber(profile.phoneNumber || '');
 
       // Start animations
       fadeAnim.setValue(0);
@@ -59,7 +63,7 @@ export default function EditProfileModal({
         }),
       ]).start();
     }
-  }, [visible, profile]);
+  }, [visible, profile, fadeAnim, slideAnim]);
 
   const handleInputChange = (field: keyof ProfileData, value: string) => {
     setFormData((prev) => ({
@@ -71,9 +75,24 @@ export default function EditProfileModal({
   const handleSave = async () => {
     if (!profile?.uid) return;
 
+    // Optional: simple validation
+    const trimmedEmail = formEmail.trim();
+    const trimmedPhone = formPhoneNumber.trim();
+
+    if (!trimmedEmail) {
+      Alert.alert('Validation', 'Email is required.');
+      return;
+    }
+
     setLoading(true);
     try {
-      await profileService.updateProfileData(profile.uid, formData);
+      // Use updateProfile so we can update top-level + nested profile together
+      await profileService.updateProfile(profile.uid, {
+        email: trimmedEmail,
+        phoneNumber: trimmedPhone || null,
+        profile: formData,
+      });
+
       Alert.alert('Success', 'Profile updated successfully!');
       onSave();
       onClose();
@@ -120,6 +139,36 @@ export default function EditProfileModal({
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
+              {/* Account Info */}
+              <Text style={styles.sectionTitle}>Account Info</Text>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your email"
+                  value={formEmail}
+                  onChangeText={setFormEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  placeholderTextColor={Colors.light.textSecondary}
+                  editable={!loading}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Mobile Number</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your mobile number"
+                  value={formPhoneNumber}
+                  onChangeText={setFormPhoneNumber}
+                  keyboardType="phone-pad"
+                  placeholderTextColor={Colors.light.textSecondary}
+                  editable={!loading}
+                />
+              </View>
+
               {/* Basic Information */}
               <Text style={styles.sectionTitle}>Basic Information</Text>
 
@@ -150,26 +199,31 @@ export default function EditProfileModal({
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Gender</Text>
                 <View style={styles.genderContainer}>
-                  {['Male', 'Female', 'Other', 'Prefer not to say'].map((gender) => (
-                    <TouchableOpacity
-                      key={gender}
-                      style={[
-                        styles.genderButton,
-                        formData.gender === gender && styles.genderButtonActive,
-                      ]}
-                      onPress={() => handleInputChange('gender', gender as any)}
-                      disabled={loading}
-                    >
-                      <Text
+                  {['Male', 'Female', 'Other', 'Prefer not to say'].map(
+                    (gender) => (
+                      <TouchableOpacity
+                        key={gender}
                         style={[
-                          styles.genderButtonText,
-                          formData.gender === gender && styles.genderButtonTextActive,
+                          styles.genderButton,
+                          formData.gender === gender && styles.genderButtonActive,
                         ]}
+                        onPress={() =>
+                          handleInputChange('gender', gender as any)
+                        }
+                        disabled={loading}
                       >
-                        {gender}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text
+                          style={[
+                            styles.genderButtonText,
+                            formData.gender === gender &&
+                              styles.genderButtonTextActive,
+                          ]}
+                        >
+                          {gender}
+                        </Text>
+                      </TouchableOpacity>
+                    )
+                  )}
                 </View>
               </View>
 
@@ -206,26 +260,32 @@ export default function EditProfileModal({
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Blood Group</Text>
                 <View style={styles.bloodGroupContainer}>
-                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((bg) => (
-                    <TouchableOpacity
-                      key={bg}
-                      style={[
-                        styles.bloodGroupButton,
-                        formData.bloodGroup === bg && styles.bloodGroupButtonActive,
-                      ]}
-                      onPress={() => handleInputChange('bloodGroup', bg as any)}
-                      disabled={loading}
-                    >
-                      <Text
+                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(
+                    (bg) => (
+                      <TouchableOpacity
+                        key={bg}
                         style={[
-                          styles.bloodGroupButtonText,
-                          formData.bloodGroup === bg && styles.bloodGroupButtonTextActive,
+                          styles.bloodGroupButton,
+                          formData.bloodGroup === bg &&
+                            styles.bloodGroupButtonActive,
                         ]}
+                        onPress={() =>
+                          handleInputChange('bloodGroup', bg as any)
+                        }
+                        disabled={loading}
                       >
-                        {bg}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text
+                          style={[
+                            styles.bloodGroupButtonText,
+                            formData.bloodGroup === bg &&
+                              styles.bloodGroupButtonTextActive,
+                          ]}
+                        >
+                          {bg}
+                        </Text>
+                      </TouchableOpacity>
+                    )
+                  )}
                 </View>
               </View>
 
@@ -235,7 +295,9 @@ export default function EditProfileModal({
                   style={[styles.input, styles.textArea]}
                   placeholder="e.g., Peanuts, Penicillin"
                   value={formData.allergies || ''}
-                  onChangeText={(text) => handleInputChange('allergies', text)}
+                  onChangeText={(text) =>
+                    handleInputChange('allergies', text)
+                  }
                   multiline
                   numberOfLines={3}
                   placeholderTextColor={Colors.light.textSecondary}
@@ -249,7 +311,9 @@ export default function EditProfileModal({
                   style={[styles.input, styles.textArea]}
                   placeholder="e.g., Diabetes, Hypertension"
                   value={formData.conditions || ''}
-                  onChangeText={(text) => handleInputChange('conditions', text)}
+                  onChangeText={(text) =>
+                    handleInputChange('conditions', text)
+                  }
                   multiline
                   numberOfLines={3}
                   placeholderTextColor={Colors.light.textSecondary}
@@ -263,7 +327,9 @@ export default function EditProfileModal({
                   style={[styles.input, styles.textArea]}
                   placeholder="e.g., Aspirin 100mg daily"
                   value={formData.medications || ''}
-                  onChangeText={(text) => handleInputChange('medications', text)}
+                  onChangeText={(text) =>
+                    handleInputChange('medications', text)
+                  }
                   multiline
                   numberOfLines={3}
                   placeholderTextColor={Colors.light.textSecondary}
@@ -292,7 +358,9 @@ export default function EditProfileModal({
                   style={styles.input}
                   placeholder="e.g., 7-8 hours"
                   value={formData.sleepDuration || ''}
-                  onChangeText={(text) => handleInputChange('sleepDuration', text)}
+                  onChangeText={(text) =>
+                    handleInputChange('sleepDuration', text)
+                  }
                   placeholderTextColor={Colors.light.textSecondary}
                   editable={!loading}
                 />
@@ -304,7 +372,9 @@ export default function EditProfileModal({
                   style={styles.input}
                   placeholder="e.g., Moderate, Active, Sedentary"
                   value={formData.physicalActivity || ''}
-                  onChangeText={(text) => handleInputChange('physicalActivity', text)}
+                  onChangeText={(text) =>
+                    handleInputChange('physicalActivity', text)
+                  }
                   placeholderTextColor={Colors.light.textSecondary}
                   editable={!loading}
                 />
@@ -316,7 +386,9 @@ export default function EditProfileModal({
                   style={[styles.input, styles.textArea]}
                   placeholder="e.g., Running 3x week, Gym 5x week"
                   value={formData.exerciseRoutine || ''}
-                  onChangeText={(text) => handleInputChange('exerciseRoutine', text)}
+                  onChangeText={(text) =>
+                    handleInputChange('exerciseRoutine', text)
+                  }
                   multiline
                   numberOfLines={3}
                   placeholderTextColor={Colors.light.textSecondary}

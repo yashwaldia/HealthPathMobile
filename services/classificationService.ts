@@ -1,9 +1,9 @@
 // services/classificationService.ts
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { ClassificationResult, DocumentCategory } from '../types/upload';
 import * as FileSystem from 'expo-file-system/legacy';
-import { extractMedicationsFromDocument, ExtractedMedication } from './aiService';
+import { ClassificationResult, DocumentCategory } from '../types/upload';
+import { ExtractedMedication, extractMedicationsFromDocument } from './aiService';
 import { addMedication } from './medicationService';
 
 // Initialize Gemini AI (use your existing API key from aiService.ts)
@@ -153,7 +153,7 @@ export const saveMedicationsToFirestore = async (
  */
 export const extractTextFromImage = async (imageUri: string): Promise<string> => {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     // Read image as base64
     const base64 = await FileSystem.readAsStringAsync(imageUri, {
@@ -197,7 +197,7 @@ export const classifyDocument = async (
       documentText = await extractTextFromImage(fileUri);
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `
 You are a medical document classifier. Analyze the following medical document and classify it into ONE of these categories:
@@ -309,7 +309,7 @@ export const extractLabResults = async (
   extractedText: string
 ): Promise<any> => {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `
 Analyze this lab report and extract all test results in structured format.
@@ -375,7 +375,7 @@ export const generateInterpretation = async (
   userProfile?: any
 ): Promise<any> => {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `
 You are a medical AI assistant. Analyze these lab test results and provide a comprehensive interpretation.

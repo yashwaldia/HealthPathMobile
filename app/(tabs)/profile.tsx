@@ -24,8 +24,6 @@ import { logOut } from '../../services/authService';
 import { storageService } from '../../services/storageService';
 import { UserProfile } from '../../types/profile';
 import EditProfileModal from '../../components/profile/EditProfileModal';
-
-// ✅ NEW: Import notification services
 import {
   checkNotificationPermissions,
   requestNotificationPermissions,
@@ -34,36 +32,32 @@ import {
   sendTestNotification,
   getAllScheduledNotifications,
 } from '../../services/notificationService';
-import { getActiveMedications } from '../../services/medicationService'; // at the top, if not already present
 
 export default function ProfileScreen() {
   const { user } = useAuth();
   const router = useRouter();
+
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-
-  // ✅ NEW: Notification states
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [hasPermission, setHasPermission] = useState(false);
   const [scheduledCount, setScheduledCount] = useState(0);
 
-  // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
     if (user) {
       loadProfile();
-      checkNotificationStatus(); // ✅ NEW
+      checkNotificationStatus();
     }
   }, [user]);
 
   useEffect(() => {
     if (!loading) {
-      // Start animations after data loads
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -77,27 +71,27 @@ export default function ProfileScreen() {
         }),
       ]).start();
     }
-  }, [loading]);
+  }, [loading, fadeAnim, slideAnim]);
 
   const loadProfile = async () => {
     if (!user?.uid) return;
-    
+
     setLoading(true);
     try {
       const userProfile = await profileService.getProfile(user.uid);
-      
+
       if (!userProfile) {
-        // Create profile if it doesn't exist
         await profileService.createProfile(user.uid, {
           email: user.email || '',
           displayName: user.displayName || 'User',
           photoURL: user.photoURL || null,
         });
-        
+
         const newProfile = await profileService.getProfile(user.uid);
         setProfile(newProfile);
       } else {
         setProfile(userProfile);
+        setNotificationsEnabled(userProfile?.profile?.notificationsEnabled ?? true);
       }
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -107,90 +101,81 @@ export default function ProfileScreen() {
     }
   };
 
-  // ✅ NEW: Check notification status
   const checkNotificationStatus = async () => {
     try {
       const permission = await checkNotificationPermissions();
       setHasPermission(permission);
-      
+
       if (permission) {
         const notifications = await getAllScheduledNotifications();
         setScheduledCount(notifications.length);
-        setNotificationsEnabled(notifications.length > 0);
       }
     } catch (error) {
       console.error('Error checking notification status:', error);
     }
   };
 
-  // ✅ NEW: Toggle notifications
   const handleToggleNotifications = async (value: boolean) => {
     if (!user?.uid) return;
 
     try {
       if (value) {
-        // Enable notifications
         const permission = await requestNotificationPermissions();
-        
+
         if (!permission) {
           Alert.alert(
             'Permission Required',
             'Please enable notifications in your device settings to receive medication reminders.',
             [{ text: 'OK' }]
           );
+          setNotificationsEnabled(false);
           return;
         }
 
-        // Schedule all medication reminders
-        Alert.alert(
-          'Enabling Notifications',
-          'Scheduling medication reminders...',
-          [{ text: 'OK' }]
-        );
-        
         await scheduleAllMedicationReminders(user.uid);
         setNotificationsEnabled(true);
         setHasPermission(true);
-        
-        // Update profile
+
         await profileService.updateProfile(user.uid, {
           profile: {
             notificationsEnabled: true,
           },
         });
 
-        
-        // Reload to get count
         await checkNotificationStatus();
-        
+
         Alert.alert(
           'Success',
-          'Medication reminders have been scheduled! You will receive notifications at your medication times.',
+          'Medication reminders have been enabled! You will receive notifications at your medication times.',
           [{ text: 'OK' }]
         );
       } else {
-        // Disable notifications
         Alert.alert(
           'Disable Notifications',
           'This will cancel all medication reminders. Are you sure?',
           [
-            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Cancel',
+              style: 'cancel',
+              onPress: () => {
+                setNotificationsEnabled(true);
+              },
+            },
             {
               text: 'Disable',
               style: 'destructive',
               onPress: async () => {
                 await cancelAllMedicationReminders();
                 setNotificationsEnabled(false);
-                
-                // Update profile
+
                 await profileService.updateProfile(user.uid, {
                   profile: {
                     notificationsEnabled: false,
                   },
                 });
-                
+
                 await checkNotificationStatus();
-                
+
                 Alert.alert('Success', 'All medication reminders have been cancelled.');
               },
             },
@@ -200,10 +185,10 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Error toggling notifications:', error);
       Alert.alert('Error', 'Failed to update notification settings');
+      setNotificationsEnabled(!value);
     }
   };
 
-  // ✅ NEW: Test notification
   const handleTestNotification = async () => {
     try {
       await sendTestNotification();
@@ -218,21 +203,27 @@ export default function ProfileScreen() {
     }
   };
 
-  // ✅ NEW: View scheduled notifications
   const handleViewScheduledNotifications = async () => {
     try {
       const notifications = await getAllScheduledNotifications();
-      
+
       if (notifications.length === 0) {
-        Alert.alert('No Scheduled Notifications', 'You don\'t have any scheduled medication reminders.');
+        Alert.alert(
+          'No Scheduled Notifications',
+          "You don't have any scheduled medication reminders."
+        );
         return;
       }
 
-      const notificationList = notifications.map((n, index) => {
-        const data = n.content.data as any;
-        const trigger = n.trigger as any;
-        return `${index + 1}. ${data?.medicationName || 'Medication'}\n   Time: ${trigger?.hour || 'N/A'}:00`;
-      }).join('\n\n');
+      const notificationList = notifications
+        .map((n, index) => {
+          const data = n.content.data as any;
+          const trigger = n.trigger as any;
+          return `${index + 1}. ${data?.medicationName || 'Medication'}\n   Time: ${
+            trigger?.hour || 'N/A'
+          }:00`;
+        })
+        .join('\n\n');
 
       Alert.alert(
         `Scheduled Notifications (${notifications.length})`,
@@ -248,7 +239,7 @@ export default function ProfileScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await loadProfile();
-    await checkNotificationStatus(); // ✅ NEW
+    await checkNotificationStatus();
     setRefreshing(false);
   };
 
@@ -257,28 +248,24 @@ export default function ProfileScreen() {
 
     setUploadingPhoto(true);
     try {
-      // Pick image
       const imageUri = await storageService.pickImage();
       if (!imageUri) {
         setUploadingPhoto(false);
         return;
       }
 
-      // Upload to Firebase Storage
       const downloadURL = await storageService.uploadProfilePhoto(user.uid, imageUri);
       if (!downloadURL) {
         setUploadingPhoto(false);
         return;
       }
 
-      // Update profile with new photo URL
       await profileService.updateProfile(user.uid, {
         photoURL: downloadURL,
       });
 
-      // Reload profile
       await loadProfile();
-      
+
       Alert.alert('Success', 'Profile photo updated successfully!');
     } catch (error) {
       console.error('Error uploading photo:', error);
@@ -289,27 +276,22 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await logOut();
-              // Navigate to login screen
-              router.replace('/(auth)/login');
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to logout. Please try again.');
-            }
-          },
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await logOut();
+            router.replace('/(auth)/login');
+          } catch (error) {
+            console.error('Logout error:', error);
+            Alert.alert('Error', 'Failed to logout. Please try again.');
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleEditProfile = () => {
@@ -317,7 +299,6 @@ export default function ProfileScreen() {
   };
 
   const handleSaveProfile = async () => {
-    // Reload profile after save
     await loadProfile();
   };
 
@@ -332,10 +313,18 @@ export default function ProfileScreen() {
     );
   }
 
-  // Safe getters with default values
-  const getProfileValue = (key: keyof UserProfile['profile'], defaultValue = 'Not set'): string => {
+  const getProfileValue = (
+    key: keyof UserProfile['profile'],
+    defaultValue = 'Not set'
+  ): string => {
     return profile?.profile?.[key]?.toString() || defaultValue;
   };
+
+  // ✅ Unified “full name” resolver used in both header and Basic Info
+  const fullName =
+    profile?.profile?.fullName?.toString().trim() ||
+    profile?.displayName?.toString().trim() ||
+    'User';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -355,7 +344,6 @@ export default function ProfileScreen() {
             transform: [{ translateY: slideAnim }],
           }}
         >
-          {/* Header with Avatar */}
           <View style={styles.header}>
             <View style={styles.avatarContainer}>
               {profile?.photoURL ? (
@@ -365,7 +353,7 @@ export default function ProfileScreen() {
                   <Ionicons name="person" size={48} color={Colors.light.primary} />
                 </View>
               )}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.editAvatarButton}
                 onPress={handleUploadPhoto}
                 disabled={uploadingPhoto}
@@ -377,11 +365,15 @@ export default function ProfileScreen() {
                 )}
               </TouchableOpacity>
             </View>
-            
+
+            {/* ✅ Header name uses unified fullName */}
             <Text style={styles.displayName}>
-              {profile?.displayName || 'User'}
+              {fullName}
             </Text>
-            <Text style={styles.email}>{profile?.email}</Text>
+            <Text style={styles.email}>{profile?.email || 'No email set'}</Text>
+            {profile?.phoneNumber && (
+              <Text style={styles.email}>{profile.phoneNumber}</Text>
+            )}
 
             <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
               <Ionicons name="create-outline" size={20} color={Colors.light.primary} />
@@ -389,19 +381,23 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Basic Information */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Basic Information</Text>
-            
+
+            {/* ✅ Basic Info “Full Name” uses the same unified fullName */}
             <InfoCard
               icon="person-outline"
               label="Full Name"
-              value={getProfileValue('fullName')}
+              value={fullName}
             />
             <InfoCard
               icon="calendar-outline"
               label="Date of Birth"
-              value={profile?.profile?.dob ? profileService.formatDate(profile.profile.dob) : 'Not set'}
+              value={
+                profile?.profile?.dob
+                  ? profileService.formatDate(profile.profile.dob)
+                  : 'Not set'
+              }
             />
             <InfoCard
               icon="transgender-outline"
@@ -411,19 +407,22 @@ export default function ProfileScreen() {
             <InfoCard
               icon="body-outline"
               label="Height"
-              value={profile?.profile?.height ? `${profile.profile.height} cm` : 'Not set'}
+              value={
+                profile?.profile?.height ? `${profile.profile.height} cm` : 'Not set'
+              }
             />
             <InfoCard
               icon="scale-outline"
               label="Weight"
-              value={profile?.profile?.weight ? `${profile.profile.weight} kg` : 'Not set'}
+              value={
+                profile?.profile?.weight ? `${profile.profile.weight} kg` : 'Not set'
+              }
             />
           </View>
 
-          {/* Medical Information */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Medical Information</Text>
-            
+
             <InfoCard
               icon="water-outline"
               label="Blood Group"
@@ -446,10 +445,9 @@ export default function ProfileScreen() {
             />
           </View>
 
-          {/* Lifestyle */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Lifestyle & Habits</Text>
-            
+
             <InfoCard
               icon="restaurant-outline"
               label="Diet Type"
@@ -467,23 +465,25 @@ export default function ProfileScreen() {
             />
           </View>
 
-          {/* ✅ ENHANCED: App Settings with Notification Controls */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>App Settings</Text>
-            
-            {/* Notification Toggle */}
+
             <View style={styles.notificationCard}>
               <View style={styles.notificationLeft}>
-                <Ionicons 
-                  name={notificationsEnabled ? "notifications" : "notifications-off"} 
-                  size={24} 
-                  color={notificationsEnabled ? Colors.light.primary : Colors.light.textSecondary} 
+                <Ionicons
+                  name={notificationsEnabled ? 'notifications' : 'notifications-off'}
+                  size={24}
+                  color={
+                    notificationsEnabled
+                      ? Colors.light.primary
+                      : Colors.light.textSecondary
+                  }
                 />
                 <View style={styles.notificationTextContainer}>
                   <Text style={styles.notificationLabel}>Medication Reminders</Text>
                   <Text style={styles.notificationSubtext}>
-                    {notificationsEnabled 
-                      ? `${scheduledCount} reminders scheduled` 
+                    {notificationsEnabled
+                      ? `${scheduledCount} reminders scheduled`
                       : 'Enable to receive reminders'}
                   </Text>
                 </View>
@@ -497,60 +497,75 @@ export default function ProfileScreen() {
               />
             </View>
 
-            {/* Notification Actions */}
             {notificationsEnabled && (
               <>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.actionCard}
                   onPress={handleViewScheduledNotifications}
                 >
                   <View style={styles.actionLeft}>
-                    <Ionicons name="list-outline" size={20} color={Colors.light.primary} />
+                    <Ionicons
+                      name="list-outline"
+                      size={20}
+                      color={Colors.light.primary}
+                    />
                     <Text style={styles.actionLabel}>View Scheduled Reminders</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color={Colors.light.textSecondary} />
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={Colors.light.textSecondary}
+                  />
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.actionCard}
                   onPress={handleTestNotification}
                 >
                   <View style={styles.actionLeft}>
-                    <Ionicons name="flask-outline" size={20} color={Colors.light.primary} />
+                    <Ionicons
+                      name="flask-outline"
+                      size={20}
+                      color={Colors.light.primary}
+                    />
                     <Text style={styles.actionLabel}>Send Test Notification</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color={Colors.light.textSecondary} />
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={Colors.light.textSecondary}
+                  />
                 </TouchableOpacity>
               </>
             )}
 
-            {/* Permission Warning */}
             {!hasPermission && (
               <View style={styles.warningCard}>
                 <Ionicons name="warning-outline" size={20} color="#FF9500" />
                 <Text style={styles.warningText}>
-                  Notification permissions not granted. Enable in device settings to receive reminders.
+                  Notification permissions not granted. Enable in device settings to
+                  receive reminders.
                 </Text>
               </View>
             )}
           </View>
 
-          {/* Logout Button */}
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color="#FF3B30" />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
 
-          {/* Footer Info */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>
-              Member since {profile?.createdAt ? profileService.formatDate(profile.createdAt) : 'Unknown'}
+              Member since{' '}
+              {profile?.createdAt
+                ? profileService.formatDate(profile.createdAt)
+                : 'Unknown'}
             </Text>
           </View>
         </Animated.View>
       </ScrollView>
 
-      {/* Edit Profile Modal */}
       <EditProfileModal
         visible={editModalVisible}
         onClose={() => setEditModalVisible(false)}
@@ -561,8 +576,15 @@ export default function ProfileScreen() {
   );
 }
 
-// Info Card Component
-const InfoCard = ({ icon, label, value }: { icon: string; label: string; value: string }) => (
+const InfoCard = ({
+  icon,
+  label,
+  value,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+}) => (
   <View style={styles.infoCard}>
     <View style={styles.infoLeft}>
       <Ionicons name={icon as any} size={20} color={Colors.light.primary} />
@@ -641,7 +663,7 @@ const styles = StyleSheet.create({
   email: {
     fontSize: 14,
     color: Colors.light.textSecondary,
-    marginBottom: 16,
+    marginBottom: 4,
   },
   editButton: {
     flexDirection: 'row',
@@ -651,6 +673,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.primary + '15',
     borderRadius: 20,
     gap: 6,
+    marginTop: 8,
   },
   editButtonText: {
     fontSize: 14,
@@ -696,7 +719,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     flex: 1,
   },
-  // ✅ NEW: Notification card styles
   notificationCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',

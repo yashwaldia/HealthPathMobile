@@ -91,7 +91,7 @@ export async function analyzeRadiologyScan(
     console.log('🎯 MIME type:', mimeType);
 
     // Use Gemini 2.0 Flash for analysis
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `You are a radiology AI assistant specializing in medical imaging analysis for EDUCATIONAL purposes.
 

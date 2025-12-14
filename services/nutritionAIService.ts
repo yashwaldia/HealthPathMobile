@@ -1,11 +1,11 @@
 // services/nutritionAIService.ts
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as FileSystem from 'expo-file-system/legacy';
 import Constants from 'expo-constants';
-import { nutritionService, NutritionEntry } from './nutritionService';
-import { getTodayISO, getISODateNDaysAgo } from '../utils/dateUtils';
+import * as FileSystem from 'expo-file-system/legacy';
+import { getISODateNDaysAgo, getTodayISO } from '../utils/dateUtils';
 import { getReportsByDateRange } from './labReportService';
+import { NutritionEntry, nutritionService } from './nutritionService';
 
 // Get API key from environment
 const API_KEY =
@@ -136,7 +136,7 @@ export async function analyzeMealFromImage(
 
     // Use Gemini 2.0 Flash for analysis
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       generationConfig: {
         temperature: 0.4,
         topP: 0.95,
@@ -272,7 +272,7 @@ export async function analyzeAndCompareMealImages(
     const mimeB = getMimeType(imageBUri);
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       generationConfig: {
         temperature: 0.4,
         topP: 0.95,
@@ -420,7 +420,7 @@ export async function analyzeManualFoods(
     console.log('🍽️ Starting manual foods analysis...', foods);
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       generationConfig: {
         temperature: 0.4,
         topP: 0.95,
@@ -578,7 +578,7 @@ export async function predictNutrientDeficiencies(
 
     // Use Gemini 2.0 Flash for analysis
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       generationConfig: {
         temperature: 0.6,
         topP: 0.9,

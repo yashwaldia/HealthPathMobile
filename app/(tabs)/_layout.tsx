@@ -1,17 +1,49 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
+import { takePhoto, requestCameraPermission } from '../../services/filePickerService';
+
 
 const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
-  const handleDiagnosePress = () => {
-    Alert.alert('Analyze', 'Analyze feature will be available soon!');
+
+  const handleDiagnosePress = async () => {
+    try {
+      // Request camera permission first
+      const hasPermission = await requestCameraPermission();
+      if (!hasPermission) {
+        return; // Permission denied, alert already shown by service
+      }
+
+      // Open camera and take photo
+      const photo = await takePhoto();
+      
+      if (photo) {
+        // Navigate to smart-upload with the captured photo
+        router.push({
+          pathname: '/smart-upload',
+          params: {
+            quickCapture: 'true',
+            fileUri: photo.uri,
+            fileName: photo.name,
+            fileSize: photo.size.toString(),
+            fileType: photo.type,
+            fileMimeType: photo.mimeType,
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Error in quick capture:', error);
+      Alert.alert('Error', 'Failed to capture photo. Please try again.');
+    }
   };
+
 
   return (
     <View
@@ -36,6 +68,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => 
         onPress={() => navigation.navigate('track')}
       />
 
+
       {/* CENTER Plus Button with Label */}
       <View style={styles.centerButtonContainer}>
         <TouchableOpacity style={styles.centerButton} onPress={handleDiagnosePress}>
@@ -43,6 +76,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => 
         </TouchableOpacity>
         <Text style={styles.centerButtonLabel}>Analyze</Text>
       </View>
+
 
       {/* 2 Buttons on the RIGHT */}
       <TabButton
@@ -61,6 +95,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => 
   );
 };
 
+
 type TabButtonProps = {
   iconName: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
@@ -68,8 +103,10 @@ type TabButtonProps = {
   onPress: () => void;
 };
 
+
 const TabButton = ({ iconName, label, isFocused, onPress }: TabButtonProps) => {
   const color = isFocused ? Colors.light.primary : Colors.light.textLight;
+
 
   return (
     <TouchableOpacity style={styles.tabButton} onPress={onPress}>
@@ -78,6 +115,7 @@ const TabButton = ({ iconName, label, isFocused, onPress }: TabButtonProps) => {
     </TouchableOpacity>
   );
 };
+
 
 export default function TabsLayout() {
   return (
@@ -95,6 +133,7 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
 
 const styles = StyleSheet.create({
   tabBarContainer: {

@@ -1,34 +1,31 @@
 // app/(tabs)/index.tsx
 
-
-import React, { useState, useEffect } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Dimensions,
   Alert,
+  Dimensions,
   Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { profileService } from '../../services/profileService';
-import { Colors } from '../../constants/colors';
-import { Ionicons } from '@expo/vector-icons';
 import { UserProfile } from '../../types/profile';
-
 
 // --- Notification Imports ---
 import { NotificationBell, NotificationModal } from '../../components/Notification/NotificationCenter';
-import { getNotifications, markAsRead, clearAllNotifications } from '../../services/appNotificationService';
+import { clearAllNotifications, getNotifications, markAsRead } from '../../services/appNotificationService';
+import { setupNotificationListeners } from '../../services/notificationService'; // ✅ NEW IMPORT
 // ----------------------------
 
-
 const { width } = Dimensions.get('window');
-
 
 // Sample health data (will be replaced with real data from Firestore later)
 const HEALTH_STATS = {
@@ -38,19 +35,17 @@ const HEALTH_STATS = {
   sleep: { hours: 7, minutes: 23 },
 };
 
-
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [greeting, setGreeting] = useState('Good Evening');
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
-
   // --- Notification State ---
   const [isNotifVisible, setNotifVisible] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-
+  const [isClearing, setIsClearing] = useState(false); // ✅ NEW: Loading state for clear all
 
   // Set greeting based on time
   useEffect(() => {
@@ -60,7 +55,6 @@ export default function HomeScreen() {
     else setGreeting('Good Evening');
   }, []);
 
-
   // Load user profile & Notifications
   useEffect(() => {
     if (user?.uid) {
@@ -69,6 +63,21 @@ export default function HomeScreen() {
     }
   }, [user]);
 
+  // ✅ NEW: Initialize notification listener when user logs in
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    console.log('🎧 Initializing notification listeners...');
+    const listenerSubscription = setupNotificationListeners(user.uid);
+
+    // Cleanup listener when component unmounts or user changes
+    return () => {
+      if (listenerSubscription) {
+        listenerSubscription.remove();
+        console.log('🧹 Notification listeners cleaned up');
+      }
+    };
+  }, [user?.uid]);
 
   const loadProfile = async () => {
     if (!user?.uid) return;
@@ -81,33 +90,58 @@ export default function HomeScreen() {
     }
   };
 
-
   // --- Notification Handlers ---
   const loadNotifications = async () => {
     if (!user?.uid) return;
-    const data = await getNotifications(user.uid);
-    setNotifications(data);
-    setUnreadCount(data.filter(n => !n.read).length);
+    try {
+      const data = await getNotifications(user.uid);
+      setNotifications(data);
+      setUnreadCount(data.filter(n => !n.read).length);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    }
   };
-
 
   const handleMarkRead = async (id: string) => {
     if (!user?.uid) return;
-    await markAsRead(user.uid, id);
-    // Optimistic update
-    const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n);
-    setNotifications(updated);
-    setUnreadCount(updated.filter(n => !n.read).length);
+    
+    try {
+      await markAsRead(user.uid, id);
+      // Optimistic update
+      const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n);
+      setNotifications(updated);
+      setUnreadCount(updated.filter(n => !n.read).length);
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
   
+  // ✅ IMPROVED: Clear all with proper state management
   const handleClearAll = async () => {
-    if (!user?.uid) return;
-    await clearAllNotifications(user.uid);
-    setNotifications([]);
-    setUnreadCount(0);
+    if (!user?.uid || isClearing) return;
+    
+    try {
+      setIsClearing(true);
+      console.log('🗑️ Clearing all notifications...');
+      
+      // Delete from Firestore
+      await clearAllNotifications(user.uid);
+      
+      // Reload from Firestore to ensure sync
+      await loadNotifications();
+      
+      console.log('✅ All notifications cleared successfully');
+    } catch (error) {
+      console.error('❌ Error clearing notifications:', error);
+      Alert.alert('Error', 'Failed to clear notifications. Please try again.');
+      
+      // Reload to get correct state from server
+      await loadNotifications();
+    } finally {
+      setIsClearing(false);
+    }
   };
   // -----------------------------
-
 
   // Updated: all buttons active, including AI Report enabled
   const actionButtons = [
@@ -118,18 +152,17 @@ export default function HomeScreen() {
     { id: 5, icon: 'bar-chart-outline', label: 'Reports', route: '/(tabs)/reports', active: true },
     { id: 6, icon: 'scan-outline', label: 'Radiology', route: '/(tabs)/radiology-analyzer', active: true },
     { id: 7, icon: 'sparkles-outline', label: 'AI Report', route: '/(tabs)/ai-report', active: true },
-    { id: 8, icon: 'pulse-outline', label: 'Biohacking', route: 'biohacking', active: true },
+    // { id: 8, icon: 'pulse-outline', label: 'Biohacking', route: 'biohacking', active: true },
     { id: 9, icon: 'restaurant-outline', label: 'Nutrition', route: 'nutrition-tracker', active: true },
     { id: 10, icon: 'medical-outline', label: 'Medication', route: '/(tabs)/medication-tracker', active: true },
-    { id: 11, icon: 'shield-checkmark-outline', label: 'Screening', route: 'screening-tracker', active: true },
-    { id: 12, icon: 'people-outline', label: 'Child Health', route: 'child-health', active: true },
+    // { id: 11, icon: 'shield-checkmark-outline', label: 'Screening', route: 'screening-tracker', active: true },
+    { id: 12, icon: 'people-outline', label: 'Wellness', route: '/(tabs)/wellness', active: true },
     { id: 13, icon: 'time-outline', label: 'History', route: '/(tabs)/history', active: true },
     { id: 14, icon: 'barbell-outline', label: 'FitCalc', route: 'fitcalc', active: true },
     // { id: 15, icon: 'nutrition-outline', label: 'MacroMaster', route: 'macromaster', active: true },
     { id: 16, icon: 'library-outline', label: 'Health Library', route: '/(tabs)/learning', active: true },
-    { id: 17, icon: 'settings-outline', label: 'Settings', route: 'settings', active: true },
+    { id: 17, icon: 'settings-outline', label: 'Settings', route: '/(tabs)/profile', active: true },
   ];
-
 
   const handleActionPress = (button: typeof actionButtons[0]) => {
     console.log('Action pressed:', button.label);
@@ -142,11 +175,9 @@ export default function HomeScreen() {
     }
   };
 
-
   const handleProfilePress = () => {
     router.push('/(tabs)/profile');
   };
-
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -182,14 +213,12 @@ export default function HomeScreen() {
             {/* --------------------------------- */}
           </View>
 
-
           {/* Greeting Section */}
           <View style={styles.greetingContainer}>
             <Text style={styles.greeting}>
               {greeting}, {user?.displayName || profile?.profile?.fullName || 'User'}
             </Text>
           </View>
-
 
           {/* Quick Stats Grid - 1x4 Layout */}
           <View style={styles.statsContainer}>
@@ -201,7 +230,6 @@ export default function HomeScreen() {
               <Text style={styles.statGoal}>/{HEALTH_STATS.calories.goal}</Text>
             </View>
 
-
             {/* Steps Card */}
             <View style={styles.statCard}>
               <Ionicons name="footsteps-outline" size={24} color={Colors.light.primary} style={styles.statIcon} />
@@ -209,7 +237,6 @@ export default function HomeScreen() {
               <Text style={styles.statValue}>{(HEALTH_STATS.steps.current / 1000).toFixed(1)}k</Text>
               <Text style={styles.statGoal}>/{(HEALTH_STATS.steps.goal / 1000).toFixed(0)}k</Text>
             </View>
-
 
             {/* Heart Rate Card */}
             <View style={styles.statCard}>
@@ -219,7 +246,6 @@ export default function HomeScreen() {
               <Text style={styles.statUnit}>bpm</Text>
             </View>
 
-
             {/* Sleep Card */}
             <View style={styles.statCard}>
               <Ionicons name="moon-outline" size={24} color={Colors.light.primary} style={styles.statIcon} />
@@ -228,7 +254,6 @@ export default function HomeScreen() {
               <Text style={styles.statUnit}>{HEALTH_STATS.sleep.minutes}m</Text>
             </View>
           </View>
-
 
           {/* Action Buttons Grid - 4x5 Layout */}
           <View style={styles.actionsContainer}>
@@ -254,7 +279,6 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
 
-
         {/* --- Notification Modal --- */}
         <NotificationModal
           visible={isNotifVisible}
@@ -265,12 +289,10 @@ export default function HomeScreen() {
         />
         {/* -------------------------- */}
 
-
       </View>
     </SafeAreaView>
   );
 }
-
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -295,7 +317,6 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 8,
   },
-  // Added style for the right side container
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -426,4 +447,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 12,
   },
-}); 
+});

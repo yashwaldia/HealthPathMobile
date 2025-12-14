@@ -67,7 +67,9 @@
         {
           "color": "#fa8a61ff"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

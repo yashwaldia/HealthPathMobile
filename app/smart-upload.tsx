@@ -1,6 +1,6 @@
 // app/smart-upload.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
@@ -32,6 +32,7 @@ import { DosageForm, FrequencyType, MealRelation } from '../types/medication';
 export default function SmartUploadScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const params = useLocalSearchParams();
 
   const [selectedFiles, setSelectedFiles] = useState<PickedFile[]>([]);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress>({
@@ -41,6 +42,27 @@ export default function SmartUploadScreen() {
   });
   const [classification, setClassification] = useState<ClassificationResult | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+
+  // Handle quick capture from Plus button
+  useEffect(() => {
+    if (params.quickCapture === 'true' && params.fileUri) {
+      const quickFile: PickedFile = {
+        uri: params.fileUri as string,
+        name: params.fileName as string,
+        size: parseInt(params.fileSize as string) || 0,
+        type: params.fileType as 'image' | 'pdf',
+        mimeType: params.fileMimeType as string,
+      };
+      
+      console.log('📸 Quick capture detected, auto-loading file:', quickFile.name);
+      setSelectedFiles([quickFile]);
+      
+      // Auto-trigger upload and analysis after a brief delay
+      setTimeout(() => {
+        handleUploadAndAnalyze([quickFile]);
+      }, 500);
+    }
+  }, [params.quickCapture]);
 
   const handleSelectFiles = async () => {
     try {
@@ -62,9 +84,10 @@ export default function SmartUploadScreen() {
     setUploadedFiles([]);
   };
 
-  const handleUploadAndAnalyze = async () => {
-    if (selectedFiles.length === 0 || !user?.uid) return;
-    const file = selectedFiles[0];
+  const handleUploadAndAnalyze = async (filesToUpload?: PickedFile[]) => {
+    const files = filesToUpload || selectedFiles;
+    if (files.length === 0 || !user?.uid) return;
+    const file = files[0];
 
     try {
       setUploadProgress({
@@ -403,7 +426,7 @@ export default function SmartUploadScreen() {
                 styles.analyzeButton,
                 (uploadProgress.status === 'uploading' || uploadProgress.status === 'analyzing') && styles.analyzeButtonDisabled
               ]}
-              onPress={handleUploadAndAnalyze}
+              onPress={() => handleUploadAndAnalyze()}
               disabled={uploadProgress.status === 'uploading' || uploadProgress.status === 'analyzing'}
               activeOpacity={0.7}
             >

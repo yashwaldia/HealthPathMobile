@@ -99,7 +99,7 @@ export async function extractVitalsFromDocument(
     console.log('🎯 MIME type:', mimeType);
 
     // Use Gemini 1.5 Pro for better accuracy
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `You are a medical vitals extraction AI. Analyze this document and extract ONLY VITAL SIGNS (NOT lab test values).
 
@@ -220,7 +220,7 @@ export async function extractMedicationsFromDocument(
     const mimeType = getMimeType(uri, type);
     console.log('🎯 MIME type:', mimeType);
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `You are a medical prescription extraction AI. Analyze this prescription document and extract ALL medications with their details.
 
@@ -329,7 +329,7 @@ IMPORTANT RULES:
  */
 export async function analyzeVitalsTrends(vitalsHistory: any[]): Promise<string> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `You are a health analytics AI. Analyze this vitals history data and provide brief, actionable health insights.
 
@@ -358,7 +358,7 @@ Keep response under 200 words. Be encouraging and professional.`;
  */
 export async function getHealthRecommendations(latestVitals: ExtractedVitals): Promise<string> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `You are a health advisor AI. Based on these vital signs, provide 3-4 brief, personalized health recommendations.
 
