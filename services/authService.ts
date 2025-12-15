@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebaseConfig';
+import firebaseAuth from '@react-native-firebase/auth';
 
 // ============================================
 // INTERFACES & TYPES
@@ -70,6 +71,10 @@ const getErrorMessage = (errorCode: string): string => {
       return 'Network error. Please check your internet connection.';
     case 'auth/invalid-credential':
       return 'Invalid email or password. Please try again.';
+    case 'auth/invalid-verification-code':
+      return 'Invalid verification code. Please try again.';
+    case 'auth/session-expired':
+      return 'Verification session expired. Please request a new code.';
     default:
       return 'An error occurred. Please try again.';
   }
@@ -219,18 +224,8 @@ export const signInWithEmail = async (email: string, password: string): Promise<
 };
 
 // ============================================
-// PHONE AUTHENTICATION - DISABLED IN EXPO GO
+// PHONE AUTHENTICATION
 // ============================================
-
-// ⚠️ IMPORTANT: Phone authentication requires @react-native-firebase/auth
-// which does NOT work with Expo Go. You need a development build to use phone auth.
-//
-// Options:
-// 1. Build with EAS (eas build --profile development)
-// 2. Use a third-party SMS service (Twilio, etc.)
-// 3. Remove phone authentication features
-//
-// For now, these functions will throw an error explaining the limitation.
 
 export const validatePhoneNumber = (phoneNumber: string): boolean => {
   const phoneRegex = /^\+\d{10,15}$/;
@@ -238,9 +233,15 @@ export const validatePhoneNumber = (phoneNumber: string): boolean => {
 };
 
 export const sendPhoneOTP = async (phoneNumber: string): Promise<any> => {
-  throw new Error(
-    'Phone authentication is not available in Expo Go. Please use email/password authentication or build a development build with EAS.'
-  );
+  try {
+    console.log('📞 Sending OTP to:', phoneNumber);
+    const confirmation = await firebaseAuth().signInWithPhoneNumber(phoneNumber);
+    console.log('✅ OTP sent successfully');
+    return confirmation;
+  } catch (error: any) {
+    console.error('❌ Send OTP error:', error);
+    throw new Error(error.message || 'Failed to send OTP. Please try again.');
+  }
 };
 
 export const verifyPhoneOTPForSignup = async (
@@ -248,32 +249,137 @@ export const verifyPhoneOTPForSignup = async (
   verificationCode: string,
   credentials: PhoneSignupCredentials
 ): Promise<User> => {
-  throw new Error(
-    'Phone authentication is not available in Expo Go. Please use email/password authentication or build a development build with EAS.'
-  );
+  try {
+    console.log('🔐 Verifying OTP for signup...');
+    
+    // Confirm the OTP
+    const userCredential = await confirmation.confirm(verificationCode);
+    const phoneUser = userCredential.user;
+    
+    console.log('✅ Phone verified, creating account...');
+
+    // Create email/password account
+    const emailUserCredential = await createUserWithEmailAndPassword(
+      auth,
+      credentials.email,
+      credentials.password
+    );
+    const user = emailUserCredential.user;
+
+    // Update display name
+    await updateProfile(user, { displayName: credentials.displayName });
+
+    // Create user document
+    const userDoc = {
+      uid: user.uid,
+      email: user.email,
+      displayName: credentials.displayName,
+      phoneNumber: phoneUser.phoneNumber,
+      createdAt: new Date(),
+      photoURL: null,
+      isNewUser: true,
+      isProfileComplete: false,
+      hasPassword: true,
+    };
+
+    await setDoc(doc(db, 'users', user.uid), userDoc);
+
+    console.log('✅ Account created successfully');
+    return user;
+  } catch (error: any) {
+    console.error('❌ Verify OTP for signup error:', error);
+    
+    if (error.code === 'auth/invalid-verification-code') {
+      throw new Error('Invalid verification code. Please try again.');
+    }
+    if (error.code === 'auth/session-expired') {
+      throw new Error('Verification code expired. Please request a new one.');
+    }
+    
+    const userMessage = getErrorMessage(error.code);
+    throw new Error(userMessage);
+  }
 };
 
 export const verifyPhoneOTPForLogin = async (
   confirmation: any,
   verificationCode: string
 ): Promise<User> => {
-  throw new Error(
-    'Phone authentication is not available in Expo Go. Please use email/password authentication or build a development build with EAS.'
-  );
+  try {
+    console.log('🔐 Verifying OTP for login...');
+    
+    // Confirm the OTP
+    const userCredential = await confirmation.confirm(verificationCode);
+    const phoneUser = userCredential.user;
+    
+    console.log('✅ Phone verified');
+
+    // Check if user exists in Firestore
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('phoneNumber', '==', phoneUser.phoneNumber));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+      throw new Error('No account found with this phone number. Please sign up first.');
+    }
+
+    const userDocData = querySnapshot.docs[0].data();
+    
+    // Check profile completeness
+    const isComplete = await checkProfileCompleteness(userDocData.uid);
+    if (isComplete) {
+      const userDocRef = doc(db, 'users', userDocData.uid);
+      await updateDoc(userDocRef, {
+        isProfileComplete: true,
+        isNewUser: false,
+      });
+    }
+
+    // Return the Firebase Auth user
+    return phoneUser as unknown as User;
+  } catch (error: any) {
+    console.error('❌ Verify OTP for login error:', error);
+    
+    if (error.code === 'auth/invalid-verification-code') {
+      throw new Error('Invalid verification code. Please try again.');
+    }
+    if (error.code === 'auth/session-expired') {
+      throw new Error('Verification code expired. Please request a new one.');
+    }
+    
+    if (error.message && !error.code) {
+      throw error;
+    }
+    
+    const userMessage = getErrorMessage(error.code);
+    throw new Error(userMessage);
+  }
 };
 
 export const verifyPhoneOTP = verifyPhoneOTPForSignup;
 
 export const signUpWithPhone = async (phoneNumber: string): Promise<any> => {
-  throw new Error(
-    'Phone authentication is not available in Expo Go. Please use email/password authentication or build a development build with EAS.'
-  );
+  try {
+    console.log('📞 Initiating phone signup for:', phoneNumber);
+    const confirmation = await firebaseAuth().signInWithPhoneNumber(phoneNumber);
+    console.log('✅ OTP sent for signup');
+    return confirmation;
+  } catch (error: any) {
+    console.error('❌ Phone signup error:', error);
+    throw new Error(error.message || 'Failed to send OTP. Please try again.');
+  }
 };
 
 export const linkPhoneToAccount = async (user: User, phoneNumber: string): Promise<any> => {
-  throw new Error(
-    'Phone authentication is not available in Expo Go. Please use email/password authentication or build a development build with EAS.'
-  );
+  try {
+    console.log('🔗 Linking phone to account:', phoneNumber);
+    const confirmation = await firebaseAuth().signInWithPhoneNumber(phoneNumber);
+    console.log('✅ OTP sent for phone linking');
+    return confirmation;
+  } catch (error: any) {
+    console.error('❌ Link phone error:', error);
+    throw new Error(error.message || 'Failed to link phone number.');
+  }
 };
 
 // ============================================

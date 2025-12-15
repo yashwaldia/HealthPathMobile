@@ -71,7 +71,8 @@ module.exports = {
       ],
       "expo-font",
       "expo-web-browser",
-      "@react-native-firebase/app"
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth"
     ],
     experiments: {
       typedRoutes: true,
