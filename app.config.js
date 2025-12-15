@@ -20,7 +20,8 @@ module.exports = {
         NSCameraUsageDescription: "This app needs access to your camera to capture medical documents.",
         NSPhotoLibraryAddUsageDescription: "This app needs access to save processed medical documents."
       },
-      bundleIdentifier: "com.ab1224.HealthPathMobile"
+      bundleIdentifier: "com.ab1224.HealthPathMobile",
+      googleServicesFile: process.env.GOOGLE_SERVICES_PLIST ?? "./GoogleService-Info.plist"
     },
     android: {
       adaptiveIcon: {
@@ -72,7 +73,14 @@ module.exports = {
       "expo-font",
       "expo-web-browser",
       "@react-native-firebase/app",
-      "@react-native-firebase/auth"
+      [
+        "@react-native-firebase/auth",
+        {
+          // This ensures proper Android configuration
+          "android_task_executor_maximum_pool_size": 10,
+          "android_task_executor_keep_alive_seconds": 3
+        }
+      ]
     ],
     experiments: {
       typedRoutes: true,

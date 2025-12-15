@@ -1,6 +1,7 @@
 // components/wellness/SetupModals/EnhancedLMPModal.tsx
 // Enhanced setup modal with mother name, LMP date picker OR current week/day input
-// Last Updated: December 12, 2025 - Added proper date picker
+// Last Updated: December 15, 2025 - Fixed keyboard handling for button layout
+
 
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -19,13 +20,16 @@ import {
 } from 'react-native';
 import { Colors } from '../../../constants/colors';
 
+
 type Props = {
   visible: boolean;
   onConfirm: (data: { motherName: string; lmpDate?: string; currentWeek?: number; currentDay?: number }) => void;
   onCancel: () => void;
 };
 
+
 type SetupMode = 'lmp' | 'manual';
+
 
 export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props) {
   const [mode, setMode] = useState<SetupMode>('lmp');
@@ -38,12 +42,14 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
   const [currentWeek, setCurrentWeek] = useState('');
   const [currentDay, setCurrentDay] = useState('');
 
+
   const handleConfirm = () => {
     // Validate mother name (required for both modes)
     if (!motherName || motherName.trim().length === 0) {
       Alert.alert('Required', 'Please enter your name');
       return;
     }
+
 
     if (mode === 'lmp') {
       // Validate that date is not in future
@@ -52,6 +58,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
         Alert.alert('Invalid Date', 'LMP date cannot be in the future');
         return;
       }
+
 
       // Format date as YYYY-MM-DD
       const formattedDate = lmpDate.toISOString().split('T')[0];
@@ -72,6 +79,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
     }
   };
 
+
   const handleCancel = () => {
     setMotherName('');
     setLmpDate(new Date());
@@ -81,6 +89,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
     setShowDatePicker(false);
     onCancel();
   };
+
 
   // ⭐ DATE PICKER HANDLERS
   const handleDateChange = (event: any, selectedDate?: Date) => {
@@ -93,9 +102,11 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
     }
   };
 
+
   const handleDatePickerDone = () => {
     setShowDatePicker(false);
   };
+
 
   // Format date for display
   const formatDateForDisplay = (date: Date): string => {
@@ -105,6 +116,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
     const year = date.getFullYear();
     return `${day} ${month} ${year}`;
   };
+
 
   return (
     <Modal
@@ -117,6 +129,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalKeyboardAvoid}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           <View style={styles.modalContainer}>
             {/* Header */}
@@ -127,7 +140,13 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
               </Text>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+
+            <ScrollView 
+              style={styles.modalBody} 
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.scrollContent}
+            >
               {/* Mother Name Input */}
               <View style={styles.inputSection}>
                 <Text style={styles.inputLabel}>Your Name</Text>
@@ -145,7 +164,9 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
                 />
               </View>
 
+
               <View style={styles.divider} />
+
 
               {/* Mode Selection */}
               <Text style={styles.sectionTitle}>Pregnancy Details</Text>
@@ -164,6 +185,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
                   </Text>
                 </TouchableOpacity>
 
+
                 <TouchableOpacity
                   style={[styles.modeButton, mode === 'manual' && styles.modeButtonActive]}
                   onPress={() => setMode('manual')}
@@ -179,6 +201,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
                 </TouchableOpacity>
               </View>
 
+
               {/* LMP Mode - WITH DATE PICKER */}
               {mode === 'lmp' ? (
                 <View style={styles.inputSection}>
@@ -186,6 +209,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
                   <Text style={styles.inputHint}>
                     Select the first day of your last period before pregnancy
                   </Text>
+
 
                   {/* ⭐ DATE PICKER BUTTON */}
                   <TouchableOpacity
@@ -200,6 +224,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
                     </View>
                     <Ionicons name="chevron-down" size={20} color={Colors.light.textSecondary} />
                   </TouchableOpacity>
+
 
                   {/* ⭐ DATE PICKER COMPONENT */}
                   {showDatePicker && (
@@ -232,6 +257,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
                     </>
                   )}
 
+
                   <View style={styles.infoBox}>
                     <Ionicons name="information-circle" size={16} color={Colors.light.primary} />
                     <Text style={styles.infoText}>
@@ -260,6 +286,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
                       />
                     </View>
 
+
                     <View style={styles.rowInputContainer}>
                       <Text style={styles.rowInputLabel}>Day (0-6)</Text>
                       <TextInput
@@ -274,6 +301,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
                     </View>
                   </View>
 
+
                   <View style={styles.exampleBox}>
                     <Ionicons name="information-circle" size={16} color={Colors.light.primary} />
                     <Text style={styles.exampleText}>
@@ -284,7 +312,8 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
               )}
             </ScrollView>
 
-            {/* Footer */}
+
+            {/* Footer - FIXED POSITION */}
             <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={styles.modalButtonSecondary}
@@ -305,6 +334,7 @@ export default function EnhancedLMPModal({ visible, onConfirm, onCancel }: Props
     </Modal>
   );
 }
+
 
 const styles = StyleSheet.create({
   modalOverlay: {
@@ -347,8 +377,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   modalBody: {
-    padding: 24,
-    maxHeight: 500,
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  scrollContent: {
+    paddingTop: 24,
+    paddingBottom: 24,
   },
   sectionTitle: {
     fontSize: 16,
@@ -414,7 +448,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
     marginTop: 4,
   },
-  // ⭐ NEW: Date picker button styles
+  // ⭐ DATE PICKER STYLES
   datePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -436,7 +470,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.text,
   },
-  // ⭐ NEW: iOS date picker container
   iosDatePickerContainer: {
     backgroundColor: Colors.light.background,
     borderRadius: 12,
@@ -519,6 +552,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
+    backgroundColor: Colors.light.cardBackground,
   },
   modalButtonSecondary: {
     flex: 1,

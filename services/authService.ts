@@ -1,16 +1,17 @@
 // services/authService.ts
 
+import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import rnFirebaseAuth from '@react-native-firebase/auth';
 import {
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
-  sendPasswordResetEmail,
   updateProfile,
   User,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from '../config/firebaseConfig';
-import firebaseAuth from '@react-native-firebase/auth';
 
 // ============================================
 // INTERFACES & TYPES
@@ -224,7 +225,7 @@ export const signInWithEmail = async (email: string, password: string): Promise<
 };
 
 // ============================================
-// PHONE AUTHENTICATION
+// PHONE AUTHENTICATION (React Native Firebase)
 // ============================================
 
 export const validatePhoneNumber = (phoneNumber: string): boolean => {
@@ -232,10 +233,10 @@ export const validatePhoneNumber = (phoneNumber: string): boolean => {
   return phoneRegex.test(phoneNumber);
 };
 
-export const sendPhoneOTP = async (phoneNumber: string): Promise<any> => {
+export const sendPhoneOTP = async (phoneNumber: string): Promise<FirebaseAuthTypes.ConfirmationResult> => {
   try {
     console.log('📞 Sending OTP to:', phoneNumber);
-    const confirmation = await firebaseAuth().signInWithPhoneNumber(phoneNumber);
+    const confirmation = await rnFirebaseAuth().signInWithPhoneNumber(phoneNumber);
     console.log('✅ OTP sent successfully');
     return confirmation;
   } catch (error: any) {
@@ -245,20 +246,26 @@ export const sendPhoneOTP = async (phoneNumber: string): Promise<any> => {
 };
 
 export const verifyPhoneOTPForSignup = async (
-  confirmation: any,
+  confirmation: FirebaseAuthTypes.ConfirmationResult,
   verificationCode: string,
   credentials: PhoneSignupCredentials
 ): Promise<User> => {
   try {
     console.log('🔐 Verifying OTP for signup...');
-    
-    // Confirm the OTP
+
+    // Confirm the OTP with React Native Firebase
     const userCredential = await confirmation.confirm(verificationCode);
-    const phoneUser = userCredential.user;
     
+    // Add null check for TypeScript
+    if (!userCredential || !userCredential.user) {
+      throw new Error('Failed to verify OTP. Please try again.');
+    }
+    
+    const phoneUser = userCredential.user;
+
     console.log('✅ Phone verified, creating account...');
 
-    // Create email/password account
+    // Create email/password account with Firebase JS SDK
     const emailUserCredential = await createUserWithEmailAndPassword(
       auth,
       credentials.email,
@@ -288,30 +295,38 @@ export const verifyPhoneOTPForSignup = async (
     return user;
   } catch (error: any) {
     console.error('❌ Verify OTP for signup error:', error);
-    
+
     if (error.code === 'auth/invalid-verification-code') {
       throw new Error('Invalid verification code. Please try again.');
     }
+
     if (error.code === 'auth/session-expired') {
       throw new Error('Verification code expired. Please request a new one.');
     }
-    
+
     const userMessage = getErrorMessage(error.code);
     throw new Error(userMessage);
   }
 };
 
+
 export const verifyPhoneOTPForLogin = async (
-  confirmation: any,
+  confirmation: FirebaseAuthTypes.ConfirmationResult,
   verificationCode: string
 ): Promise<User> => {
   try {
     console.log('🔐 Verifying OTP for login...');
-    
+
     // Confirm the OTP
     const userCredential = await confirmation.confirm(verificationCode);
-    const phoneUser = userCredential.user;
     
+    // Add null check for TypeScript
+    if (!userCredential || !userCredential.user) {
+      throw new Error('Failed to verify OTP. Please try again.');
+    }
+    
+    const phoneUser = userCredential.user;
+
     console.log('✅ Phone verified');
 
     // Check if user exists in Firestore
@@ -324,7 +339,7 @@ export const verifyPhoneOTPForLogin = async (
     }
 
     const userDocData = querySnapshot.docs[0].data();
-    
+
     // Check profile completeness
     const isComplete = await checkProfileCompleteness(userDocData.uid);
     if (isComplete) {
@@ -335,33 +350,35 @@ export const verifyPhoneOTPForLogin = async (
       });
     }
 
-    // Return the Firebase Auth user
+    // Return the Firebase Auth user (converting from RN Firebase to JS SDK format)
     return phoneUser as unknown as User;
   } catch (error: any) {
     console.error('❌ Verify OTP for login error:', error);
-    
+
     if (error.code === 'auth/invalid-verification-code') {
       throw new Error('Invalid verification code. Please try again.');
     }
+
     if (error.code === 'auth/session-expired') {
       throw new Error('Verification code expired. Please request a new one.');
     }
-    
+
     if (error.message && !error.code) {
       throw error;
     }
-    
+
     const userMessage = getErrorMessage(error.code);
     throw new Error(userMessage);
   }
 };
 
+
 export const verifyPhoneOTP = verifyPhoneOTPForSignup;
 
-export const signUpWithPhone = async (phoneNumber: string): Promise<any> => {
+export const signUpWithPhone = async (phoneNumber: string): Promise<FirebaseAuthTypes.ConfirmationResult> => {
   try {
     console.log('📞 Initiating phone signup for:', phoneNumber);
-    const confirmation = await firebaseAuth().signInWithPhoneNumber(phoneNumber);
+    const confirmation = await rnFirebaseAuth().signInWithPhoneNumber(phoneNumber);
     console.log('✅ OTP sent for signup');
     return confirmation;
   } catch (error: any) {
@@ -370,10 +387,10 @@ export const signUpWithPhone = async (phoneNumber: string): Promise<any> => {
   }
 };
 
-export const linkPhoneToAccount = async (user: User, phoneNumber: string): Promise<any> => {
+export const linkPhoneToAccount = async (user: User, phoneNumber: string): Promise<FirebaseAuthTypes.ConfirmationResult> => {
   try {
     console.log('🔗 Linking phone to account:', phoneNumber);
-    const confirmation = await firebaseAuth().signInWithPhoneNumber(phoneNumber);
+    const confirmation = await rnFirebaseAuth().signInWithPhoneNumber(phoneNumber);
     console.log('✅ OTP sent for phone linking');
     return confirmation;
   } catch (error: any) {
@@ -451,7 +468,9 @@ export const signInWithPhoneAndPassword = async (
 
 export const logOut = async (): Promise<void> => {
   try {
+    // Sign out from both Firebase JS SDK and React Native Firebase
     await signOut(auth);
+    await rnFirebaseAuth().signOut();
   } catch (error: any) {
     console.error('❌ Sign out error:', error.message);
     throw new Error('Failed to sign out. Please try again.');

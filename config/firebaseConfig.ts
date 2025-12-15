@@ -1,78 +1,47 @@
 // config/firebaseConfig.ts
 
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
-import { getStorage, FirebaseStorage } from 'firebase/storage';
+// Import React Native Firebase modules using require to avoid ES module issues
+const firebaseApp = require('@react-native-firebase/app').default;
+const authModule = require('@react-native-firebase/auth').default;
+const firestoreModule = require('@react-native-firebase/firestore').default;
+const storageModule = require('@react-native-firebase/storage').default;
 
-// Firebase configuration using environment variables
-const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_API_KEY,
-  authDomain: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.EXPO_PUBLIC_HEALTHPATH_FIREBASE_APP_ID,
-};
+// Note: React Native Firebase automatically initializes from native config files
+// (google-services.json for Android, GoogleService-Info.plist for iOS)
 
-// Log Firebase configuration for debugging
-console.log('🔥 Firebase Configuration:');
-console.log('  Project ID:', firebaseConfig.projectId);
-console.log('  Storage Bucket:', firebaseConfig.storageBucket);
-console.log('  Auth Domain:', firebaseConfig.authDomain);
+console.log('🔥 React Native Firebase Configuration:');
 
-// Validate required config values
-if (!firebaseConfig.apiKey || !firebaseConfig.projectId || !firebaseConfig.storageBucket) {
-  console.error('❌ Missing required Firebase configuration!');
-  console.error('   Make sure your .env file has all EXPO_PUBLIC_FIREBASE_* variables set.');
-  throw new Error('Firebase configuration is incomplete');
+// Get the default app instance
+let app;
+try {
+  app = firebaseApp.app();
+  console.log('✅ Using existing Firebase app instance');
+} catch (error) {
+  console.log('⚠️ Firebase app will be initialized from native config files');
+  // App will auto-initialize on first use
 }
 
-// Validate Storage Bucket format
-if (
-  firebaseConfig.storageBucket &&
-  !firebaseConfig.storageBucket.includes('.firebasestorage.app') &&
-  !firebaseConfig.storageBucket.includes('.appspot.com')
-) {
-  console.warn('⚠️ Storage bucket URL format may be incorrect');
-  console.warn('   Expected: PROJECT_ID.firebasestorage.app or PROJECT_ID.appspot.com');
-  console.warn('   Got:', firebaseConfig.storageBucket);
+// Get Firebase service instances
+const auth = authModule();
+const db = firestoreModule();
+const storage = storageModule();
+
+console.log('✅ React Native Firebase Auth initialized (native)');
+console.log('✅ React Native Firestore initialized');
+console.log('✅ React Native Firebase Storage initialized');
+console.log('📱 Native auth persistence: Automatic via React Native Firebase');
+
+// Log app info if available
+if (app) {
+  console.log('  Project ID:', app.options?.projectId || 'Will load from native config');
+  console.log('  Storage Bucket:', app.options?.storageBucket || 'Will load from native config');
 }
 
-// Initialize Firebase App
-let app: FirebaseApp;
-if (getApps().length === 0) {
-  app = initializeApp(firebaseConfig);
-  console.log('✅ Firebase App initialized');
-} else {
-  app = getApp();
-  console.log('✅ Using existing Firebase App instance');
-}
+// Export Firebase services with consistent naming
+export { auth, db, storage };
 
-// Initialize Firebase Auth
-// Note: The warning about AsyncStorage can be ignored - 
-// we handle persistence manually in AuthContext using AsyncStorage
-const auth: Auth = getAuth(app);
-console.log('✅ Firebase Auth initialized');
+// Also export with 'rn' prefix for clarity
+export { auth as rnAuth, db as rnDb, storage as rnStorage };
 
-// Initialize Firestore
-const db: Firestore = getFirestore(app);
-console.log('✅ Firestore initialized');
-
-// Initialize Firebase Storage
-const storage: FirebaseStorage = getStorage(app);
-console.log('✅ Firebase Storage initialized');
-console.log('📦 Storage Bucket URL:', firebaseConfig.storageBucket);
-
-// Additional Storage validation
-if (!firebaseConfig.storageBucket || firebaseConfig.storageBucket === 'undefined') {
-  console.error('❌ Storage Bucket is not configured!');
-  console.error('   Add EXPO_PUBLIC_HEALTHPATH_FIREBASE_STORAGE_BUCKET to your .env file');
-  console.error('   Example: EXPO_PUBLIC_HEALTHPATH_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app');
-} else {
-  console.log('✅ Storage bucket format verified');
-}
-
-// Export Firebase services
-export { auth, db, storage, app };
+// Export the app if needed
 export default app;
