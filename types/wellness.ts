@@ -1,6 +1,6 @@
 // types/wellness.ts
 // Type definitions for Wellness Modules
-// Last Updated: December 14, 2025 - ✅ FIXED: Multiple concerns support + enhanced types
+// Last Updated: December 16, 2025 - ✅ UPDATED: Added growth tracking & vaccination tracking for Child Care
 
 export type WellnessModuleType =
   | 'mother-care'
@@ -32,9 +32,9 @@ export type TaskCategory =
   | 'social'
   | 'health'
   | 'self-care'
-  | 'detox'          // ✅ ADDED for liver-kidney
-  | 'mobility'       // ✅ ADDED for bone-joint
-  | 'dental';        // ✅ ADDED for teeth-oral
+  | 'detox'
+  | 'mobility'
+  | 'dental';
 
 // ✅ ADDED: Health status type (used across all modules)
 export type HealthStatus = 'excellent' | 'good' | 'fair' | 'poor' | 'critical';
@@ -161,6 +161,20 @@ export interface TrimesterData {
 }
 
 // --- CHILD CARE ---
+// ✅ NEW: Growth Record interface (from desktop)
+export interface GrowthRecord {
+  recordId: string;           // Unique ID for the record
+  date: string;               // ISO date string (YYYY-MM-DD)
+  heightCm: string;           // Height in centimeters
+  weightKg: string;           // Weight in kilograms
+  notes?: string;             // Optional notes
+  ageInMonths?: number;       // Age at time of recording
+}
+
+// ✅ NEW: Vaccination status type
+export type VaccinationStatus = 'Completed' | 'Missed';
+
+// ✅ UPDATED: Enhanced ChildCareProfile with growth & vaccination tracking
 export interface ChildCareProfile extends WellnessModuleProfile {
   childId: string;
   childName: string;
@@ -168,9 +182,12 @@ export interface ChildCareProfile extends WellnessModuleProfile {
   ageInMonths: number;
   ageInDays?: number;
   gender?: 'male' | 'female';
+  birthWeightKg?: string;                                        // ✅ NEW: Birth weight
   developmentalStage?: '0-3m' | '3-6m' | '6-12m' | '12-24m' | '24-36m' | '36m+';
   photoUrl?: string;
   lastTrackedDate?: string;
+  vaccinations: { [vaccineId: string]: VaccinationStatus };     // ✅ NEW: Vaccination tracking
+  growthRecords: GrowthRecord[];                                 // ✅ NEW: Growth records array
 }
 
 export interface ChildProfileSummary {
@@ -207,8 +224,18 @@ export interface ChildGrowthMetrics {
   date: string;
 }
 
+// ✅ NEW: Vaccination interface (from desktop constants)
+export interface Vaccination {
+  id: string;
+  name: string;
+  ageInWeeks: number;
+  ageDescription: string;
+}
+
+// ✅ NEW: Vaccination status calculation helper type
+export type VaccineStatus = 'Completed' | 'Upcoming' | 'Pending' | 'Missed';
+
 // --- LIVER & KIDNEY ---
-// ✅ UPDATED: Enhanced with proper types
 export interface LiverKidneyProfile extends WellnessModuleProfile {
   detoxDay: number;
   hydrationGoalLiters: number;
@@ -216,8 +243,8 @@ export interface LiverKidneyProfile extends WellnessModuleProfile {
   condition: 'fatty-liver' | 'kidney-stones' | 'ckd' | 'hepatitis' | 'elevated-enzymes' | 'uti' | 'detox' | 'general';
   age: number;
   gender: 'male' | 'female';
-  currentLiverStatus: HealthStatus;      // ✅ CHANGED to HealthStatus type
-  currentKidneyStatus: HealthStatus;     // ✅ CHANGED to HealthStatus type
+  currentLiverStatus: HealthStatus;
+  currentKidneyStatus: HealthStatus;
   lastTestDate?: string;
 }
 
@@ -230,18 +257,17 @@ export interface LiverKidneyMetrics {
 }
 
 // --- SKIN & HAIR ---
-// ✅ MAJOR UPDATE: Support for multiple concerns
 export interface SkinHairProfile extends WellnessModuleProfile {
-  concerns: string[];                    // ✅ CHANGED: Now array of concerns
-  primaryConcern: string;                // ✅ ADDED: Main focus area
+  concerns: string[];
+  primaryConcern: string;
   skinType: 'oily' | 'dry' | 'combination' | 'sensitive' | 'normal';
   hairType: 'straight' | 'wavy' | 'curly' | 'coily';
   age: number;
   gender: 'male' | 'female';
-  currentSkinCondition: HealthStatus;    // ✅ CHANGED to HealthStatus type
-  currentHairCondition: HealthStatus;    // ✅ CHANGED to HealthStatus type
+  currentSkinCondition: HealthStatus;
+  currentHairCondition: HealthStatus;
   lastTreatmentDate?: string;
-  lastAnalysisDate?: string;             // ✅ ADDED: Track when detailed analysis was last viewed
+  lastAnalysisDate?: string;
 }
 
 export interface SkinHairMetrics {
@@ -252,20 +278,19 @@ export interface SkinHairMetrics {
   sleepHours: number;
   scalpMassageDone?: boolean;
   hairOilApplied?: boolean;
-  skinConditionRating?: number;          // 1-5 scale
-  hairConditionRating?: number;          // 1-5 scale
+  skinConditionRating?: number;
+  hairConditionRating?: number;
 }
 
 // --- GUT HEALTH ---
-// ✅ UPDATED: Enhanced concern types
 export interface GutHealthProfile extends WellnessModuleProfile {
   concern: 'bloating' | 'acidity' | 'ibs' | 'constipation' | 'diarrhea' | 'indigestion' | 'acid-reflux' | 'general';
   dietType: 'vegetarian' | 'non-vegetarian' | 'vegan';
   age: number;
   gender: 'male' | 'female';
-  currentDigestiveHealth: HealthStatus;  // ✅ CHANGED to HealthStatus type
+  currentDigestiveHealth: HealthStatus;
   lastCheckupDate?: string;
-  severityLevel: 'mild' | 'moderate' | 'severe';  // ✅ CHANGED: Made required with default
+  severityLevel: 'mild' | 'moderate' | 'severe';
 }
 
 export interface GutHealthMetrics {
@@ -278,16 +303,15 @@ export interface GutHealthMetrics {
 }
 
 // --- BONE & JOINT ---
-// ✅ UPDATED: Enhanced concern types
 export interface BoneJointProfile extends WellnessModuleProfile {
   concern: 'pain' | 'stiffness' | 'flexibility' | 'strength' | 'arthritis' | 'osteoporosis' | 'inflammation' | 'general';
   affectedJoints: string[];
   age: number;
   gender: 'male' | 'female';
-  currentMobilityStatus: HealthStatus;   // ✅ CHANGED to HealthStatus type
-  currentPainLevel: number;              // ✅ CHANGED: Made required (0-10 scale)
+  currentMobilityStatus: HealthStatus;
+  currentPainLevel: number;
   lastCheckupDate?: string;
-  activityLevel: 'sedentary' | 'moderate' | 'active' | 'very-active';  // ✅ CHANGED: Made required
+  activityLevel: 'sedentary' | 'moderate' | 'active' | 'very-active';
 }
 
 export interface BoneJointMetrics {
@@ -300,15 +324,14 @@ export interface BoneJointMetrics {
 }
 
 // --- TEETH & ORAL CARE ---
-// ✅ UPDATED: Enhanced types
 export interface TeethOralProfile extends WellnessModuleProfile {
   concern: 'sensitivity' | 'whitening' | 'gum-health' | 'cavities' | 'bad-breath' | 'tooth-decay' | 'bleeding-gums' | 'gum-disease' | 'general';
   age: number;
   gender: 'male' | 'female';
-  currentDentalHealth: HealthStatus;     // ✅ CHANGED to HealthStatus type
+  currentDentalHealth: HealthStatus;
   lastDentalVisit?: string;
-  hasDentalIssues: boolean;              // ✅ CHANGED: Made required with default false
-  smokingStatus: 'non-smoker' | 'smoker' | 'ex-smoker';  // ✅ CHANGED: Made required
+  hasDentalIssues: boolean;
+  smokingStatus: 'non-smoker' | 'smoker' | 'ex-smoker';
 }
 
 export interface TeethOralMetrics {
@@ -320,19 +343,18 @@ export interface TeethOralMetrics {
 }
 
 // --- BEAUTY & FITNESS ---
-// ✅ UPDATED: Already has dynamic calculation, enhanced types
 export interface BeautyFitnessProfile extends WellnessModuleProfile {
   goal: 'weight-loss' | 'muscle-gain' | 'skin-glow' | 'overall-fitness';
   currentWeightKg: number;
-  targetWeightKg: number;                // ✅ CHANGED: Made required
+  targetWeightKg: number;
   heightCm: number;
   age: number;
   gender: 'male' | 'female';
-  bmi: number;                           // ✅ CHANGED: Made required (calculated)
-  fitnessLevel: 'beginner' | 'intermediate' | 'advanced';  // ✅ CHANGED: Made required
+  bmi: number;
+  fitnessLevel: 'beginner' | 'intermediate' | 'advanced';
   currentBodyFat?: number;
   targetBodyFat?: number;
-  lastWeightCheckDate: string;           // ✅ CHANGED: Made required
+  lastWeightCheckDate: string;
 }
 
 export interface BeautyFitnessMetrics {
@@ -365,7 +387,7 @@ export interface MedicalReminder {
 // WARNING SIGNS
 // ============================================================================
 
-export interface WarningSSign {
+export interface WarningSign {
   signId: string;
   symptom: string;
   action: string;
@@ -385,52 +407,25 @@ export interface PersonalizedSuggestions {
 }
 
 // ============================================================================
-// ⭐ WEEKLY AI-GENERATED CONTENT TYPES
+// ✅ REMOVED: Weekly AI-generated content types (no longer needed)
+// - DailyAIContent
+// - WeeklyAIContent  
+// - AIContentCache
 // ============================================================================
 
-export interface DailyAIContent {
-  dayNumber: number;
-  dayOfWeek: string;
-  tasks: DailyTask[];
-  milestones: {
-    physical: string[];
-    cognitive: string[];
-    social: string[];
-    language: string[];
-    tips: string[];
-  };
-  feeding: {
-    summary: string;
-    schedule: Array<{
-      time: string;
-      activity: string;
-      amount?: string;
-      emoji: string;
-    }>;
-    tips: string[];
-  };
-  activities: {
-    morning: string[];
-    afternoon: string[];
-    evening: string[];
-  };
-}
+// ============================================================================
+// ✅ ADDED: CHILD HEALTH AI ANALYSIS TYPE (simpler, one-time analysis)
+// ============================================================================
 
-export interface WeeklyAIContent {
-  weekId: string;
+export interface ChildHealthAnalysis {
   childId: string;
   childName: string;
   ageInMonths: number;
   generatedAt: string;
-  expiresAt: string;
-  days: DailyAIContent[];
-}
-
-export interface AIContentCache {
-  weekId: string;
-  isValid: boolean;
-  expiresAt: string;
-  daysRemaining: number;
+  analysisText: string;           // Raw markdown text from AI
+  growthSummary?: string;         // Optional parsed sections
+  vaccinationStatus?: string;
+  wellnessTips?: string[];
 }
 
 // ============================================================================

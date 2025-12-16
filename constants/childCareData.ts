@@ -1,8 +1,8 @@
 // constants/childCareData.ts
 // Child Care module data and configurations
-// Last Updated: December 11, 2025 - FIXED
+// Last Updated: December 16, 2025 - ✅ UPDATED: Vaccination schedule format aligned with desktop
 
-import { DailyTask } from '../types/wellness';
+import { DailyTask, Vaccination } from '../types/wellness';
 
 // Age milestones (in months)
 export const AGE_MILESTONES = {
@@ -61,50 +61,50 @@ export const DEVELOPMENTAL_MILESTONES = [
   },
 ];
 
-// Daily tasks by age range - FIXED: Changed title to name
+// Daily tasks by age range (used as fallback when no custom tasks)
 export const DAILY_TASKS_BY_AGE: Record<string, DailyTask[]> = {
   '0-6': [
-    { taskId: 'feeding-1', name: 'Morning feed', category: 'feeding', completed: false, priority: 'high' },
-    { taskId: 'diaper-1', name: 'Diaper changes (6-8 times)', category: 'hygiene', completed: false, priority: 'high' },
-    { taskId: 'tummy-time', name: 'Tummy time (5-10 min)', category: 'activity', completed: false, priority: 'medium' },
-    { taskId: 'bath', name: 'Bath time', category: 'hygiene', completed: false, priority: 'medium' },
-    { taskId: 'sleep-track', name: 'Track sleep schedule', category: 'sleep', completed: false, priority: 'high' },
+    { taskId: 'feeding-1', name: 'Morning feed', category: 'feeding', completed: false, priority: 'high', emoji: '🍼' },
+    { taskId: 'diaper-1', name: 'Diaper changes (6-8 times)', category: 'hygiene', completed: false, priority: 'high', emoji: '🧷' },
+    { taskId: 'tummy-time', name: 'Tummy time (5-10 min)', category: 'activity', completed: false, priority: 'medium', emoji: '🤸' },
+    { taskId: 'bath', name: 'Bath time', category: 'hygiene', completed: false, priority: 'medium', emoji: '🛁' },
+    { taskId: 'sleep-track', name: 'Track sleep schedule', category: 'sleep', completed: false, priority: 'high', emoji: '😴' },
   ],
   '6-12': [
-    { taskId: 'feeding-2', name: 'Solid food introduction', category: 'feeding', completed: false, priority: 'high' },
-    { taskId: 'playtime', name: 'Interactive playtime', category: 'activity', completed: false, priority: 'high' },
-    { taskId: 'diaper-2', name: 'Diaper changes', category: 'hygiene', completed: false, priority: 'high' },
-    { taskId: 'reading', name: 'Reading/story time', category: 'learning', completed: false, priority: 'medium' },
-    { taskId: 'outdoor', name: 'Outdoor time', category: 'activity', completed: false, priority: 'medium' },
+    { taskId: 'feeding-2', name: 'Solid food introduction', category: 'feeding', completed: false, priority: 'high', emoji: '🥄' },
+    { taskId: 'playtime', name: 'Interactive playtime', category: 'activity', completed: false, priority: 'high', emoji: '🧸' },
+    { taskId: 'diaper-2', name: 'Diaper changes', category: 'hygiene', completed: false, priority: 'high', emoji: '🧷' },
+    { taskId: 'reading', name: 'Reading/story time', category: 'learning', completed: false, priority: 'medium', emoji: '📖' },
+    { taskId: 'outdoor', name: 'Outdoor time', category: 'activity', completed: false, priority: 'medium', emoji: '🌳' },
   ],
   '12-24': [
-    { taskId: 'meals', name: 'Regular meals (3 times)', category: 'feeding', completed: false, priority: 'high' },
-    { taskId: 'snacks', name: 'Healthy snacks (2 times)', category: 'feeding', completed: false, priority: 'medium' },
-    { taskId: 'active-play', name: 'Active play (running, climbing)', category: 'activity', completed: false, priority: 'high' },
-    { taskId: 'learning-activity', name: 'Learning activity', category: 'learning', completed: false, priority: 'medium' },
-    { taskId: 'bedtime-routine', name: 'Bedtime routine', category: 'sleep', completed: false, priority: 'high' },
+    { taskId: 'meals', name: 'Regular meals (3 times)', category: 'feeding', completed: false, priority: 'high', emoji: '🍽️' },
+    { taskId: 'snacks', name: 'Healthy snacks (2 times)', category: 'feeding', completed: false, priority: 'medium', emoji: '🍎' },
+    { taskId: 'active-play', name: 'Active play (running, climbing)', category: 'activity', completed: false, priority: 'high', emoji: '⚽' },
+    { taskId: 'learning-activity', name: 'Learning activity', category: 'learning', completed: false, priority: 'medium', emoji: '🎨' },
+    { taskId: 'bedtime-routine', name: 'Bedtime routine', category: 'sleep', completed: false, priority: 'high', emoji: '🌙' },
   ],
   '24+': [
-    { taskId: 'balanced-meals', name: 'Balanced meals', category: 'feeding', completed: false, priority: 'high' },
-    { taskId: 'educational-activity', name: 'Educational activity', category: 'learning', completed: false, priority: 'high' },
-    { taskId: 'physical-activity', name: 'Physical activity (1 hour)', category: 'activity', completed: false, priority: 'high' },
-    { taskId: 'social-interaction', name: 'Social playtime', category: 'social', completed: false, priority: 'medium' },
-    { taskId: 'screen-time-limit', name: 'Limit screen time', category: 'health', completed: false, priority: 'medium' },
+    { taskId: 'balanced-meals', name: 'Balanced meals', category: 'feeding', completed: false, priority: 'high', emoji: '🥗' },
+    { taskId: 'educational-activity', name: 'Educational activity', category: 'learning', completed: false, priority: 'high', emoji: '📚' },
+    { taskId: 'physical-activity', name: 'Physical activity (1 hour)', category: 'activity', completed: false, priority: 'high', emoji: '🏃' },
+    { taskId: 'social-interaction', name: 'Social playtime', category: 'social', completed: false, priority: 'medium', emoji: '👫' },
+    { taskId: 'screen-time-limit', name: 'Limit screen time', category: 'health', completed: false, priority: 'medium', emoji: '📱' },
   ],
 };
 
-// Vaccination schedule
-export const VACCINATION_SCHEDULE = [
-  { age: 'Birth', vaccines: ['Hepatitis B (1st dose)', 'BCG', 'OPV 0'] },
-  { age: '6 weeks', vaccines: ['DTaP 1', 'IPV 1', 'Hib 1', 'PCV 1', 'Rotavirus 1'] },
-  { age: '10 weeks', vaccines: ['DTaP 2', 'IPV 2', 'Hib 2', 'PCV 2', 'Rotavirus 2'] },
-  { age: '14 weeks', vaccines: ['DTaP 3', 'IPV 3', 'Hib 3', 'PCV 3', 'Rotavirus 3'] },
-  { age: '6 months', vaccines: ['Hepatitis B (3rd dose)', 'Influenza (annual)'] },
-  { age: '9 months', vaccines: ['MMR 1'] },
-  { age: '12 months', vaccines: ['Hepatitis A 1', 'Varicella 1', 'PCV 4'] },
-  { age: '15 months', vaccines: ['MMR 2', 'Varicella 2', 'DTaP 4'] },
-  { age: '18 months', vaccines: ['Hepatitis A 2'] },
-  { age: '4-6 years', vaccines: ['DTaP 5', 'IPV 4', 'MMR 3'] },
+// ✅ UPDATED: Vaccination schedule (aligned with desktop format)
+// Uses id, name, ageInWeeks, ageDescription structure
+export const VACCINATION_SCHEDULE: Vaccination[] = [
+  { id: 'bcg_opv0_hepb1', name: 'BCG, OPV 0, Hep B 1', ageInWeeks: 0, ageDescription: 'Birth' },
+  { id: 'dtp1_ipv1_hib1_hepb2', name: 'DTP 1, IPV 1, Hib 1, Hep B 2', ageInWeeks: 6, ageDescription: '6 Weeks' },
+  { id: 'dtp2_ipv2_hib2', name: 'DTP 2, IPV 2, Hib 2', ageInWeeks: 10, ageDescription: '10 Weeks' },
+  { id: 'dtp3_ipv3_hib3_rota3', name: 'DTP 3, IPV 3, Hib 3, Rota 3', ageInWeeks: 14, ageDescription: '14 Weeks' },
+  { id: 'flu1', name: 'Influenza 1', ageInWeeks: 26, ageDescription: '6 Months' },
+  { id: 'mmr1', name: 'Measles, MMR 1', ageInWeeks: 39, ageDescription: '9 Months' },
+  { id: 'hib_booster_varicella1', name: 'Hib Booster, Varicella 1', ageInWeeks: 65, ageDescription: '12–15 Months' },
+  { id: 'dtp_b1_ipv_b', name: 'DTP Booster 1, IPV Booster', ageInWeeks: 78, ageDescription: '1.5 Years' },
+  { id: 'dtp_b2_mmr2_varicella2', name: 'DTP Booster 2, MMR 2, Varicella 2', ageInWeeks: 234, ageDescription: '4–6 Years' },
 ];
 
 // Feeding guidelines by age
@@ -182,8 +182,13 @@ export function getDailyTasksForAge(ageInMonths: number): DailyTask[] {
 }
 
 export function getMilestoneForAge(ageInMonths: number) {
-  const milestone = DEVELOPMENTAL_MILESTONES.find((m) => ageInMonths >= m.ageMonths);
-  return milestone || DEVELOPMENTAL_MILESTONES[0];
+  // Find the milestone that matches or is closest to the age (descending order)
+  for (let i = DEVELOPMENTAL_MILESTONES.length - 1; i >= 0; i--) {
+    if (ageInMonths >= DEVELOPMENTAL_MILESTONES[i].ageMonths) {
+      return DEVELOPMENTAL_MILESTONES[i];
+    }
+  }
+  return DEVELOPMENTAL_MILESTONES[0];
 }
 
 export function calculateAgeInMonths(birthDate: string): number {
@@ -191,4 +196,42 @@ export function calculateAgeInMonths(birthDate: string): number {
   const today = new Date();
   const months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
   return Math.max(0, months);
+}
+
+// ✅ NEW: Calculate age in weeks from birth date
+export function calculateAgeInWeeks(birthDate: string): number {
+  const birth = new Date(birthDate);
+  const today = new Date();
+  const diffTime = Math.abs(today.getTime() - birth.getTime());
+  const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
+  return diffWeeks;
+}
+
+// ✅ NEW: Get vaccine status based on child's age
+export function getVaccineStatus(
+  vaccine: Vaccination,
+  childAgeInWeeks: number,
+  vaccinationRecord: { [vaccineId: string]: 'Completed' | 'Missed' }
+): 'Completed' | 'Upcoming' | 'Pending' | 'Missed' {
+  // Check if manually marked
+  if (vaccinationRecord[vaccine.id] === 'Completed') {
+    return 'Completed';
+  }
+  if (vaccinationRecord[vaccine.id] === 'Missed') {
+    return 'Missed';
+  }
+
+  // Calculate status based on age
+  const weeksDifference = childAgeInWeeks - vaccine.ageInWeeks;
+  
+  if (weeksDifference < -4) {
+    // More than 4 weeks before due date
+    return 'Upcoming';
+  } else if (weeksDifference >= -4 && weeksDifference <= 4) {
+    // Within 4 weeks window (before or after)
+    return 'Pending';
+  } else {
+    // More than 4 weeks overdue
+    return 'Missed';
+  }
 }

@@ -1,23 +1,21 @@
 // services/wellnessService.ts
-// Last Updated: December 16, 2025 - Migrated to React Native Firebase + Fixed progress bar NaN issue + Fixed TypeScript errors
+// Last Updated: December 16, 2025 - ✅ ADDED: Growth tracking & vaccination tracking for Child Care
 
 import firestore from '@react-native-firebase/firestore';
 import { PROGRAM_DURATIONS } from '../constants/wellnessData';
 import {
   BeautyFitnessProfile, BoneJointProfile, ChildCareProfile, ChildProfileSummary,
-  DailyTracking, GutHealthProfile, LiverKidneyProfile, MedicalReminder,
+  DailyTracking, GrowthRecord, GutHealthProfile, LiverKidneyProfile, MedicalReminder,
   MotherCareMetrics, MotherCareProfile, SkinHairProfile, TeethOralProfile,
-  WeeklyAIContent, WeeklyMilestone, WeeklyReport, WellnessModuleProfile, WellnessModuleType,
+  VaccinationStatus, WeeklyMilestone, WeeklyReport, WellnessModuleProfile, WellnessModuleType,
 } from '../types/wellness';
-import { createFallbackWeeklyContent, generateWeeklyContent, getWeekId, isContentValid } from './childCareAIService';
 import {
   calculateDentalHealthStatus, calculateDigestiveHealthStatus, calculateHairHealthStatus,
   calculateKidneyHealthStatus, calculateLiverHealthStatus, calculateMobilityStatus, calculateSkinHealthStatus
 } from './healthStatusCalculator';
 
-
 // ============================================================================
-// ⭐ NEW: HELPER TO GET CORRECT CURRENT DAY FIELD (FIX FOR NaN)
+// ⭐ HELPER TO GET CORRECT CURRENT DAY FIELD
 // ============================================================================
 const getModuleCurrentDay = (profile: any, moduleType: WellnessModuleType): number => {
   if (!profile) return 1;
@@ -35,8 +33,7 @@ const getModuleCurrentDay = (profile: any, moduleType: WellnessModuleType): numb
   }
 };
 
-
-// ⭐ NEW: GET TODAY'S TASK COMPLETION PERCENTAGE (FOR MODULE SCREENS)
+// ⭐ GET TODAY'S TASK COMPLETION PERCENTAGE
 export const getDailyTaskCompletion = async (
   userId: string,
   moduleType: WellnessModuleType,
@@ -53,7 +50,6 @@ export const getDailyTaskCompletion = async (
     return 0;
   }
 };
-
 
 // ============================================================================
 // MODULE PROFILE OPERATIONS
@@ -76,7 +72,6 @@ export const startWellnessModule = async (
   return profileData;
 };
 
-
 export const getModuleProfile = async (
   userId: string, moduleType: WellnessModuleType
 ): Promise<WellnessModuleProfile | null> => {
@@ -84,10 +79,9 @@ export const getModuleProfile = async (
   const snapshot = await moduleRef.get();
   if (!snapshot.exists) return null;
   const data = snapshot.data();
-  if (!data) return null; // ✅ FIX: Check if data exists
+  if (!data) return null;
   return { ...data.profile, lastUpdated: data.profile.lastUpdated?.toDate() || new Date() } as WellnessModuleProfile;
 };
-
 
 export const updateModuleProfile = async (
   userId: string, moduleType: WellnessModuleType, updates: Partial<WellnessModuleProfile>
@@ -99,11 +93,9 @@ export const updateModuleProfile = async (
   });
 };
 
-
 export const deactivateModule = async (userId: string, moduleType: WellnessModuleType): Promise<void> => {
   await updateModuleProfile(userId, moduleType, { isActive: false });
 };
-
 
 // ============================================================================
 // DAILY TRACKING OPERATIONS
@@ -122,7 +114,6 @@ export const saveDailyTracking = async (
   }, { merge: true });
 };
 
-
 export const getDailyTracking = async (
   userId: string, moduleType: WellnessModuleType, date: string
 ): Promise<DailyTracking | null> => {
@@ -133,10 +124,9 @@ export const getDailyTracking = async (
   const snapshot = await trackingRef.get();
   if (!snapshot.exists) return null;
   const data = snapshot.data();
-  if (!data) return null; // ✅ FIX: Check if data exists
+  if (!data) return null;
   return { ...data, createdAt: data.createdAt?.toDate() || new Date() } as DailyTracking;
 };
-
 
 export const getDailyTrackingRange = async (
   userId: string, moduleType: WellnessModuleType, startDate: string, endDate: string
@@ -155,8 +145,6 @@ export const getDailyTrackingRange = async (
   })) as DailyTracking[];
 };
 
-
-// ⭐ UPDATED: Toggle task completion (Option A - doesn't affect overall progress)
 export const toggleTaskCompletion = async (
   userId: string, moduleType: WellnessModuleType, date: string, taskId: string
 ): Promise<void> => {
@@ -172,8 +160,6 @@ export const toggleTaskCompletion = async (
   console.log(`✅ Task ${taskId} toggled - Daily completion: ${Math.round(completionRate)}%`);
 };
 
-
-// ⭐ UPDATED: Calculate overall program progress (not daily tasks)
 export const updateCompletionPercentage = async (userId: string, moduleType: WellnessModuleType): Promise<void> => {
   const profile = await getModuleProfile(userId, moduleType);
   if (!profile) return;
@@ -187,8 +173,6 @@ export const updateCompletionPercentage = async (userId: string, moduleType: Wel
   }
 };
 
-
-// ⭐ UPDATED: Sync completion percentage (Option A - based on days, not tasks)
 export const syncCompletionPercentage = async (userId: string, moduleType: WellnessModuleType): Promise<number> => {
   try {
     const profile = await getModuleProfile(userId, moduleType);
@@ -209,7 +193,6 @@ export const syncCompletionPercentage = async (userId: string, moduleType: Welln
   }
 };
 
-
 // ============================================================================
 // WEEKLY DATA & REPORTS
 // ============================================================================
@@ -221,16 +204,15 @@ export const saveWeeklyMilestone = async (userId: string, moduleType: WellnessMo
   await weekRef.set(milestone, { merge: true });
 };
 
-
 export const getWeeklyMilestone = async (userId: string, moduleType: WellnessModuleType, weekNumber: number): Promise<WeeklyMilestone | null> => {
   const weekRef = firestore()
     .collection('users').doc(userId)
     .collection('wellnessModules').doc(moduleType)
     .collection('weeklyData').doc(weekNumber.toString());
-  const snapshot = await weekRef.get();
-  return snapshot.exists() ? snapshot.data() as WeeklyMilestone : null; // ✅ FIX: Call exists()
-};
+    const snapshot = await weekRef.get();
+    return snapshot.exists() ? snapshot.data() as WeeklyMilestone : null;
 
+};
 
 export const saveWeeklyReport = async (userId: string, moduleType: WellnessModuleType, report: Omit<WeeklyReport, 'reportId' | 'generatedAt'>): Promise<void> => {
   const reportRef = firestore()
@@ -243,7 +225,6 @@ export const saveWeeklyReport = async (userId: string, moduleType: WellnessModul
     generatedAt: firestore.FieldValue.serverTimestamp() 
   });
 };
-
 
 export const getWeeklyReports = async (userId: string, moduleType: WellnessModuleType, limit: number = 10): Promise<WeeklyReport[]> => {
   const snapshot = await firestore()
@@ -259,7 +240,6 @@ export const getWeeklyReports = async (userId: string, moduleType: WellnessModul
   })) as WeeklyReport[];
 };
 
-
 // ============================================================================
 // MEDICAL REMINDERS
 // ============================================================================
@@ -269,12 +249,11 @@ export const saveMedicalReminder = async (userId: string, moduleType: WellnessMo
     .collection('wellnessModules').doc(moduleType)
     .collection('moduleData').doc('medicalReminders');
   const existingSnapshot = await reminderRef.get();
-  const reminders = existingSnapshot.exists() ? existingSnapshot.data()?.reminders || [] : []; // ✅ FIX: Call exists()
+  const reminders = existingSnapshot.exists() ? existingSnapshot.data()?.reminders || [] : [];
   const updatedReminders = reminders.filter((r: MedicalReminder) => r.reminderId !== reminder.reminderId);
   updatedReminders.push(reminder);
   await reminderRef.set({ reminders: updatedReminders }, { merge: true });
 };
-
 
 export const getMedicalReminders = async (userId: string, moduleType: WellnessModuleType): Promise<MedicalReminder[]> => {
   const reminderRef = firestore()
@@ -282,9 +261,8 @@ export const getMedicalReminders = async (userId: string, moduleType: WellnessMo
     .collection('wellnessModules').doc(moduleType)
     .collection('moduleData').doc('medicalReminders');
   const snapshot = await reminderRef.get();
-  return snapshot.exists() ? snapshot.data()?.reminders || [] : []; // ✅ FIX: Call exists()
+  return snapshot.exists() ? snapshot.data()?.reminders || [] : [];
 };
-
 
 export const updateMedicalReminderStatus = async (userId: string, moduleType: WellnessModuleType, reminderId: string, completed: boolean, completedDate?: string): Promise<void> => {
   const reminders = await getMedicalReminders(userId, moduleType);
@@ -295,7 +273,6 @@ export const updateMedicalReminderStatus = async (userId: string, moduleType: We
     .collection('moduleData').doc('medicalReminders');
   await reminderRef.set({ reminders: updatedReminders }, { merge: true });
 };
-
 
 // ============================================================================
 // MOTHER CARE OPERATIONS
@@ -324,7 +301,6 @@ export const startMotherCareModule = async (userId: string, motherName: string, 
   return profile;
 };
 
-
 export const startMotherCareModuleManual = async (userId: string, motherName: string, currentWeek: number, currentDay: number): Promise<MotherCareProfile> => {
   const today = new Date();
   const totalDays = currentWeek * 7 + currentDay;
@@ -347,7 +323,6 @@ export const startMotherCareModuleManual = async (userId: string, motherName: st
   });
   return profile;
 };
-
 
 export const updatePregnancyProgress = async (userId: string): Promise<MotherCareProfile> => {
   const profile = (await getModuleProfile(userId, 'mother-care')) as MotherCareProfile;
@@ -373,11 +348,9 @@ export const updatePregnancyProgress = async (userId: string): Promise<MotherCar
   return updatedProfile;
 };
 
-
 export const deleteMotherCareModule = async (userId: string): Promise<void> => {
   await deleteWellnessModuleWithSubcollections(userId, 'mother-care');
 };
-
 
 export const updateMotherCareMetrics = async (userId: string, date: string, metrics: MotherCareMetrics): Promise<void> => {
   const tracking = await getDailyTracking(userId, 'mother-care', date);
@@ -387,54 +360,53 @@ export const updateMotherCareMetrics = async (userId: string, date: string, metr
   });
 };
 
-
 // ============================================================================
-// DELETE HELPER
+// DELETE HELPERS
 // ============================================================================
 const deleteWellnessModuleWithSubcollections = async (userId: string, moduleType: WellnessModuleType): Promise<void> => {
   const moduleRef = firestore().collection('users').doc(userId).collection('wellnessModules').doc(moduleType);
   
-  // Delete subcollections
   const subcollections = ['dailyTracking', 'weeklyData', 'weeklyReports', 'moduleData'];
   for (const sub of subcollections) {
     const snapshot = await moduleRef.collection(sub).get();
     const batch = firestore().batch();
-    snapshot.docs.forEach((doc: any) => batch.delete(doc.ref)); // ✅ FIX: Add type annotation
+    snapshot.docs.forEach((doc: any) => batch.delete(doc.ref));
     if (!snapshot.empty) await batch.commit();
   }
   
-  // Delete main document
   await moduleRef.delete();
 };
-
 
 const deleteProfileWithSubcollections = async (basePath: string, extraSubCollections: string[] = []): Promise<void> => {
   const pathParts = basePath.split('/');
   let ref: any = firestore();
   
-  // Build reference
   for (let i = 0; i < pathParts.length; i += 2) {
     ref = ref.collection(pathParts[i]).doc(pathParts[i + 1]);
   }
   
-  // Delete subcollections
-  const subcollections = ['dailyTracking', 'weeklyData', 'weeklyReports', 'moduleData', ...extraSubCollections];
+  const subcollections = ['dailyTracking', 'weeklyData', 'weeklyReports', 'moduleData', 'growthRecords', ...extraSubCollections];
   for (const sub of subcollections) {
     const snapshot = await ref.collection(sub).get();
     const batch = firestore().batch();
-    snapshot.docs.forEach((doc: any) => batch.delete(doc.ref)); // ✅ FIX: Add type annotation
+    snapshot.docs.forEach((doc: any) => batch.delete(doc.ref));
     if (!snapshot.empty) await batch.commit();
   }
   
-  // Delete main document
   await ref.delete();
 };
-
 
 // ============================================================================
 // CHILD CARE OPERATIONS
 // ============================================================================
-export const createChildProfile = async (userId: string, childName: string, birthDate: string, gender?: 'male' | 'female'): Promise<ChildCareProfile> => {
+// ✅ UPDATED: Create child profile with birth weight, vaccinations, and growth records
+export const createChildProfile = async (
+  userId: string, 
+  childName: string, 
+  birthDate: string, 
+  gender?: 'male' | 'female',
+  birthWeightKg?: string
+): Promise<ChildCareProfile> => {
   const childProfilesRef = firestore().collection('users').doc(userId).collection('childProfiles');
   const newChildRef = childProfilesRef.doc();
   const birth = new Date(birthDate);
@@ -450,10 +422,26 @@ export const createChildProfile = async (userId: string, childName: string, birt
   else if (ageInMonths >= 3) developmentalStage = '3-6m';
 
   const profile: ChildCareProfile = {
-    childId: newChildRef.id, childName, birthDate, ageInMonths, ageInDays, gender, moduleType: 'child-care',
-    isActive: true, startDate: today.toISOString().split('T')[0], currentDay: ageInDays, currentWeek: Math.floor(ageInDays / 7),
-    programDuration: 60 * 30, completionPercentage: Math.min((ageInMonths / 60) * 100, 100), lastUpdated: new Date(),
-    notificationsEnabled: false, developmentalStage, lastTrackedDate: today.toISOString().split('T')[0],
+    childId: newChildRef.id, 
+    childName, 
+    birthDate, 
+    ageInMonths, 
+    ageInDays, 
+    gender,
+    birthWeightKg, // ✅ NEW
+    moduleType: 'child-care',
+    isActive: true, 
+    startDate: today.toISOString().split('T')[0], 
+    currentDay: ageInDays, 
+    currentWeek: Math.floor(ageInDays / 7),
+    programDuration: 60 * 30, 
+    completionPercentage: Math.min((ageInMonths / 60) * 100, 100), 
+    lastUpdated: new Date(),
+    notificationsEnabled: false, 
+    developmentalStage, 
+    lastTrackedDate: today.toISOString().split('T')[0],
+    vaccinations: {}, // ✅ NEW: Initialize empty vaccinations object
+    growthRecords: [], // ✅ NEW: Initialize empty growth records array
   };
 
   await newChildRef.set({ 
@@ -461,16 +449,22 @@ export const createChildProfile = async (userId: string, childName: string, birt
     createdAt: firestore.FieldValue.serverTimestamp(), 
     updatedAt: firestore.FieldValue.serverTimestamp() 
   });
+  
+  console.log(`✅ Created child profile for ${childName}`);
   return profile;
 };
 
-
-export const createChildProfileManual = async (userId: string, childName: string, ageInMonths: number, gender?: 'male' | 'female'): Promise<ChildCareProfile> => {
+export const createChildProfileManual = async (
+  userId: string, 
+  childName: string, 
+  ageInMonths: number, 
+  gender?: 'male' | 'female'
+): Promise<ChildCareProfile> => {
   const today = new Date();
-  const birthDate = new Date(today); birthDate.setMonth(birthDate.getMonth() - ageInMonths);
+  const birthDate = new Date(today); 
+  birthDate.setMonth(birthDate.getMonth() - ageInMonths);
   return await createChildProfile(userId, childName, birthDate.toISOString().split('T')[0], gender);
 };
-
 
 export const getAllChildProfiles = async (userId: string): Promise<ChildProfileSummary[]> => {
   const snapshot = await firestore().collection('users').doc(userId).collection('childProfiles').get();
@@ -486,22 +480,35 @@ export const getAllChildProfiles = async (userId: string): Promise<ChildProfileS
     else ageDisplay = `${profile.ageInMonths} month${profile.ageInMonths > 1 ? 's' : ''}`;
 
     return {
-      childId: profile.childId, childName: profile.childName, ageInMonths: profile.ageInMonths,
-      ageDisplay, gender: profile.gender, lastTrackedDate: profile.lastTrackedDate,
-      photoUrl: profile.photoUrl, completionRate: profile.completionPercentage || 0,
+      childId: profile.childId, 
+      childName: profile.childName, 
+      ageInMonths: profile.ageInMonths,
+      ageDisplay, 
+      gender: profile.gender, 
+      lastTrackedDate: profile.lastTrackedDate,
+      photoUrl: profile.photoUrl, 
+      completionRate: profile.completionPercentage || 0,
     };
   }).sort((a, b) => (b.lastTrackedDate || '').localeCompare(a.lastTrackedDate || ''));
 };
-
 
 export const getChildProfile = async (userId: string, childId: string): Promise<ChildCareProfile | null> => {
   const snapshot = await firestore().collection('users').doc(userId).collection('childProfiles').doc(childId).get();
   if (!snapshot.exists) return null;
   const data = snapshot.data();
-  if (!data) return null; // ✅ FIX: Check if data exists
-  return { ...data.profile, lastUpdated: data.profile.lastUpdated?.toDate() || new Date() } as ChildCareProfile;
-};
+  if (!data) return null;
+  
+  const profile = data.profile as ChildCareProfile;
+  
+  // ✅ ENSURE: Initialize missing fields for backward compatibility
+  return {
+    ...profile,
+    lastUpdated: profile.lastUpdated instanceof Date ? profile.lastUpdated : new Date(),
+    vaccinations: profile.vaccinations || {},
+    growthRecords: profile.growthRecords || [],
+  };
 
+};
 
 export const updateChildAge = async (userId: string, childId: string): Promise<ChildCareProfile> => {
   const profile = await getChildProfile(userId, childId);
@@ -520,9 +527,15 @@ export const updateChildAge = async (userId: string, childId: string): Promise<C
   else if (ageInMonths >= 3) developmentalStage = '3-6m';
 
   const updatedProfile: ChildCareProfile = {
-    ...profile, ageInMonths, ageInDays, currentDay: ageInDays, currentWeek: Math.floor(ageInDays / 7),
-    developmentalStage, completionPercentage: Math.min((ageInMonths / 60) * 100, 100),
-    lastUpdated: new Date(), lastTrackedDate: today.toISOString().split('T')[0],
+    ...profile, 
+    ageInMonths, 
+    ageInDays, 
+    currentDay: ageInDays, 
+    currentWeek: Math.floor(ageInDays / 7),
+    developmentalStage, 
+    completionPercentage: Math.min((ageInMonths / 60) * 100, 100),
+    lastUpdated: new Date(), 
+    lastTrackedDate: today.toISOString().split('T')[0],
   };
 
   const childRef = firestore().collection('users').doc(userId).collection('childProfiles').doc(childId);
@@ -532,7 +545,6 @@ export const updateChildAge = async (userId: string, childId: string): Promise<C
   });
   return updatedProfile;
 };
-
 
 export const updateChildProfile = async (userId: string, childId: string, updates: Partial<ChildCareProfile>): Promise<void> => {
   const profile = await getChildProfile(userId, childId);
@@ -545,11 +557,9 @@ export const updateChildProfile = async (userId: string, childId: string, update
   });
 };
 
-
 export const deleteChildProfile = async (userId: string, childId: string): Promise<void> => {
-  await deleteProfileWithSubcollections(`users/${userId}/childProfiles/${childId}`, ['weeklyAIContent']);
+  await deleteProfileWithSubcollections(`users/${userId}/childProfiles/${childId}`);
 };
-
 
 export const getChildDailyTracking = async (userId: string, childId: string, date: string): Promise<DailyTracking | null> => {
   const snapshot = await firestore()
@@ -559,12 +569,15 @@ export const getChildDailyTracking = async (userId: string, childId: string, dat
     .get();
   if (!snapshot.exists) return null;
   const data = snapshot.data();
-  if (!data) return null; // ✅ FIX: Check if data exists
+  if (!data) return null;
   return { ...data, createdAt: data.createdAt?.toDate() || new Date() } as DailyTracking;
 };
 
-
-export const saveChildDailyTracking = async (userId: string, childId: string, tracking: Omit<DailyTracking, 'trackingId' | 'createdAt'>): Promise<void> => {
+export const saveChildDailyTracking = async (
+  userId: string, 
+  childId: string, 
+  tracking: Omit<DailyTracking, 'trackingId' | 'createdAt'>
+): Promise<void> => {
   const trackingRef = firestore()
     .collection('users').doc(userId)
     .collection('childProfiles').doc(childId)
@@ -576,60 +589,151 @@ export const saveChildDailyTracking = async (userId: string, childId: string, tr
   }, { merge: true });
 };
 
+// ============================================================================
+// ✅ NEW: GROWTH RECORD OPERATIONS
+// ============================================================================
 
-export const getWeeklyAIContent = async (userId: string, childId: string, weekId: string): Promise<WeeklyAIContent | null> => {
-  const snapshot = await firestore()
-    .collection('users').doc(userId)
-    .collection('childProfiles').doc(childId)
-    .collection('weeklyAIContent').doc(weekId)
-    .get();
-  return snapshot.exists() ? snapshot.data() as WeeklyAIContent : null; // ✅ FIX: Call exists()
+/**
+ * Add a new growth record to a child's profile
+ */
+export const addGrowthRecord = async (
+  userId: string,
+  childId: string,
+  record: Omit<GrowthRecord, 'recordId'>
+): Promise<GrowthRecord> => {
+  const profile = await getChildProfile(userId, childId);
+  if (!profile) throw new Error('Child profile not found');
+
+  // Generate unique ID
+  const recordId = `growth_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const newRecord: GrowthRecord = {
+    ...record,
+    recordId,
+  };
+
+  // Add to growth records array
+  const updatedRecords = [...(profile.growthRecords || []), newRecord];
+  
+  // Sort by date (newest first)
+  updatedRecords.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Update profile
+  await updateChildProfile(userId, childId, { growthRecords: updatedRecords });
+  
+  console.log(`✅ Added growth record for ${profile.childName}`);
+  return newRecord;
 };
 
+/**
+ * Update an existing growth record
+ */
+export const updateGrowthRecord = async (
+  userId: string,
+  childId: string,
+  recordId: string,
+  updates: Partial<Omit<GrowthRecord, 'recordId'>>
+): Promise<void> => {
+  const profile = await getChildProfile(userId, childId);
+  if (!profile) throw new Error('Child profile not found');
 
-export const saveWeeklyAIContent = async (userId: string, childId: string, content: WeeklyAIContent): Promise<void> => {
-  await firestore()
-    .collection('users').doc(userId)
-    .collection('childProfiles').doc(childId)
-    .collection('weeklyAIContent').doc(content.weekId)
-    .set(content);
+  const updatedRecords = profile.growthRecords.map(record =>
+    record.recordId === recordId ? { ...record, ...updates } : record
+  );
+
+  // Sort by date
+  updatedRecords.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  await updateChildProfile(userId, childId, { growthRecords: updatedRecords });
+  console.log(`✅ Updated growth record ${recordId}`);
 };
 
+/**
+ * Delete a growth record
+ */
+export const deleteGrowthRecord = async (
+  userId: string,
+  childId: string,
+  recordId: string
+): Promise<void> => {
+  const profile = await getChildProfile(userId, childId);
+  if (!profile) throw new Error('Child profile not found');
 
-export const getCurrentWeekContent = async (userId: string, childId: string, profile: ChildCareProfile): Promise<WeeklyAIContent> => {
-  const weekId = getWeekId();
-  const existingContent = await getWeeklyAIContent(userId, childId, weekId);
-  if (existingContent && isContentValid(existingContent)) return existingContent;
+  const updatedRecords = profile.growthRecords.filter(record => record.recordId !== recordId);
 
-  try {
-    const newContent = await generateWeeklyContent(profile);
-    await saveWeeklyAIContent(userId, childId, newContent);
-    return newContent;
-  } catch {
-    const fallbackContent = createFallbackWeeklyContent(profile);
-    await saveWeeklyAIContent(userId, childId, fallbackContent);
-    return fallbackContent;
-  }
+  await updateChildProfile(userId, childId, { growthRecords: updatedRecords });
+  console.log(`✅ Deleted growth record ${recordId}`);
 };
 
-
-export const deleteOldWeeklyContent = async (userId: string, childId: string, keepWeeks: number = 4): Promise<void> => {
-  const snapshot = await firestore()
-    .collection('users').doc(userId)
-    .collection('childProfiles').doc(childId)
-    .collection('weeklyAIContent')
-    .get();
-  const now = new Date();
-  const deletePromises = snapshot.docs
-    .filter(d => {
-      const data = d.data() as WeeklyAIContent;
-      const daysOld = (now.getTime() - new Date(data.expiresAt).getTime()) / (1000 * 60 * 60 * 24);
-      return daysOld > keepWeeks * 7;
-    })
-    .map(d => d.ref.delete());
-  await Promise.all(deletePromises);
+/**
+ * Get all growth records for a child (sorted by date)
+ */
+export const getGrowthRecords = async (
+  userId: string,
+  childId: string
+): Promise<GrowthRecord[]> => {
+  const profile = await getChildProfile(userId, childId);
+  if (!profile) return [];
+  
+  // Return sorted records (newest first)
+  return [...(profile.growthRecords || [])].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
 };
 
+// ============================================================================
+// ✅ NEW: VACCINATION TRACKING OPERATIONS
+// ============================================================================
+
+/**
+ * Update vaccination status (mark as Completed or Missed)
+ */
+export const updateVaccinationStatus = async (
+  userId: string,
+  childId: string,
+  vaccineId: string,
+  status: VaccinationStatus
+): Promise<void> => {
+  const profile = await getChildProfile(userId, childId);
+  if (!profile) throw new Error('Child profile not found');
+
+  const updatedVaccinations = {
+    ...profile.vaccinations,
+    [vaccineId]: status,
+  };
+
+  await updateChildProfile(userId, childId, { vaccinations: updatedVaccinations });
+  console.log(`✅ Updated vaccination ${vaccineId} to ${status}`);
+};
+
+/**
+ * Remove vaccination status (reset to unchecked)
+ */
+export const removeVaccinationStatus = async (
+  userId: string,
+  childId: string,
+  vaccineId: string
+): Promise<void> => {
+  const profile = await getChildProfile(userId, childId);
+  if (!profile) throw new Error('Child profile not found');
+
+  const updatedVaccinations = { ...profile.vaccinations };
+  delete updatedVaccinations[vaccineId];
+
+  await updateChildProfile(userId, childId, { vaccinations: updatedVaccinations });
+  console.log(`✅ Removed vaccination status for ${vaccineId}`);
+};
+
+/**
+ * Get vaccination record for a child
+ */
+export const getVaccinationRecord = async (
+  userId: string,
+  childId: string
+): Promise<{ [vaccineId: string]: VaccinationStatus }> => {
+  const profile = await getChildProfile(userId, childId);
+  if (!profile) return {};
+  return profile.vaccinations || {};
+};
 
 // ============================================================================
 // OTHER MODULE OPERATIONS
@@ -643,7 +747,6 @@ const saveModuleProfile = async (userId: string, moduleType: WellnessModuleType,
   });
 };
 
-
 export const startLiverKidneyModule = async (userId: string, condition: string, dietType: string, age: number, gender: 'male' | 'female'): Promise<LiverKidneyProfile> => {
   const today = new Date().toISOString().split('T')[0];
   const profile: LiverKidneyProfile = {
@@ -656,7 +759,6 @@ export const startLiverKidneyModule = async (userId: string, condition: string, 
   await saveModuleProfile(userId, 'liver-kidney', profile);
   return profile;
 };
-
 
 export const startSkinHairModule = async (userId: string, concerns: string[], skinType: string, hairType: string, age: number, gender: 'male' | 'female'): Promise<SkinHairProfile> => {
   const today = new Date().toISOString().split('T')[0];
@@ -674,7 +776,6 @@ export const startSkinHairModule = async (userId: string, concerns: string[], sk
   return profile;
 };
 
-
 export const startGutHealthModule = async (userId: string, concern: string, dietType: string, age: number, gender: 'male' | 'female', severityLevel?: string): Promise<GutHealthProfile> => {
   const today = new Date().toISOString().split('T')[0];
   const profile: GutHealthProfile = {
@@ -687,7 +788,6 @@ export const startGutHealthModule = async (userId: string, concern: string, diet
   await saveModuleProfile(userId, 'gut-health', profile);
   return profile;
 };
-
 
 export const startBoneJointModule = async (userId: string, concern: string, affectedJoints: string[], age: number, gender: 'male' | 'female', activityLevel?: string, currentPainLevel?: number): Promise<BoneJointProfile> => {
   const today = new Date().toISOString().split('T')[0];
@@ -703,7 +803,6 @@ export const startBoneJointModule = async (userId: string, concern: string, affe
   return profile;
 };
 
-
 export const startTeethOralModule = async (userId: string, concern: string, age: number, gender: 'male' | 'female', smokingStatus?: string, hasDentalIssues?: boolean): Promise<TeethOralProfile> => {
   const today = new Date().toISOString().split('T')[0];
   const smoking = smokingStatus || 'non-smoker';
@@ -718,7 +817,6 @@ export const startTeethOralModule = async (userId: string, concern: string, age:
   return profile;
 };
 
-
 export const startBeautyFitnessModule = async (userId: string, goal: string, currentWeightKg: number, heightCm: number, age: number, gender: 'male' | 'female', targetWeightKg?: number, fitnessLevel?: string): Promise<BeautyFitnessProfile> => {
   const today = new Date().toISOString().split('T')[0];
   const bmi = currentWeightKg / ((heightCm / 100) ** 2);
@@ -732,7 +830,6 @@ export const startBeautyFitnessModule = async (userId: string, goal: string, cur
   return profile;
 };
 
-
 export const deleteLiverKidneyModule = async (userId: string): Promise<void> => { await deleteWellnessModuleWithSubcollections(userId, 'liver-kidney'); };
 export const deleteSkinHairModule = async (userId: string): Promise<void> => { await deleteWellnessModuleWithSubcollections(userId, 'skin-hair'); };
 export const deleteGutHealthModule = async (userId: string): Promise<void> => { await deleteWellnessModuleWithSubcollections(userId, 'gut-health'); };
@@ -740,12 +837,10 @@ export const deleteBoneJointModule = async (userId: string): Promise<void> => { 
 export const deleteTeethOralModule = async (userId: string): Promise<void> => { await deleteWellnessModuleWithSubcollections(userId, 'teeth-oral'); };
 export const deleteBeautyFitnessModule = async (userId: string): Promise<void> => { await deleteWellnessModuleWithSubcollections(userId, 'beauty-fitness'); };
 
-
 export const moduleExists = async (userId: string, moduleType: WellnessModuleType): Promise<boolean> => {
   const profile = await getModuleProfile(userId, moduleType);
   return profile !== null;
 };
-
 
 export const getActiveModules = async (userId: string): Promise<WellnessModuleType[]> => {
   const snapshot = await firestore().collection('users').doc(userId).collection('wellnessModules').get();
@@ -755,20 +850,37 @@ export const getActiveModules = async (userId: string): Promise<WellnessModuleTy
     .map((p: any) => p.moduleType);
 };
 
-
 // ============================================================================
 // EXPORT SERVICE OBJECT
 // ============================================================================
 export const wellnessService = {
+  // Core
   startWellnessModule, getModuleProfile, updateModuleProfile, deactivateModule, moduleExists, getActiveModules,
   syncCompletionPercentage, getDailyTaskCompletion,
+  
+  // Daily Tracking
   saveDailyTracking, getDailyTracking, getDailyTrackingRange, toggleTaskCompletion, updateCompletionPercentage,
+  
+  // Weekly Data
   saveWeeklyMilestone, getWeeklyMilestone, saveWeeklyReport, getWeeklyReports,
+  
+  // Medical Reminders
   saveMedicalReminder, getMedicalReminders, updateMedicalReminderStatus,
+  
+  // Mother Care
   startMotherCareModule, startMotherCareModuleManual, updatePregnancyProgress, deleteMotherCareModule, updateMotherCareMetrics,
+  
+  // Child Care - Profile
   createChildProfile, createChildProfileManual, getAllChildProfiles, getChildProfile, updateChildAge,
   updateChildProfile, deleteChildProfile, getChildDailyTracking, saveChildDailyTracking,
-  getWeeklyAIContent, saveWeeklyAIContent, getCurrentWeekContent, deleteOldWeeklyContent,
+  
+  // ✅ NEW: Child Care - Growth Records
+  addGrowthRecord, updateGrowthRecord, deleteGrowthRecord, getGrowthRecords,
+  
+  // ✅ NEW: Child Care - Vaccinations
+  updateVaccinationStatus, removeVaccinationStatus, getVaccinationRecord,
+  
+  // Other Modules
   startLiverKidneyModule, startSkinHairModule, startGutHealthModule, startBoneJointModule, startTeethOralModule, startBeautyFitnessModule,
   deleteLiverKidneyModule, deleteSkinHairModule, deleteGutHealthModule, deleteBoneJointModule, deleteTeethOralModule, deleteBeautyFitnessModule,
 };

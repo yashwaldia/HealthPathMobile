@@ -1,6 +1,6 @@
 // app/(tabs)/wellness/child-care/[childId].tsx
 // Individual Child Tracking Screen
-// Last Updated: December 13, 2025 - Added weekly AI content integration
+// Last Updated: December 17, 2025 - Added growth & vaccination cards, single-shot AI analysis
 
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -25,6 +25,8 @@ import WarningSignsCard from '../../../../components/wellness/WarningSignsCard';
 import WeeklyMilestoneCard from '../../../../components/wellness/WeeklyMilestoneCard';
 import WeeklyReportModal from '../../../../components/wellness/WeeklyReportModal';
 import WellnessHeader from '../../../../components/wellness/WellnessHeader';
+import GrowthChartCard from '../../../../components/wellness/child-care/GrowthChartCard';
+import VaccinationTrackerCard from '../../../../components/wellness/child-care/VaccinationTrackerCard';
 import {
   AGE_MILESTONES,
   CHILD_CARE_WARNING_SIGNS,
@@ -32,14 +34,13 @@ import {
   getAgeGroup,
   getDailyTasksForAge,
   getMilestoneForAge,
-  VACCINATION_SCHEDULE,
 } from '../../../../constants/childCareData';
 import { Colors } from '../../../../constants/colors';
 import { useAuth } from '../../../../context/AuthContext';
+import { analyzeChildCareWithAI } from '../../../../services/childCareAIService';
 import { wellnessService } from '../../../../services/wellnessService';
 import {
   ChildCareProfile,
-  DailyAIContent,
   DailyTask,
   DailyTracking,
   MedicalReminder,
@@ -65,10 +66,11 @@ export default function IndividualChildCareScreen() {
     exercise: [],
     mentalHealth: [],
   });
-  const [todayContent, setTodayContent] = useState<DailyAIContent | null>(null); // ⭐ NEW
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success');
+  const [toastType, setToastType] =
+    useState<'success' | 'error' | 'info'>('success');
+  const [aiSummaryMarkdown, setAiSummaryMarkdown] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && childId) {
@@ -79,7 +81,7 @@ export default function IndividualChildCareScreen() {
   const initializeChild = async () => {
     try {
       setLoading(true);
-      
+
       if (!user || !childId) {
         setProfile(null);
         return;
@@ -93,12 +95,12 @@ export default function IndividualChildCareScreen() {
         setTodayTasks([]);
         setMedicalReminders([]);
         setLatestReport(null);
-        setTodayContent(null); // ⭐ CLEAR AI CONTENT
         setSuggestions({
           food: [],
           exercise: [],
           mentalHealth: [],
         });
+        setAiSummaryMarkdown(null);
         return;
       }
 
@@ -109,36 +111,52 @@ export default function IndividualChildCareScreen() {
       }
 
       try {
-        const updatedProfile = await wellnessService.updateChildAge(user.uid, childId);
+        const updatedProfile = await wellnessService.updateChildAge(
+          user.uid,
+          childId,
+        );
         setProfile(updatedProfile);
         await loadChildData(updatedProfile);
         console.log('✅ Child profile loaded and updated successfully');
       } catch (updateError: any) {
         console.error('❌ Error updating child age:', updateError);
-        
-        if (updateError?.message?.includes('not found') || updateError?.message?.includes('missing')) {
+
+        if (
+          updateError?.message?.includes('not found') ||
+          updateError?.message?.includes('missing')
+        ) {
           console.log('🗑️ Profile appears to be deleted - clearing state');
           setProfile(null);
           setTodayTasks([]);
           setMedicalReminders([]);
           setLatestReport(null);
-          setTodayContent(null); // ⭐ CLEAR AI CONTENT
+          setSuggestions({
+            food: [],
+            exercise: [],
+            mentalHealth: [],
+          });
+          setAiSummaryMarkdown(null);
           return;
         }
-        
+
         console.log('📦 Using existing profile as fallback');
         setProfile(childProfile);
         await loadChildData(childProfile);
       }
     } catch (error: any) {
       console.error('❌ Error initializing child:', error);
-      
+
       setProfile(null);
       setTodayTasks([]);
       setMedicalReminders([]);
       setLatestReport(null);
-      setTodayContent(null); // ⭐ CLEAR AI CONTENT
-      
+      setSuggestions({
+        food: [],
+        exercise: [],
+        mentalHealth: [],
+      });
+      setAiSummaryMarkdown(null);
+
       showToast('Failed to load child profile', 'error');
     } finally {
       setLoading(false);
@@ -152,130 +170,80 @@ export default function IndividualChildCareScreen() {
       const today = new Date().toISOString().split('T')[0];
       setTodayDate(today);
 
-      // ⭐ STEP 1: Load Weekly AI Content
-      let weeklyContent: any = null;
-      let todayContentData: any = null;
+      // STEP 1: Load today's tasks (from Firestore or static fallback)
+      let tracking = await wellnessService.getChildDailyTracking(
+        user.uid,
+        childId,
+        today,
+      );
 
+      if (!tracking) {
+        const tasks = getDailyTasksForAge(prof.ageInMonths);
+
+        const newTracking: Omit<DailyTracking, 'trackingId' | 'createdAt'> = {
+          date: today,
+          dayNumber: prof.ageInDays || prof.ageInMonths * 30,
+          tasks,
+          metrics: {},
+          overallCompletion: 0,
+        };
+
+        await wellnessService.saveChildDailyTracking(user.uid, childId, newTracking);
+        setTodayTasks(tasks);
+      } else {
+        setTodayTasks(tracking.tasks);
+      }
+
+      // STEP 2: Static suggestions (fallback default)
+      const ageGroup = getAgeGroup(prof.ageInMonths);
+      const feeding =
+        FEEDING_GUIDELINES[ageGroup as keyof typeof FEEDING_GUIDELINES];
+
+      setSuggestions({
+        food: feeding
+          ? [feeding.primary, feeding.notes]
+          : ['Balanced meals', 'Regular feeding schedule'],
+        exercise: [
+          prof.ageInMonths < 12
+            ? 'Tummy time daily (15-30 mins)'
+            : 'Active play 1-2 hours daily',
+          'Outdoor time for vitamin D and fresh air',
+          prof.ageInMonths >= 12
+            ? 'Encourage walking and exploration'
+            : 'Support motor skill development',
+        ],
+        mentalHealth: [
+          'Read books together daily',
+          'Limit screen time (none for under 2 years)',
+          'Consistent bedtime routine',
+          prof.ageInMonths >= 12
+            ? 'Interactive play and socialization'
+            : 'Bonding time through eye contact and touch',
+        ],
+      });
+
+      // STEP 3: (Optional) non-vaccine medical reminders (kept for future use)
+      setMedicalReminders([]); // or keep existing logic if you add other reminders
+
+      // STEP 4: Optional single-shot AI analysis (non-blocking)
       try {
-        console.log('🤖 Loading weekly AI content...');
-        weeklyContent = await wellnessService.getCurrentWeekContent(user.uid, childId, prof);
-        
-        if (weeklyContent) {
-          const { getContentForDay } = await import('../../../../services/childCareAIService');
-          todayContentData = getContentForDay(weeklyContent, new Date());
-          setTodayContent(todayContentData); // ⭐ STORE IN STATE
-          console.log('✅ Weekly AI content loaded successfully');
-        }
-      } catch (aiError) {
-        console.error('⚠️ AI content loading failed, using fallback:', aiError);
-        weeklyContent = null;
-        todayContentData = null;
-        setTodayContent(null); // ⭐ CLEAR STATE ON ERROR
+        const aiAnalysis = await analyzeChildCareWithAI(
+          prof,
+          prof.growthRecords || [],
+          prof.vaccinations || {},
+        );
+        setAiSummaryMarkdown(aiAnalysis.markdownSummary);
+        console.log('🤖 Child AI analysis generated');
+      } catch (aiErr) {
+        console.error(
+          '⚠️ Child AI analysis failed, using static suggestions only:',
+          aiErr,
+        );
+        setAiSummaryMarkdown(null);
       }
 
-      // ⭐ STEP 2: Load/Set Today's Tasks (AI or Fallback)
-      if (todayContentData && todayContentData.tasks && todayContentData.tasks.length > 0) {
-        console.log('✅ Using AI-generated tasks for today');
-        
-        // Check if we already have tracking for today
-        const existingTracking = await wellnessService.getChildDailyTracking(user.uid, childId, today);
-        
-        if (existingTracking) {
-          // Use existing tracking (preserves completion status)
-          setTodayTasks(existingTracking.tasks);
-        } else {
-          // Use AI tasks and save them
-          setTodayTasks(todayContentData.tasks);
-          
-          const newTracking: Omit<DailyTracking, 'trackingId' | 'createdAt'> = {
-            date: today,
-            dayNumber: prof.ageInDays || prof.ageInMonths * 30,
-            tasks: todayContentData.tasks,
-            metrics: {},
-            overallCompletion: 0,
-          };
-          await wellnessService.saveChildDailyTracking(user.uid, childId, newTracking);
-        }
-      } else {
-        // Fallback: Load from Firestore or generate static tasks
-        let tracking = await wellnessService.getChildDailyTracking(user.uid, childId, today);
-
-        if (!tracking) {
-          const tasks = getDailyTasksForAge(prof.ageInMonths);
-          
-          const newTracking: Omit<DailyTracking, 'trackingId' | 'createdAt'> = {
-            date: today,
-            dayNumber: prof.ageInDays || prof.ageInMonths * 30,
-            tasks,
-            metrics: {},
-            overallCompletion: 0,
-          };
-          
-          await wellnessService.saveChildDailyTracking(user.uid, childId, newTracking);
-          setTodayTasks(tasks);
-        } else {
-          setTodayTasks(tracking.tasks);
-        }
-      }
-
-      // ⭐ STEP 3: Set Suggestions (AI or Fallback)
-      if (todayContentData && todayContentData.feeding && todayContentData.activities) {
-        // Use AI-generated suggestions
-        setSuggestions({
-          food: todayContentData.feeding?.tips || [todayContentData.feeding?.summary || 'Balanced meals'],
-          exercise: todayContentData.activities?.afternoon || [
-            prof.ageInMonths < 12 ? 'Tummy time daily (15-30 mins)' : 'Active play 1-2 hours daily',
-            'Outdoor time for vitamin D and fresh air',
-          ],
-          mentalHealth: todayContentData.activities?.evening || [
-            'Read books together daily',
-            'Consistent bedtime routine',
-          ],
-        });
-      } else {
-        // Fallback: Use static suggestions
-        const ageGroup = getAgeGroup(prof.ageInMonths);
-        const feeding = FEEDING_GUIDELINES[ageGroup as keyof typeof FEEDING_GUIDELINES];
-        
-        setSuggestions({
-          food: feeding ? [feeding.primary, feeding.notes] : ['Balanced meals', 'Regular feeding schedule'],
-          exercise: [
-            prof.ageInMonths < 12 ? 'Tummy time daily (15-30 mins)' : 'Active play 1-2 hours daily',
-            'Outdoor time for vitamin D and fresh air',
-            prof.ageInMonths >= 12 ? 'Encourage walking and exploration' : 'Support motor skill development',
-          ],
-          mentalHealth: [
-            'Read books together daily',
-            'Limit screen time (none for under 2 years)',
-            'Consistent bedtime routine',
-            prof.ageInMonths >= 12 ? 'Interactive play and socialization' : 'Bonding time through eye contact and touch',
-          ],
-        });
-      }
-
-      // ⭐ STEP 4: Load Medical Reminders (Keep existing logic)
-      const vaccineReminders: MedicalReminder[] = VACCINATION_SCHEDULE
-        .filter(v => {
-          const ageMatch = v.age.match(/(\d+)/);
-          if (!ageMatch) return false;
-          const vaccinationAge = parseInt(ageMatch[0]);
-          return vaccinationAge >= prof.ageInMonths && vaccinationAge <= prof.ageInMonths + 6;
-        })
-        .slice(0, 5)
-        .map((v, i) => ({
-          reminderId: `vaccine-${i}`,
-          title: `Vaccination: ${v.age}`,
-          description: v.vaccines.join(', '),
-          dueDate: v.age,
-          urgency: 'upcoming' as const,
-          completed: false,
-        }));
-      
-      setMedicalReminders(vaccineReminders);
-
-      // Load weekly reports (future implementation)
+      // STEP 5: Weekly reports (placeholder)
       setLatestReport(null);
-
     } catch (error) {
       console.error('❌ Error loading child data:', error);
     }
@@ -292,17 +260,21 @@ export default function IndividualChildCareScreen() {
       if (!user || !childId || !todayDate) return;
 
       const updatedTasks = todayTasks.map((task) =>
-        task.taskId === taskId
-          ? { ...task, completed: !task.completed }
-          : task
+        task.taskId === taskId ? { ...task, completed: !task.completed } : task,
       );
       setTodayTasks(updatedTasks);
 
-      const tracking = await wellnessService.getChildDailyTracking(user.uid, childId, todayDate);
-      
+      const tracking = await wellnessService.getChildDailyTracking(
+        user.uid,
+        childId,
+        todayDate,
+      );
+
       if (tracking) {
-        const completionRate = (updatedTasks.filter(t => t.completed).length / updatedTasks.length) * 100;
-        
+        const completionRate =
+          (updatedTasks.filter((t) => t.completed).length / updatedTasks.length) *
+          100;
+
         await wellnessService.saveChildDailyTracking(user.uid, childId, {
           ...tracking,
           tasks: updatedTasks,
@@ -322,19 +294,22 @@ export default function IndividualChildCareScreen() {
 
     Alert.alert(
       reminder.title,
-      reminder.description + (reminder.completed ? '\n\nCurrently marked as complete.' : ''),
+      reminder.description +
+        (reminder.completed ? '\n\nCurrently marked as complete.' : ''),
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: reminder.completed ? 'Mark Incomplete' : 'Mark Complete',
           onPress: async () => {
             showToast(
-              reminder.completed ? 'Reminder marked incomplete' : 'Reminder completed!',
-              'success'
+              reminder.completed
+                ? 'Reminder marked incomplete'
+                : 'Reminder completed!',
+              'success',
             );
           },
         },
-      ]
+      ],
     );
   };
 
@@ -355,9 +330,9 @@ export default function IndividualChildCareScreen() {
 
               setLoading(true);
               await wellnessService.deleteChildProfile(user.uid, childId);
-              
+
               showToast('Profile deleted successfully', 'success');
-              
+
               setTimeout(() => {
                 router.push('/(tabs)/wellness/child-care');
               }, 1000);
@@ -368,11 +343,14 @@ export default function IndividualChildCareScreen() {
             }
           },
         },
-      ]
+      ],
     );
   };
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+  const showToast = (
+    message: string,
+    type: 'success' | 'error' | 'info',
+  ) => {
     setToastMessage(message);
     setToastType(type);
     setToastVisible(true);
@@ -402,7 +380,11 @@ export default function IndividualChildCareScreen() {
           onBackPress={() => router.push('/(tabs)/wellness/child-care')}
         />
         <View style={styles.loadingContainer}>
-          <Ionicons name="warning-outline" size={64} color={Colors.light.textSecondary} />
+          <Ionicons
+            name="warning-outline"
+            size={64}
+            color={Colors.light.textSecondary}
+          />
           <Text style={styles.emptyTitle}>Profile Not Found</Text>
           <Text style={styles.emptyText}>
             This child's profile could not be found. It may have been deleted.
@@ -420,7 +402,9 @@ export default function IndividualChildCareScreen() {
 
   const milestone = getMilestoneForAge(profile.ageInMonths);
   const ageGroup = getAgeGroup(profile.ageInMonths);
-  const stageInfo = Object.values(AGE_MILESTONES).find((m) => m.range === milestone.range);
+  const stageInfo = Object.values(AGE_MILESTONES).find(
+    (m) => m.range === milestone.range,
+  );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -466,26 +450,20 @@ export default function IndividualChildCareScreen() {
 
         <View style={styles.spacing} />
 
-        {/* ⭐ Weekly Milestone Card - NOW USES AI DATA */}
+        {/* Weekly Milestone Card (static milestone data) */}
         <WeeklyMilestoneCard
           weekNumber={Math.floor(profile.ageInMonths / 4)}
-          title={todayContent?.milestones?.tips?.[0] || milestone.range}
+          title={milestone.range}
           emoji="🎯"
-          developmentText={
-            todayContent?.milestones?.physical?.[0] || 
-            milestone.physical.join(' • ')
-          }
-          milestones={
-            todayContent?.milestones
-              ? [
-                  ...(todayContent.milestones.cognitive || []),
-                  ...(todayContent.milestones.social || []),
-                  ...(todayContent.milestones.language || [])
-                ].slice(0, 5) // Show first 5 milestones
-              : [...milestone.cognitive, ...milestone.social]
-          }
+          developmentText={milestone.physical.join(' • ')}
+          milestones={[...milestone.cognitive, ...milestone.social].slice(0, 5)}
           color="#87CEEB"
         />
+
+        <View style={styles.spacing} />
+
+        {/* Growth Chart Card */}
+        <GrowthChartCard growthRecords={profile.growthRecords || []} />
 
         <View style={styles.spacing} />
 
@@ -507,13 +485,24 @@ export default function IndividualChildCareScreen() {
 
         <View style={styles.spacing} />
 
-        {/* Medical Reminders */}
-        <MedicalRemindersCard
-          reminders={medicalReminders}
-          onReminderPress={handleReminderPress}
+        {/* Vaccination Tracker */}
+        <VaccinationTrackerCard
+          childAgeInMonths={profile.ageInMonths}
+          vaccinations={profile.vaccinations || {}}
         />
 
         <View style={styles.spacing} />
+
+        {/* Medical Reminders (non-vaccine, if you add any later) */}
+        {medicalReminders.length > 0 && (
+          <>
+            <MedicalRemindersCard
+              reminders={medicalReminders}
+              onReminderPress={handleReminderPress}
+            />
+            <View style={styles.spacing} />
+          </>
+        )}
 
         {/* Warning Signs */}
         <WarningSignsCard warningsSigns={CHILD_CARE_WARNING_SIGNS} />
@@ -532,24 +521,45 @@ export default function IndividualChildCareScreen() {
         )}
 
         <View style={styles.spacing} />
-        
+
+        {/* AI analysis note (optional display) */}
+        {aiSummaryMarkdown && (
+          <View style={styles.disclaimerCard}>
+            <Ionicons
+              name="sparkles-outline"
+              size={20}
+              color={Colors.light.primary}
+            />
+            <Text style={styles.disclaimerText}>
+              This child’s summary includes AI-generated insights. View it in the
+              Child Health AI section.
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.spacing} />
+
         {/* Disclaimer */}
         <View style={styles.disclaimerCard}>
-          <Ionicons name="information-circle" size={20} color={Colors.light.primary} />
+          <Ionicons
+            name="information-circle"
+            size={20}
+            color={Colors.light.primary}
+          />
           <Text style={styles.disclaimerText}>
-            Some content in this module is AI-generated. Always consult your pediatrician for medical advice.
+            Some content in this module is AI-generated. Always consult your
+            pediatrician for medical advice.
           </Text>
         </View>
 
         <View style={styles.spacing} />
-        
+
         {/* Delete Button */}
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={handleDeleteProfile}
-        >
+        <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteProfile}>
           <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-          <Text style={styles.deleteButtonText}>Delete {profile.childName}'s Profile</Text>
+          <Text style={styles.deleteButtonText}>
+            Delete {profile.childName}'s Profile
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.spacing} />

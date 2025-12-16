@@ -1,6 +1,6 @@
 // components/wellness/SetupModals/ChildSetupModal.tsx
 // Modal for adding/editing child profile with hybrid birthdate/age input
-// Last Updated: December 12, 2025
+// Last Updated: December 16, 2025 - Added optional birth weight field
 
 import React, { useState } from 'react';
 import {
@@ -21,37 +21,40 @@ import { Colors } from '../../../constants/colors';
 
 type Props = {
   visible: boolean;
-  onConfirm: (data: { 
-    childName: string; 
-    birthDate?: string; 
+  onConfirm: (data: {
+    childName: string;
+    birthDate?: string;
     ageInMonths?: number;
     gender?: 'male' | 'female';
+    birthWeightKg?: string;
   }) => void;
   onCancel: () => void;
   editMode?: boolean;
   initialData?: {
     childName: string;
     gender?: 'male' | 'female';
+    birthWeightKg?: string;
   };
 };
 
 type SetupMode = 'birthdate' | 'manual';
 
-export default function ChildSetupModal({ 
-  visible, 
-  onConfirm, 
-  onCancel, 
+export default function ChildSetupModal({
+  visible,
+  onConfirm,
+  onCancel,
   editMode = false,
-  initialData 
+  initialData,
 }: Props) {
   const [mode, setMode] = useState<SetupMode>('birthdate');
   const [childName, setChildName] = useState(initialData?.childName || '');
   const [gender, setGender] = useState<'male' | 'female' | undefined>(initialData?.gender);
-  
+  const [birthWeightKg, setBirthWeightKg] = useState(initialData?.birthWeightKg || '');
+
   // Birthdate mode
   const [birthDate, setBirthDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  
+
   // Manual age mode
   const [ageInMonths, setAgeInMonths] = useState('');
 
@@ -60,6 +63,19 @@ export default function ChildSetupModal({
     if (!childName || childName.trim().length === 0) {
       Alert.alert('Required', "Please enter your child's name");
       return;
+    }
+
+    // Basic validation for birth weight (if provided)
+    const trimmedWeight = birthWeightKg.trim();
+    if (trimmedWeight.length > 0) {
+      const numericWeight = parseFloat(trimmedWeight.replace(',', '.'));
+      if (isNaN(numericWeight) || numericWeight <= 0 || numericWeight > 10) {
+        Alert.alert(
+          'Invalid Birth Weight',
+          'Please enter a valid birth weight in kilograms (e.g., 3.2).'
+        );
+        return;
+      }
     }
 
     if (mode === 'birthdate') {
@@ -74,29 +90,37 @@ export default function ChildSetupModal({
       const tenYearsAgo = new Date();
       tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
       if (birthDate < tenYearsAgo) {
-        Alert.alert('Invalid Date', 'This module is designed for children up to 10 years old');
+        Alert.alert(
+          'Invalid Date',
+          'This module is designed for children up to 10 years old'
+        );
         return;
       }
 
       const formattedDate = birthDate.toISOString().split('T')[0];
-      onConfirm({ 
-        childName: childName.trim(), 
+      onConfirm({
+        childName: childName.trim(),
         birthDate: formattedDate,
-        gender 
+        gender,
+        birthWeightKg: trimmedWeight || undefined,
       });
     } else {
       // Manual age mode
-      const age = parseInt(ageInMonths);
-      
+      const age = parseInt(ageInMonths, 10);
+
       if (isNaN(age) || age < 0 || age > 120) {
-        Alert.alert('Invalid Age', 'Please enter a valid age (0-120 months / 0-10 years)');
+        Alert.alert(
+          'Invalid Age',
+          'Please enter a valid age (0-120 months / 0-10 years)'
+        );
         return;
       }
 
-      onConfirm({ 
-        childName: childName.trim(), 
+      onConfirm({
+        childName: childName.trim(),
         ageInMonths: age,
-        gender 
+        gender,
+        birthWeightKg: trimmedWeight || undefined,
       });
     }
   };
@@ -104,6 +128,7 @@ export default function ChildSetupModal({
   const handleCancel = () => {
     setChildName(initialData?.childName || '');
     setGender(initialData?.gender);
+    setBirthWeightKg(initialData?.birthWeightKg || '');
     setBirthDate(new Date());
     setAgeInMonths('');
     setMode('birthdate');
@@ -115,7 +140,7 @@ export default function ChildSetupModal({
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
     }
-    
+
     if (selectedDate) {
       setBirthDate(selectedDate);
     }
@@ -126,7 +151,20 @@ export default function ChildSetupModal({
   };
 
   const formatDateForDisplay = (date: Date): string => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     const day = date.getDate();
     const month = months[date.getMonth()];
     const year = date.getFullYear();
@@ -152,7 +190,9 @@ export default function ChildSetupModal({
                 {editMode ? 'Edit Child Profile' : 'Add Child Profile'}
               </Text>
               <Text style={styles.modalSubtitle}>
-                {editMode ? "Update your child's information" : "Let's track your child's growth"}
+                {editMode
+                  ? "Update your child's information"
+                  : "Let's track your child's growth"}
               </Text>
             </View>
 
@@ -176,33 +216,77 @@ export default function ChildSetupModal({
                 <Text style={styles.inputLabel}>Gender (Optional)</Text>
                 <View style={styles.genderSelector}>
                   <TouchableOpacity
-                    style={[styles.genderButton, gender === 'male' && styles.genderButtonActive]}
-                    onPress={() => setGender(gender === 'male' ? undefined : 'male')}
+                    style={[
+                      styles.genderButton,
+                      gender === 'male' && styles.genderButtonActive,
+                    ]}
+                    onPress={() =>
+                      setGender(gender === 'male' ? undefined : 'male')
+                    }
                   >
                     <Ionicons
                       name="male"
                       size={24}
-                      color={gender === 'male' ? Colors.light.primary : Colors.light.textSecondary}
+                      color={
+                        gender === 'male'
+                          ? Colors.light.primary
+                          : Colors.light.textSecondary
+                      }
                     />
-                    <Text style={[styles.genderButtonText, gender === 'male' && styles.genderButtonTextActive]}>
+                    <Text
+                      style={[
+                        styles.genderButtonText,
+                        gender === 'male' && styles.genderButtonTextActive,
+                      ]}
+                    >
                       Boy
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.genderButton, gender === 'female' && styles.genderButtonActive]}
-                    onPress={() => setGender(gender === 'female' ? undefined : 'female')}
+                    style={[
+                      styles.genderButton,
+                      gender === 'female' && styles.genderButtonActive,
+                    ]}
+                    onPress={() =>
+                      setGender(gender === 'female' ? undefined : 'female')
+                    }
                   >
                     <Ionicons
                       name="female"
                       size={24}
-                      color={gender === 'female' ? Colors.light.primary : Colors.light.textSecondary}
+                      color={
+                        gender === 'female'
+                          ? Colors.light.primary
+                          : Colors.light.textSecondary
+                      }
                     />
-                    <Text style={[styles.genderButtonText, gender === 'female' && styles.genderButtonTextActive]}>
+                    <Text
+                      style={[
+                        styles.genderButtonText,
+                        gender === 'female' && styles.genderButtonTextActive,
+                      ]}
+                    >
                       Girl
                     </Text>
                   </TouchableOpacity>
                 </View>
+              </View>
+
+              {/* Birth Weight (Optional) */}
+              <View style={styles.inputSection}>
+                <Text style={styles.inputLabel}>Birth Weight (Optional)</Text>
+                <Text style={styles.inputHint}>
+                  Enter birth weight in kilograms (e.g., 3.2)
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., 3.2"
+                  placeholderTextColor={Colors.light.textSecondary + '80'}
+                  value={birthWeightKg}
+                  onChangeText={setBirthWeightKg}
+                  keyboardType="decimal-pad"
+                />
               </View>
 
               {!editMode && (
@@ -213,29 +297,53 @@ export default function ChildSetupModal({
                   <Text style={styles.sectionTitle}>Child's Age</Text>
                   <View style={styles.modeSelector}>
                     <TouchableOpacity
-                      style={[styles.modeButton, mode === 'birthdate' && styles.modeButtonActive]}
+                      style={[
+                        styles.modeButton,
+                        mode === 'birthdate' && styles.modeButtonActive,
+                      ]}
                       onPress={() => setMode('birthdate')}
                     >
                       <Ionicons
                         name="calendar-outline"
                         size={24}
-                        color={mode === 'birthdate' ? Colors.light.primary : Colors.light.textSecondary}
+                        color={
+                          mode === 'birthdate'
+                            ? Colors.light.primary
+                            : Colors.light.textSecondary
+                        }
                       />
-                      <Text style={[styles.modeButtonText, mode === 'birthdate' && styles.modeButtonTextActive]}>
+                      <Text
+                        style={[
+                          styles.modeButtonText,
+                          mode === 'birthdate' && styles.modeButtonTextActive,
+                        ]}
+                      >
                         Birth Date
                       </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={[styles.modeButton, mode === 'manual' && styles.modeButtonActive]}
+                      style={[
+                        styles.modeButton,
+                        mode === 'manual' && styles.modeButtonActive,
+                      ]}
                       onPress={() => setMode('manual')}
                     >
                       <Ionicons
                         name="create-outline"
                         size={24}
-                        color={mode === 'manual' ? Colors.light.primary : Colors.light.textSecondary}
+                        color={
+                          mode === 'manual'
+                            ? Colors.light.primary
+                            : Colors.light.textSecondary
+                        }
                       />
-                      <Text style={[styles.modeButtonText, mode === 'manual' && styles.modeButtonTextActive]}>
+                      <Text
+                        style={[
+                          styles.modeButtonText,
+                          mode === 'manual' && styles.modeButtonTextActive,
+                        ]}
+                      >
                         Age in Months
                       </Text>
                     </TouchableOpacity>
@@ -254,12 +362,20 @@ export default function ChildSetupModal({
                         onPress={() => setShowDatePicker(true)}
                       >
                         <View style={styles.datePickerContent}>
-                          <Ionicons name="calendar" size={20} color={Colors.light.primary} />
+                          <Ionicons
+                            name="calendar"
+                            size={20}
+                            color={Colors.light.primary}
+                          />
                           <Text style={styles.datePickerText}>
                             {formatDateForDisplay(birthDate)}
                           </Text>
                         </View>
-                        <Ionicons name="chevron-down" size={20} color={Colors.light.textSecondary} />
+                        <Ionicons
+                          name="chevron-down"
+                          size={20}
+                          color={Colors.light.textSecondary}
+                        />
                       </TouchableOpacity>
 
                       {showDatePicker && (
@@ -268,7 +384,9 @@ export default function ChildSetupModal({
                             <View style={styles.iosDatePickerContainer}>
                               <View style={styles.iosDatePickerHeader}>
                                 <TouchableOpacity onPress={handleDatePickerDone}>
-                                  <Text style={styles.datePickerDoneButton}>Done</Text>
+                                  <Text style={styles.datePickerDoneButton}>
+                                    Done
+                                  </Text>
                                 </TouchableOpacity>
                               </View>
                               <DateTimePicker
@@ -293,7 +411,11 @@ export default function ChildSetupModal({
                       )}
 
                       <View style={styles.infoBox}>
-                        <Ionicons name="information-circle" size={16} color={Colors.light.primary} />
+                        <Ionicons
+                          name="information-circle"
+                          size={16}
+                          color={Colors.light.primary}
+                        />
                         <Text style={styles.infoText}>
                           For children up to 10 years old
                         </Text>
@@ -305,7 +427,7 @@ export default function ChildSetupModal({
                       <Text style={styles.inputHint}>
                         Enter your child's current age in months (e.g., 14)
                       </Text>
-                      
+
                       <TextInput
                         style={styles.ageInput}
                         placeholder="14"
@@ -317,9 +439,14 @@ export default function ChildSetupModal({
                       />
 
                       <View style={styles.exampleBox}>
-                        <Ionicons name="bulb-outline" size={16} color={Colors.light.primary} />
+                        <Ionicons
+                          name="bulb-outline"
+                          size={16}
+                          color={Colors.light.primary}
+                        />
                         <Text style={styles.exampleText}>
-                          1 year = 12 months | 2 years = 24 months | 5 years = 60 months
+                          1 year = 12 months | 2 years = 24 months | 5 years = 60
+                          months
                         </Text>
                       </View>
                     </View>
