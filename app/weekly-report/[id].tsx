@@ -1,10 +1,10 @@
+// app/weekly-report/[id].tsx
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../config/firebaseConfig';
+import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { Colors } from '../../constants/colors';
 
@@ -33,24 +33,30 @@ export default function WeeklyReportScreen() {
     }
   }, [user, id]);
 
-  const fetchReport = async () => {
-    try {
-      // Ensure id is a string
-      const reportId = Array.isArray(id) ? id[0] : id;
-      const docRef = doc(db, `users/${user?.uid}/weeklyReports`, reportId);
-      const docSnap = await getDoc(docRef);
+const fetchReport = async () => {
+  try {
+    const reportId = Array.isArray(id) ? id[0] : id;
+    if (!reportId || !user?.uid) return;
 
-      if (docSnap.exists()) {
-        setReport(docSnap.data() as WeeklyReport);
-      } else {
-        console.log("No such report!");
-      }
-    } catch (error) {
-      console.error("Error fetching report:", error);
-    } finally {
-      setLoading(false);
+    const docSnap = await firestore()
+      .collection('users')
+      .doc(user.uid)
+      .collection('weeklyReports')
+      .doc(reportId as string)
+      .get();
+
+    if (docSnap.exists()) {
+      setReport(docSnap.data() as WeeklyReport);
+    } else {
+      console.log('No such report!');
     }
-  };
+  } catch (error) {
+    console.error('Error fetching report:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   if (loading) {
     return (
@@ -81,7 +87,10 @@ export default function WeeklyReportScreen() {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
   };
 
   return (
@@ -95,7 +104,7 @@ export default function WeeklyReportScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -115,30 +124,28 @@ export default function WeeklyReportScreen() {
             <Ionicons name="sparkles" size={20} color="#FFFFFF" />
             <Text style={styles.summaryTitle}>AI Health Summary</Text>
           </View>
-          <Text style={styles.summaryBody}>
-            {report.aiSummary}
-          </Text>
+          <Text style={styles.summaryBody}>{report.aiSummary}</Text>
         </View>
 
         {/* Stats Grid */}
         <Text style={styles.sectionTitle}>Activity Breakdown</Text>
         <View style={styles.statsGrid}>
-          <StatCard 
-            icon="pulse" 
-            value={report.dataPoints.vitals} 
-            label="Vitals Logged" 
+          <StatCard
+            icon="pulse"
+            value={report.dataPoints.vitals}
+            label="Vitals Logged"
             color={Colors.light.success}
           />
-          <StatCard 
-            icon="medkit" 
-            value={report.dataPoints.medications} 
-            label="Active Meds" 
+          <StatCard
+            icon="medkit"
+            value={report.dataPoints.medications}
+            label="Active Meds"
             color={Colors.light.primary}
           />
-          <StatCard 
-            icon="document-text" 
-            value={report.dataPoints.labs} 
-            label="Labs Uploaded" 
+          <StatCard
+            icon="document-text"
+            value={report.dataPoints.labs}
+            label="Labs Uploaded"
             color={Colors.light.warning}
           />
         </View>
@@ -158,19 +165,19 @@ const StatCard = ({ icon, value, label, color }: any) => (
 );
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: Colors.light.background 
+  container: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
   },
-  loadingContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
+
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
@@ -178,46 +185,46 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
   },
-  backButton: { 
+  backButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: { 
-    fontSize: 20, 
-    fontWeight: '700', 
-    color: Colors.light.text 
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.light.text,
   },
-  
-  content: { 
+
+  content: {
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 20,
   },
-  
-  dateContainer: { 
-    alignItems: 'center', 
-    marginBottom: 24 
+
+  dateContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
   },
-  dateChip: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: Colors.light.cardBackground, 
-    paddingHorizontal: 16, 
-    paddingVertical: 8, 
+  dateChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.cardBackground,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
     gap: 8,
     shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 4, 
-    elevation: 3
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  dateText: { 
-    fontSize: 14, 
-    color: Colors.light.textSecondary, 
-    fontWeight: '600' 
+  dateText: {
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    fontWeight: '600',
   },
 
   summaryCard: {
@@ -226,40 +233,40 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 32,
     shadowColor: Colors.light.primary,
-    shadowOffset: { width: 0, height: 4 }, 
-    shadowOpacity: 0.3, 
-    shadowRadius: 8, 
-    elevation: 6
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  summaryHeader: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 8, 
-    marginBottom: 12 
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
   },
-  summaryTitle: { 
-    fontSize: 18, 
-    fontWeight: '700', 
-    color: '#FFFFFF' 
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
-  summaryBody: { 
-    fontSize: 15, 
-    color: '#FFFFFF', 
-    lineHeight: 24, 
-    opacity: 0.95 
+  summaryBody: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    lineHeight: 24,
+    opacity: 0.95,
   },
 
-  sectionTitle: { 
-    fontSize: 18, 
-    fontWeight: '700', 
-    color: Colors.light.text, 
-    marginBottom: 16 
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 16,
   },
-  
-  statsGrid: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    gap: 12 
+
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   statCard: {
     flex: 1,
@@ -268,39 +275,39 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 4, 
-    elevation: 3
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  iconCircle: { 
-    width: 48, 
-    height: 48, 
-    borderRadius: 24, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginBottom: 12 
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  statValue: { 
-    fontSize: 24, 
-    fontWeight: '700', 
-    color: Colors.light.text, 
-    marginBottom: 4 
+  statValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 4,
   },
-  statLabel: { 
-    fontSize: 12, 
-    color: Colors.light.textSecondary, 
-    textAlign: 'center' 
+  statLabel: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    textAlign: 'center',
   },
 
-  errorContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
   },
-  errorText: { 
-    fontSize: 18, 
+  errorText: {
+    fontSize: 18,
     fontWeight: '600',
     color: Colors.light.text,
     marginTop: 16,

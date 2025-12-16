@@ -26,7 +26,6 @@ import { LabReport } from '../../types/upload';
 import {
   generatePDFReport,
   generateDOCXReport,
-  generateCSVReport,
   shareExportedFile,
   downloadFile,
 } from '../../services/reportExportService';
@@ -144,7 +143,7 @@ export default function AIReportScreen() {
     }
   };
 
-  const exportSingleReport = async (report: LabReport, format: 'pdf' | 'docx' | 'csv') => {
+  const exportSingleReport = async (report: LabReport, format: 'pdf' | 'docx') => {
     setExportingId(report.reportId);
     setShowExportModal(false);
     
@@ -153,10 +152,8 @@ export default function AIReportScreen() {
       
       if (format === 'pdf') {
         filePath = await generatePDFReport([report]);
-      } else if (format === 'docx') {
-        filePath = await generateDOCXReport([report]);
       } else {
-        filePath = await generateCSVReport([report]);
+        filePath = await generateDOCXReport([report]);
       }
 
       setExportedFilePath(filePath);
@@ -449,15 +446,6 @@ export default function AIReportScreen() {
                 <Ionicons name="document" size={32} color={Colors.light.primary} />
                 <Text style={styles.exportOptionText}>DOCX</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.exportOptionButton}
-                onPress={() => selectedReport && exportSingleReport(selectedReport, 'csv')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="grid" size={32} color={Colors.light.primary} />
-                <Text style={styles.exportOptionText}>CSV</Text>
-              </TouchableOpacity>
             </View>
 
             {/* Cancel Button */}
@@ -517,9 +505,6 @@ export default function AIReportScreen() {
   );
 }
 
-// Updated styles section for ai-report.tsx
-// Replace your existing styles object with this:
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -555,7 +540,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingBottom: 100, // ✅ CORRECT: Matches Home and Health Library screens
+    paddingBottom: 100,
   },
   emptyListContent: {
     flexGrow: 1,

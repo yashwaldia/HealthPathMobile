@@ -1,47 +1,69 @@
 // config/firebaseConfig.ts
 
-// Import React Native Firebase modules using require to avoid ES module issues
-const firebaseApp = require('@react-native-firebase/app').default;
-const authModule = require('@react-native-firebase/auth').default;
-const firestoreModule = require('@react-native-firebase/firestore').default;
-const storageModule = require('@react-native-firebase/storage').default;
+/**
+ * Firebase Configuration for React Native
+ * 
+ * React Native Firebase automatically initializes from native config files:
+ * - Android: google-services.json
+ * - iOS: GoogleService-Info.plist
+ * 
+ * Native persistence is handled automatically - no additional configuration needed.
+ */
 
-// Note: React Native Firebase automatically initializes from native config files
-// (google-services.json for Android, GoogleService-Info.plist for iOS)
+import { getApp } from '@react-native-firebase/app';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+
+// ============================================
+// FIREBASE APP INITIALIZATION CHECK
+// ============================================
 
 console.log('🔥 React Native Firebase Configuration:');
 
-// Get the default app instance
-let app;
 try {
-  app = firebaseApp.app();
-  console.log('✅ Using existing Firebase app instance');
+  const firebaseApp = getApp();
+  console.log('✅ Firebase app initialized successfully');
+  console.log('  📱 App Name:', firebaseApp.name);
+  console.log('  🆔 Project ID:', firebaseApp.options.projectId);
+  console.log('  🗄️ Storage Bucket:', firebaseApp.options.storageBucket);
 } catch (error) {
-  console.log('⚠️ Firebase app will be initialized from native config files');
-  // App will auto-initialize on first use
+  console.log('⚠️ Firebase app will auto-initialize from native config files');
+  console.log('   This is normal on first load.');
 }
 
-// Get Firebase service instances
-const auth = authModule();
-const db = firestoreModule();
-const storage = storageModule();
+// ============================================
+// FIREBASE SERVICES
+// ============================================
 
-console.log('✅ React Native Firebase Auth initialized (native)');
+console.log('✅ React Native Firebase Auth initialized');
 console.log('✅ React Native Firestore initialized');
-console.log('✅ React Native Firebase Storage initialized');
-console.log('📱 Native auth persistence: Automatic via React Native Firebase');
+console.log('📱 Native auth persistence: Automatic (no AsyncStorage needed)');
 
-// Log app info if available
-if (app) {
-  console.log('  Project ID:', app.options?.projectId || 'Will load from native config');
-  console.log('  Storage Bucket:', app.options?.storageBucket || 'Will load from native config');
-}
+// ❌ REMOVE THIS ENTIRE BLOCK - It causes the error
+// firestore().settings({
+//   persistence: true,
+//   cacheSizeBytes: firestore.CACHE_SIZE_UNLIMITED,
+// });
 
-// Export Firebase services with consistent naming
-export { auth, db, storage };
+// ℹ️ Firestore offline persistence is ENABLED BY DEFAULT in React Native Firebase
+// No need to configure it manually
 
-// Also export with 'rn' prefix for clarity
-export { auth as rnAuth, db as rnDb, storage as rnStorage };
+console.log('✅ Firestore offline persistence enabled (default)');
 
-// Export the app if needed
-export default app;
+// ============================================
+// EXPORTS
+// ============================================
+
+// Export auth and firestore modules
+export { auth, firestore };
+
+// Export getApp for accessing the Firebase app instance if needed
+  export { getApp } from '@react-native-firebase/app';
+
+// Default export
+export default auth;
+
+// Type exports for TypeScript consumers
+export type { FirebaseAuthTypes } from '@react-native-firebase/auth';
+export type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+

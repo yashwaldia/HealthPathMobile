@@ -1,19 +1,5 @@
 // services/nutritionService.ts
-
-import {
-  collection,
-  doc,
-  setDoc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  deleteDoc,
-  updateDoc,
-  Timestamp,
-} from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import firestore from '@react-native-firebase/firestore';
 
 export type NutritionFoodItem = {
   name: string;
@@ -57,7 +43,10 @@ const cleanData = (data: any) => {
 };
 
 const getCollectionRef = (userId: string) =>
-  collection(db, `users/${userId}/nutrition`);
+  firestore()
+    .collection('users')
+    .doc(userId)
+    .collection('nutrition');
 
 export const nutritionService = {
   async addEntry(
@@ -65,7 +54,7 @@ export const nutritionService = {
     entryData: Omit<NutritionEntry, 'entryId' | 'userId' | 'createdAt' | 'updatedAt'>
   ): Promise<string> {
     const colRef = getCollectionRef(userId);
-    const newDocRef = doc(colRef);
+    const newDocRef = colRef.doc();
     const now = new Date();
 
     const payload: NutritionEntry = {
@@ -78,40 +67,48 @@ export const nutritionService = {
 
     const cleaned = cleanData({
       ...payload,
-      createdAt: Timestamp.fromDate(now),
-      updatedAt: Timestamp.fromDate(now),
+      createdAt: firestore.Timestamp.fromDate(now),
+      updatedAt: firestore.Timestamp.fromDate(now),
     });
 
-    await setDoc(newDocRef, cleaned);
+    await newDocRef.set(cleaned);
     return newDocRef.id;
   },
 
   async getEntry(userId: string, entryId: string): Promise<NutritionEntry | null> {
-    const docRef = doc(db, `users/${userId}/nutrition`, entryId);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) return null;
+    const snap = await firestore()
+      .collection('users')
+      .doc(userId)
+      .collection('nutrition')
+      .doc(entryId)
+      .get();
 
-    const data = snap.data() as any;
+    if (!snap.exists) return null;
+
+    const data = snap.data();
+    if (!data) return null;
+
     return {
-      ...(data as NutritionEntry),
+      ...(data as any as NutritionEntry),
       entryId: snap.id,
-      createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-      updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+      createdAt: data.createdAt?.toDate() || new Date(),
+      updatedAt: data.updatedAt?.toDate() || new Date(),
     };
   },
 
   async getForDate(userId: string, date: string): Promise<NutritionEntry[]> {
-    const colRef = getCollectionRef(userId);
-    const qRef = query(colRef, where('date', '==', date), orderBy('date', 'asc'));
-    const snapshot = await getDocs(qRef);
+    const snapshot = await getCollectionRef(userId)
+      .where('date', '==', date)
+      .orderBy('date', 'asc')
+      .get();
 
     const items = snapshot.docs.map((docSnap) => {
-      const data = docSnap.data() as any;
+      const data = docSnap.data();
       return {
-        ...(data as NutritionEntry),
+        ...(data as any as NutritionEntry),
         entryId: docSnap.id,
-        createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-        updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
       };
     });
 
@@ -124,22 +121,19 @@ export const nutritionService = {
     startDate: string,
     endDate: string
   ): Promise<NutritionEntry[]> {
-    const colRef = getCollectionRef(userId);
-    const qRef = query(
-      colRef,
-      where('date', '>=', startDate),
-      where('date', '<=', endDate),
-      orderBy('date', 'asc')
-    );
-    const snapshot = await getDocs(qRef);
+    const snapshot = await getCollectionRef(userId)
+      .where('date', '>=', startDate)
+      .where('date', '<=', endDate)
+      .orderBy('date', 'asc')
+      .get();
 
     const items = snapshot.docs.map((docSnap) => {
-      const data = docSnap.data() as any;
+      const data = docSnap.data();
       return {
-        ...(data as NutritionEntry),
+        ...(data as any as NutritionEntry),
         entryId: docSnap.id,
-        createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-        updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
       };
     });
 
@@ -155,18 +149,17 @@ export const nutritionService = {
     entryId: string,
     updates: Partial<NutritionEntry>
   ): Promise<void> {
-    const docRef = doc(db, `users/${userId}/nutrition`, entryId);
+    const docRef = getCollectionRef(userId).doc(entryId);
 
     const cleaned = cleanData({
       ...updates,
-      updatedAt: Timestamp.fromDate(new Date()),
+      updatedAt: firestore.Timestamp.fromDate(new Date()),
     });
 
-    await updateDoc(docRef, cleaned);
+    await docRef.update(cleaned);
   },
 
   async deleteEntry(userId: string, entryId: string): Promise<void> {
-    const docRef = doc(db, `users/${userId}/nutrition`, entryId);
-    await deleteDoc(docRef);
+    await getCollectionRef(userId).doc(entryId).delete();
   },
 };

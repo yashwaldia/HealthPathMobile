@@ -1,20 +1,5 @@
 // services/radiologyAnalysisService.ts
-
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  query, 
-  orderBy, 
-  deleteDoc, 
-  serverTimestamp,
-  Timestamp,
-  limit,
-  where
-} from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import firestore from '@react-native-firebase/firestore';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as FileSystem from 'expo-file-system/legacy';
 import Constants from 'expo-constants';
@@ -172,7 +157,7 @@ Return ONLY valid JSON. No markdown, no code blocks, no explanations outside JSO
 
     // Clean up the response
     let cleanedText = text.trim();
-    cleanedText = cleanedText.replace(/```json\n?/g, '');
+    cleanedText = cleanedText.replace(/```json/gi, '');
     cleanedText = cleanedText.replace(/```\n?/g, '');
     cleanedText = cleanedText.trim();
 
@@ -213,9 +198,9 @@ export async function checkDuplicateRadiologyAnalysis(
   fileName: string
 ): Promise<boolean> {
   try {
-    const analysesRef = collection(db, `users/${userId}/radiologyAnalyses`);
-    const q = query(analysesRef);
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await firestore()
+      .collection(`users/${userId}/radiologyAnalyses`)
+      .get();
 
     for (const docSnap of querySnapshot.docs) {
       const analysis = docSnap.data() as RadiologyAnalysis;
@@ -239,18 +224,17 @@ export async function saveRadiologyAnalysis(
   analysisData: Omit<RadiologyAnalysis, 'analysisId' | 'userId' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
   try {
-    const analysesRef = collection(db, `users/${userId}/radiologyAnalyses`);
-    const newAnalysisRef = doc(analysesRef);
+    const newAnalysisRef = firestore().collection(`users/${userId}/radiologyAnalyses`).doc();
 
     const analysis: any = {
       analysisId: newAnalysisRef.id,
       userId,
       ...analysisData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     };
 
-    await setDoc(newAnalysisRef, analysis);
+    await newAnalysisRef.set(analysis);
 
     console.log('✅ Radiology analysis saved:', newAnalysisRef.id);
     return newAnalysisRef.id;
@@ -268,10 +252,12 @@ export async function getRadiologyAnalysis(
   analysisId: string
 ): Promise<RadiologyAnalysis | null> {
   try {
-    const analysisRef = doc(db, `users/${userId}/radiologyAnalyses`, analysisId);
-    const analysisDoc = await getDoc(analysisRef);
+    const analysisDoc = await firestore()
+      .collection(`users/${userId}/radiologyAnalyses`)
+      .doc(analysisId)
+      .get();
 
-    if (!analysisDoc.exists()) {
+    if (!analysisDoc.exists) {
       return null;
     }
 
@@ -293,14 +279,15 @@ export async function getAllRadiologyAnalyses(
   limitCount?: number
 ): Promise<RadiologyAnalysis[]> {
   try {
-    const analysesRef = collection(db, `users/${userId}/radiologyAnalyses`);
-    let q = query(analysesRef, orderBy('uploadDate', 'desc'));
+    let queryRef = firestore()
+      .collection(`users/${userId}/radiologyAnalyses`)
+      .orderBy('uploadDate', 'desc');
     
     if (limitCount) {
-      q = query(analysesRef, orderBy('uploadDate', 'desc'), limit(limitCount));
+      queryRef = queryRef.limit(limitCount);
     }
 
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await queryRef.get();
     return querySnapshot.docs.map(doc => ({
       ...doc.data(),
       analysisId: doc.id,
@@ -319,8 +306,10 @@ export async function deleteRadiologyAnalysis(
   analysisId: string
 ): Promise<void> {
   try {
-    const analysisRef = doc(db, `users/${userId}/radiologyAnalyses`, analysisId);
-    await deleteDoc(analysisRef);
+    await firestore()
+      .collection(`users/${userId}/radiologyAnalyses`)
+      .doc(analysisId)
+      .delete();
     console.log('✅ Radiology analysis deleted:', analysisId);
   } catch (error) {
     console.error('Error deleting radiology analysis:', error);
@@ -336,14 +325,12 @@ export async function getAnalysesByUrgency(
   urgencyLevel: UrgencyLevel
 ): Promise<RadiologyAnalysis[]> {
   try {
-    const analysesRef = collection(db, `users/${userId}/radiologyAnalyses`);
-    const q = query(
-      analysesRef,
-      where('urgencyLevel', '==', urgencyLevel),
-      orderBy('uploadDate', 'desc')
-    );
+    const querySnapshot = await firestore()
+      .collection(`users/${userId}/radiologyAnalyses`)
+      .where('urgencyLevel', '==', urgencyLevel)
+      .orderBy('uploadDate', 'desc')
+      .get();
 
-    const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       ...doc.data(),
       analysisId: doc.id,
@@ -362,14 +349,12 @@ export async function getAnalysesByExamType(
   examType: ExamType
 ): Promise<RadiologyAnalysis[]> {
   try {
-    const analysesRef = collection(db, `users/${userId}/radiologyAnalyses`);
-    const q = query(
-      analysesRef,
-      where('examType', '==', examType),
-      orderBy('uploadDate', 'desc')
-    );
+    const querySnapshot = await firestore()
+      .collection(`users/${userId}/radiologyAnalyses`)
+      .where('examType', '==', examType)
+      .orderBy('uploadDate', 'desc')
+      .get();
 
-    const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       ...doc.data(),
       analysisId: doc.id,
@@ -389,11 +374,13 @@ export async function updateAnalysisNotes(
   notes: string
 ): Promise<void> {
   try {
-    const analysisRef = doc(db, `users/${userId}/radiologyAnalyses`, analysisId);
-    await setDoc(analysisRef, {
-      notes,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+    await firestore()
+      .collection(`users/${userId}/radiologyAnalyses`)
+      .doc(analysisId)
+      .update({
+        notes,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
     console.log('✅ Analysis notes updated');
   } catch (error) {
     console.error('Error updating notes:', error);
@@ -410,11 +397,13 @@ export async function toggleFavorite(
   isFavorite: boolean
 ): Promise<void> {
   try {
-    const analysisRef = doc(db, `users/${userId}/radiologyAnalyses`, analysisId);
-    await setDoc(analysisRef, {
-      isFavorite,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+    await firestore()
+      .collection(`users/${userId}/radiologyAnalyses`)
+      .doc(analysisId)
+      .update({
+        isFavorite,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
     console.log('✅ Favorite status toggled');
   } catch (error) {
     console.error('Error toggling favorite:', error);

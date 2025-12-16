@@ -1,13 +1,9 @@
 // context/AuthContext.tsx
 
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import auth from '@react-native-firebase/auth';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { auth } from '../config/firebaseConfig';
 import { checkProfileCompleteness, getUserProfile } from '../services/authService';
-
-// ============================================
-// INTERFACES
-// ============================================
 
 interface AuthContextType {
   user: FirebaseAuthTypes.User | null;
@@ -17,10 +13,6 @@ interface AuthContextType {
   needsProfileSetup: boolean;
   refreshProfileStatus: () => Promise<void>;
 }
-
-// ============================================
-// CONTEXT
-// ============================================
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -33,24 +25,15 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
-// ============================================
-// PROVIDER
-// ============================================
-
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isNewUser, setIsNewUser] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
 
-  // ============================================
-  // PROFILE STATUS CHECKS
-  // ============================================
-
   const checkUserProfileStatus = async (uid: string) => {
     try {
       console.log('🔍 Checking profile status for user:', uid);
-
       const userProfile = await getUserProfile(uid);
 
       if (userProfile) {
@@ -88,17 +71,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // ============================================
-  // AUTH STATE INITIALIZATION
-  // ============================================
-
   useEffect(() => {
     let isMounted = true;
-
     console.log('🚀 Initializing auth state with React Native Firebase...');
 
-    // React Native Firebase auth listener with automatic native persistence
-    const unsubscribe = auth.onAuthStateChanged(
+    const unsubscribe = auth().onAuthStateChanged(
       async (firebaseUser: FirebaseAuthTypes.User | null) => {
         if (!isMounted) return;
 
@@ -107,7 +84,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (firebaseUser) {
           console.log('✅ User authenticated:', firebaseUser.uid);
           console.log('📱 Native auth persistence: Automatic');
-          
           setUser(firebaseUser);
           await checkUserProfileStatus(firebaseUser.uid);
         } else {
@@ -129,10 +105,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const needsProfileSetup = !!user && (isNewUser || !isProfileComplete);
-
-  // ============================================
-  // CONTEXT VALUE
-  // ============================================
 
   const contextValue: AuthContextType = {
     user,

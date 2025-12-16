@@ -1,18 +1,5 @@
 // services/fitCalcService.ts
-
-import {
-  collection,
-  doc,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  getDocs,
-  deleteDoc,
-  Timestamp,
-} from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import firestore from '@react-native-firebase/firestore';
 import { FitCalcId } from '../types/fitcalc';
 
 export type FitCalcHistoryEntry = {
@@ -32,13 +19,16 @@ export async function saveFitCalcHistory(
   inputs: any,
   result: any
 ): Promise<string> {
-  const ref = collection(db, 'users', userId, 'fitcalc_history');
-  const docRef = await addDoc(ref, {
-    calculatorId,
-    inputs,
-    result,
-    savedAt: Timestamp.now(),
-  });
+  const docRef = await firestore()
+    .collection('users')
+    .doc(userId)
+    .collection('fitcalc_history')
+    .add({
+      calculatorId,
+      inputs,
+      result,
+      savedAt: firestore.Timestamp.now(),
+    });
   return docRef.id;
 }
 
@@ -50,18 +40,17 @@ export async function loadFitCalcHistory(
   calculatorId: FitCalcId,
   maxCount: number = 10
 ): Promise<FitCalcHistoryEntry[]> {
-  const ref = collection(db, 'users', userId, 'fitcalc_history');
-  const q = query(
-    ref,
-    where('calculatorId', '==', calculatorId),
-    orderBy('savedAt', 'desc'),
-    limit(maxCount)
-  );
-
-  const snapshot = await getDocs(q);
+  const snapshot = await firestore()
+    .collection('users')
+    .doc(userId)
+    .collection('fitcalc_history')
+    .where('calculatorId', '==', calculatorId)
+    .orderBy('savedAt', 'desc')
+    .limit(maxCount)
+    .get();
 
   const entries: FitCalcHistoryEntry[] = [];
-  snapshot.forEach((docSnap) => {
+  snapshot.docs.forEach((docSnap) => {
     const data = docSnap.data();
     entries.push({
       entryId: docSnap.id,
@@ -82,6 +71,10 @@ export async function deleteFitCalcHistoryEntry(
   userId: string,
   entryId: string
 ): Promise<void> {
-  const ref = doc(db, 'users', userId, 'fitcalc_history', entryId);
-  await deleteDoc(ref);
+  await firestore()
+    .collection('users')
+    .doc(userId)
+    .collection('fitcalc_history')
+    .doc(entryId)
+    .delete();
 }

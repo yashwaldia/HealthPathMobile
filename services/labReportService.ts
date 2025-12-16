@@ -1,7 +1,5 @@
 // services/labReportService.ts
-
-import { collection, doc, setDoc, getDoc, getDocs, query, where, orderBy, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import firestore from '@react-native-firebase/firestore';
 import { LabReport, UploadedFile } from '../types/upload';
 import { ReportAIAnalysis } from './reportAnalysisAIService';
 
@@ -13,11 +11,12 @@ export const checkDuplicateReport = async (
   fileName: string
 ): Promise<boolean> => {
   try {
-    const reportsRef = collection(db, `users/${userId}/lab_reports`);
-    const q = query(reportsRef);
+    const querySnapshot = await firestore()
+      .collection(`users/${userId}/lab_reports`)
+      .get();
 
-    const querySnapshot = await getDocs(q);
-    for (const docSnap of querySnapshot.docs) {
+    const docs = querySnapshot.docs;
+    for (const docSnap of docs) {
       const report = docSnap.data() as LabReport;
       if (report.files && Array.isArray(report.files)) {
         for (const file of report.files as UploadedFile[]) {
@@ -40,8 +39,7 @@ export const saveLabReport = async (
   reportData: Partial<LabReport>
 ): Promise<string> => {
   try {
-    const reportsRef = collection(db, `users/${userId}/lab_reports`);
-    const newReportRef = doc(reportsRef);
+    const newReportRef = firestore().collection(`users/${userId}/lab_reports`).doc();
 
     // Build report object without undefined fields
     const report: any = {
@@ -69,11 +67,11 @@ export const saveLabReport = async (
       report.aiInterpretation = reportData.aiInterpretation;
     }
 
-    await setDoc(newReportRef, {
+    await newReportRef.set({
       ...report,
-      uploadDate: serverTimestamp(),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      uploadDate: firestore.FieldValue.serverTimestamp(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     });
 
     return newReportRef.id;
@@ -91,10 +89,12 @@ export const getLabReport = async (
   reportId: string
 ): Promise<LabReport | null> => {
   try {
-    const reportRef = doc(db, `users/${userId}/lab_reports`, reportId);
-    const reportDoc = await getDoc(reportRef);
+    const reportDoc = await firestore()
+      .collection(`users/${userId}/lab_reports`)
+      .doc(reportId)
+      .get();
 
-    if (!reportDoc.exists()) {
+    if (!reportDoc.exists) {
       return null;
     }
 
@@ -113,9 +113,10 @@ export const getLabReport = async (
  */
 export const getAllLabReports = async (userId: string): Promise<LabReport[]> => {
   try {
-    const reportsRef = collection(db, `users/${userId}/lab_reports`);
-    const q = query(reportsRef, orderBy('uploadDate', 'desc'));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await firestore()
+      .collection(`users/${userId}/lab_reports`)
+      .orderBy('uploadDate', 'desc')
+      .get();
 
     return querySnapshot.docs.map(doc => ({
       ...doc.data(),
@@ -136,7 +137,8 @@ export const updateLabReport = async (
   updates: Partial<LabReport>
 ): Promise<void> => {
   try {
-    const reportRef = doc(db, `users/${userId}/lab_reports`, reportId);
+    const reportRef = firestore().collection(`users/${userId}/lab_reports`).doc(reportId);
+    
     // Filter out undefined values from updates
     const cleanedUpdates: any = {};
     Object.keys(updates).forEach(key => {
@@ -144,10 +146,11 @@ export const updateLabReport = async (
         cleanedUpdates[key] = updates[key as keyof LabReport];
       }
     });
-    await setDoc(reportRef, {
+
+    await reportRef.update({
       ...cleanedUpdates,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+    });
   } catch (error) {
     console.error('Error updating lab report:', error);
     throw error;
@@ -162,8 +165,10 @@ export const deleteLabReport = async (
   reportId: string
 ): Promise<void> => {
   try {
-    const reportRef = doc(db, `users/${userId}/lab_reports`, reportId);
-    await deleteDoc(reportRef);
+    await firestore()
+      .collection(`users/${userId}/lab_reports`)
+      .doc(reportId)
+      .delete();
   } catch (error) {
     console.error('Error deleting lab report:', error);
     throw error;
@@ -204,14 +209,13 @@ export const getReportsByDateRange = async (
   endDate: string
 ): Promise<LabReport[]> => {
   try {
-    const reportsRef = collection(db, `users/${userId}/lab_reports`);
-    const q = query(
-      reportsRef,
-      where('testDate', '>=', startDate),
-      where('testDate', '<=', endDate),
-      orderBy('testDate', 'desc')
-    );
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await firestore()
+      .collection(`users/${userId}/lab_reports`)
+      .where('testDate', '>=', startDate)
+      .where('testDate', '<=', endDate)
+      .orderBy('testDate', 'desc')
+      .get();
+
     return querySnapshot.docs.map(doc => ({
       ...doc.data(),
       reportId: doc.id,
@@ -224,7 +228,6 @@ export const getReportsByDateRange = async (
 
 /**
  * Save AI analysis to existing lab report
- * This function updates a report with AI-generated analysis results
  */
 export const saveAIAnalysisToReport = async (
   userId: string,
@@ -234,7 +237,7 @@ export const saveAIAnalysisToReport = async (
   try {
     console.log('Saving AI analysis to report:', reportId);
 
-    const reportRef = doc(db, `users/${userId}/lab_reports`, reportId);
+    const reportRef = firestore().collection(`users/${userId}/lab_reports`).doc(reportId);
 
     // Convert ReportAIAnalysis to aiInterpretation format
     const aiInterpretation = {
@@ -248,11 +251,11 @@ export const saveAIAnalysisToReport = async (
     };
 
     // Update report with AI analysis and set status to 'analyzed'
-    await setDoc(reportRef, {
+    await reportRef.update({
       aiInterpretation,
       status: 'analyzed',
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+    });
 
     console.log('AI analysis saved successfully');
   } catch (error) {
@@ -269,13 +272,13 @@ export const removeAIAnalysisFromReport = async (
   reportId: string
 ): Promise<void> => {
   try {
-    const reportRef = doc(db, `users/${userId}/lab_reports`, reportId);
+    const reportRef = firestore().collection(`users/${userId}/lab_reports`).doc(reportId);
     
-    await setDoc(reportRef, {
+    await reportRef.update({
       aiInterpretation: null,
       status: 'pending',
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+    });
 
     console.log('AI analysis removed successfully');
   } catch (error) {
@@ -289,13 +292,11 @@ export const removeAIAnalysisFromReport = async (
  */
 export const getPendingAnalysisReports = async (userId: string): Promise<LabReport[]> => {
   try {
-    const reportsRef = collection(db, `users/${userId}/lab_reports`);
-    const q = query(
-      reportsRef,
-      where('status', '==', 'pending'),
-      orderBy('uploadDate', 'desc')
-    );
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await firestore()
+      .collection(`users/${userId}/lab_reports`)
+      .where('status', '==', 'pending')
+      .orderBy('uploadDate', 'desc')
+      .get();
 
     return querySnapshot.docs.map(doc => ({
       ...doc.data(),
@@ -312,13 +313,11 @@ export const getPendingAnalysisReports = async (userId: string): Promise<LabRepo
  */
 export const getAnalyzedReports = async (userId: string): Promise<LabReport[]> => {
   try {
-    const reportsRef = collection(db, `users/${userId}/lab_reports`);
-    const q = query(
-      reportsRef,
-      where('status', '==', 'analyzed'),
-      orderBy('uploadDate', 'desc')
-    );
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await firestore()
+      .collection(`users/${userId}/lab_reports`)
+      .where('status', '==', 'analyzed')
+      .orderBy('uploadDate', 'desc')
+      .get();
 
     return querySnapshot.docs.map(doc => ({
       ...doc.data(),

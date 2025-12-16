@@ -1,19 +1,13 @@
 /**
  * Profile Service - Firebase Firestore CRUD Operations
  * Firestore Path: users/{userId}
+ * 
+ * Modern React Native Firebase v23 Implementation
  */
 
-import { 
-  getFirestore, 
-  doc, 
-  getDoc, 
-  setDoc, 
-  updateDoc,
-  Timestamp,
-} from 'firebase/firestore';
-import { UserProfile, ProfileData, ProfileUpdateData, getDefaultProfile } from '../types/profile';
-
-const db = getFirestore();
+import type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
+import { ProfileData, ProfileUpdateData, UserProfile, getDefaultProfile } from '../types/profile';
 
 export const profileService = {
   /**
@@ -21,12 +15,22 @@ export const profileService = {
    */
   async getProfile(userId: string): Promise<UserProfile | null> {
     try {
-      const docRef = doc(db, 'users', userId);
-      const docSnap = await getDoc(docRef);
+      const docSnap = await firestore()
+        .collection('users')
+        .doc(userId)
+        .get();
       
+      // ✅ CORRECT: .exists() is a METHOD in React Native Firebase
       if (docSnap.exists()) {
         console.log('✅ Profile loaded successfully');
-        return docSnap.data() as UserProfile;
+        const data = docSnap.data();
+        
+        // ✅ Convert Firestore timestamps to ISO strings (matching authService pattern)
+        return {
+          ...data,
+          createdAt: data?.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data?.createdAt || new Date().toISOString()),
+          lastActive: data?.lastActive?.toDate ? data.lastActive.toDate().toISOString() : (data?.lastActive || new Date().toISOString()),
+        } as UserProfile;
       }
       
       console.log('⚠️ Profile not found');
@@ -45,7 +49,6 @@ export const profileService = {
     initialData: { email: string; displayName: string; photoURL: string | null; }
   ): Promise<void> {
     try {
-      const docRef = doc(db, 'users', userId);
       let timezone = 'UTC';
       
       try {
@@ -66,7 +69,11 @@ export const profileService = {
         profile: getDefaultProfile(),
       };
 
-      await setDoc(docRef, newProfile);
+      await firestore()
+        .collection('users')
+        .doc(userId)
+        .set(newProfile);
+        
       console.log('✅ Profile created successfully');
     } catch (error) {
       console.error('❌ Error creating profile:', error);
@@ -79,8 +86,10 @@ export const profileService = {
    */
   async updateProfile(userId: string, data: ProfileUpdateData): Promise<void> {
     try {
-      const docRef = doc(db, 'users', userId);
-      const updateData: any = { ...data, lastActive: new Date().toISOString() };
+      const updateData: any = { 
+        ...data, 
+        lastActive: new Date().toISOString() 
+      };
 
       if (data.profile) {
         const currentProfile = await this.getProfile(userId);
@@ -89,7 +98,11 @@ export const profileService = {
         }
       }
 
-      await updateDoc(docRef, updateData);
+      await firestore()
+        .collection('users')
+        .doc(userId)
+        .update(updateData);
+        
       console.log('✅ Profile updated successfully');
     } catch (error) {
       console.error('❌ Error updating profile:', error);
@@ -102,15 +115,17 @@ export const profileService = {
    */
   async updateProfileData(userId: string, profileData: Partial<ProfileData>): Promise<void> {
     try {
-      const docRef = doc(db, 'users', userId);
       const currentProfile = await this.getProfile(userId);
       
       if (!currentProfile) throw new Error('Profile not found');
 
-      await updateDoc(docRef, {
-        profile: { ...currentProfile.profile, ...profileData },
-        lastActive: new Date().toISOString(),
-      });
+      await firestore()
+        .collection('users')
+        .doc(userId)
+        .update({
+          profile: { ...currentProfile.profile, ...profileData },
+          lastActive: new Date().toISOString(),
+        });
 
       console.log('✅ Profile data updated successfully');
     } catch (error) {
@@ -124,8 +139,12 @@ export const profileService = {
    */
   async updateLastActive(userId: string): Promise<void> {
     try {
-      const docRef = doc(db, 'users', userId);
-      await updateDoc(docRef, { lastActive: new Date().toISOString() });
+      await firestore()
+        .collection('users')
+        .doc(userId)
+        .update({ 
+          lastActive: new Date().toISOString() 
+        });
     } catch (error) {
       console.error('❌ Error updating last active:', error);
     }
@@ -136,11 +155,14 @@ export const profileService = {
    */
   async updatePushToken(userId: string, pushToken: string | null): Promise<void> {
     try {
-      const docRef = doc(db, 'users', userId);
-      await updateDoc(docRef, {
-        pushToken,
-        lastActive: new Date().toISOString(),
-      });
+      await firestore()
+        .collection('users')
+        .doc(userId)
+        .update({
+          pushToken,
+          lastActive: new Date().toISOString(),
+        });
+        
       console.log('✅ Push token updated successfully');
     } catch (error) {
       console.error('❌ Error updating push token:', error);
@@ -153,11 +175,14 @@ export const profileService = {
    */
   async updateTimezone(userId: string, timezone: string): Promise<void> {
     try {
-      const docRef = doc(db, 'users', userId);
-      await updateDoc(docRef, {
-        timezone,
-        lastActive: new Date().toISOString(),
-      });
+      await firestore()
+        .collection('users')
+        .doc(userId)
+        .update({
+          timezone,
+          lastActive: new Date().toISOString(),
+        });
+        
       console.log('✅ Timezone updated successfully');
     } catch (error) {
       console.error('❌ Error updating timezone:', error);
@@ -186,12 +211,12 @@ export const profileService = {
   /**
    * Format date for display - handles Firestore Timestamp and ISO strings
    */
-  formatDate(dateInput: string | Timestamp | Date | any): string {
+  formatDate(dateInput: string | FirebaseFirestoreTypes.Timestamp | Date | any): string {
     if (!dateInput) return 'Not set';
     
     let date: Date;
     
-    // Handle Firestore Timestamp object
+    // Handle Firestore Timestamp object (React Native Firebase)
     if (dateInput?.toDate && typeof dateInput.toDate === 'function') {
       date = dateInput.toDate();
     } 
@@ -209,4 +234,40 @@ export const profileService = {
       day: 'numeric',
     });
   },
+
+  /**
+   * Listen to profile changes in real-time (optional)
+   */
+  subscribeToProfile(
+    userId: string, 
+    onUpdate: (profile: UserProfile | null) => void
+  ): () => void {
+    const unsubscribe = firestore()
+      .collection('users')
+      .doc(userId)
+      .onSnapshot(
+        (docSnap) => {
+          // ✅ CORRECT: .exists() is a METHOD
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const profile: UserProfile = {
+              ...data,
+              createdAt: data?.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data?.createdAt || new Date().toISOString()),
+              lastActive: data?.lastActive?.toDate ? data.lastActive.toDate().toISOString() : (data?.lastActive || new Date().toISOString()),
+            } as UserProfile;
+            onUpdate(profile);
+          } else {
+            onUpdate(null);
+          }
+        },
+        (error) => {
+          console.error('❌ Error listening to profile:', error);
+          onUpdate(null);
+        }
+      );
+
+    return unsubscribe;
+  },
 };
+
+export default profileService;

@@ -1,7 +1,6 @@
 // services/uploadService.ts
-
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage, auth } from '../config/firebaseConfig';
+import storage from '@react-native-firebase/storage';
+import auth from '@react-native-firebase/auth';
 import { UploadedFile, UploadProgress } from '../types/upload';
 
 /**
@@ -27,30 +26,23 @@ export const uploadFileToStorage = async (
 ): Promise<UploadedFile> => {
   try {
     // ✅ Validate authentication first
-    if (!auth.currentUser) {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
       throw new Error('User must be authenticated to upload files');
     }
 
     console.log('🔐 Authentication Check:');
-    console.log('  Current User:', auth.currentUser.uid);
+    console.log('  Current User:', currentUser.uid);
     console.log('  Provided User ID:', userId);
-    console.log('  Match:', auth.currentUser.uid === userId);
+    console.log('  Match:', currentUser.uid === userId);
 
     // ✅ Validate inputs
     if (!userId) {
       throw new Error('User ID is required for upload');
     }
 
-    if (auth.currentUser.uid !== userId) {
+    if (currentUser.uid !== userId) {
       throw new Error('User ID mismatch - authentication error');
-    }
-    
-    if (!storage) {
-      throw new Error('Firebase Storage is not initialized');
-    }
-
-    if (!storage.app.options.storageBucket) {
-      throw new Error('Storage bucket is not configured');
     }
 
     // Determine file type from filename
@@ -74,13 +66,11 @@ export const uploadFileToStorage = async (
     console.log('  Sanitized Name:', sanitizedFileName);
     console.log('  Storage Path:', storagePath);
     console.log('  MIME Type:', mimeType);
-    console.log('  Storage Bucket:', storage.app.options.storageBucket);
     
-    const storageRef = ref(storage, storagePath);
+    const storageRef = storage().ref(storagePath);
     console.log('  Storage Ref Created:', storageRef.fullPath);
-    console.log('  Storage Ref Bucket:', storageRef.bucket);
 
-    // Fetch the file as a blob
+    // Fetch the file as a blob (React Native standard)
     console.log('  Fetching file from:', fileUri);
     const response = await fetch(fileUri);
     
@@ -106,9 +96,9 @@ export const uploadFileToStorage = async (
       throw new Error(`File size ${formatFileSize(fileSize)} exceeds limit of ${formatFileSize(MAX_SIZE)}`);
     }
 
-    // Upload with progress tracking
+    // Upload with progress tracking using putFile (React Native optimized)
     console.log('  Starting upload...');
-    const uploadTask = uploadBytesResumable(storageRef, blob, {
+    const uploadTask = storageRef.put(blob, {
       contentType: mimeType,
       customMetadata: {
         uploadedBy: userId,
@@ -119,81 +109,72 @@ export const uploadFileToStorage = async (
     });
 
     return new Promise((resolve, reject) => {
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          // Progress tracking
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log(`  Upload Progress: ${Math.round(progress)}%`);
-          console.log(`  Bytes: ${snapshot.bytesTransferred} / ${snapshot.totalBytes}`);
+      uploadTask.on('state_changed', (taskSnapshot) => {
+        // Progress tracking
+        const progress = (taskSnapshot.bytesTransferred / taskSnapshot.totalBytes) * 100;
+        console.log(`  Upload Progress: ${Math.round(progress)}%`);
+        console.log(`  Bytes: ${taskSnapshot.bytesTransferred} / ${taskSnapshot.totalBytes}`);
+        
+        if (onProgress) {
+          onProgress({
+            status: 'uploading',
+            progress,
+            message: `Uploading... ${Math.round(progress)}%`,
+            currentFile: fileName,
+          });
+        }
+      });
+
+      uploadTask.then(async () => {
+        // Upload complete - get download URL
+        try {
+          console.log('  ✅ Upload Complete! Getting download URL...');
+          const downloadURL = await storageRef.getDownloadURL();
+          console.log('  Download URL:', downloadURL);
           
+          const uploadedFile: UploadedFile = {
+            fileName: sanitizedFileName,
+            fileURL: downloadURL,
+            fileType,
+            fileSize,
+            mimeType,
+            uploadedAt: new Date(),
+          };
+
           if (onProgress) {
             onProgress({
-              status: 'uploading',
-              progress,
-              message: `Uploading... ${Math.round(progress)}%`,
+              status: 'complete',
+              progress: 100,
+              message: 'Upload complete',
               currentFile: fileName,
             });
           }
-        },
-        (error: any) => {
-          // Enhanced error handling
-          console.error('❌ Upload Error:', error);
-          console.error('  Error Code:', error.code);
-          console.error('  Error Message:', error.message);
-          console.error('  Server Response:', error.serverResponse);
-          console.error('  Full Error Object:', JSON.stringify(error, null, 2));
-          
-          // Log auth state during error
-          console.error('  Auth State:', auth.currentUser ? 'Authenticated' : 'Not Authenticated');
-          if (auth.currentUser) {
-            console.error('  Auth UID:', auth.currentUser.uid);
-          }
-          
-          if (onProgress) {
-            onProgress({
-              status: 'error',
-              progress: 0,
-              message: `Upload failed: ${error.message}`,
-              error: error.message,
-            });
-          }
-          
+
+          console.log('  ✅ Upload fully complete!');
+          resolve(uploadedFile);
+        } catch (error) {
+          console.error('❌ Error getting download URL:', error);
           reject(error);
-        },
-        async () => {
-          // Upload complete - get download URL
-          try {
-            console.log('  ✅ Upload Complete! Getting download URL...');
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            console.log('  Download URL:', downloadURL);
-            
-            const uploadedFile: UploadedFile = {
-              fileName: sanitizedFileName,
-              fileURL: downloadURL,
-              fileType,
-              fileSize,
-              mimeType,
-              uploadedAt: new Date(),
-            };
-
-            if (onProgress) {
-              onProgress({
-                status: 'complete',
-                progress: 100,
-                message: 'Upload complete',
-                currentFile: fileName,
-              });
-            }
-
-            console.log('  ✅ Upload fully complete!');
-            resolve(uploadedFile);
-          } catch (error) {
-            console.error('❌ Error getting download URL:', error);
-            reject(error);
-          }
         }
-      );
+      });
+
+      uploadTask.catch((error) => {
+        // Enhanced error handling
+        console.error('❌ Upload Error:', error);
+        console.error('  Error Code:', error.code);
+        console.error('  Error Message:', error.message);
+        
+        if (onProgress) {
+          onProgress({
+            status: 'error',
+            progress: 0,
+            message: `Upload failed: ${error.message}`,
+            error: error.message,
+          });
+        }
+        
+        reject(error);
+      });
     });
   } catch (error: any) {
     console.error('❌ Upload Service Error:', error);
@@ -245,12 +226,14 @@ export const uploadMultipleFiles = async (
  */
 export const deleteFileFromStorage = async (fileURL: string): Promise<void> => {
   try {
-    if (!auth.currentUser) {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
       throw new Error('User must be authenticated to delete files');
     }
 
-    const fileRef = ref(storage, fileURL);
-    await deleteObject(fileRef);
+    // Extract path from URL for React Native Firebase
+    const path = decodeURIComponent(fileURL.split('/o/')[1]?.split('?')[0] || fileURL);
+    await storage().ref(path).delete();
     console.log('✅ File deleted successfully:', fileURL);
   } catch (error) {
     console.error('❌ Error deleting file:', error);
@@ -263,18 +246,8 @@ export const deleteFileFromStorage = async (fileURL: string): Promise<void> => {
  */
 export const verifyStorageConfig = (): boolean => {
   try {
-    if (!storage) {
-      console.error('❌ Storage not initialized');
-      return false;
-    }
-
-    if (!storage.app.options.storageBucket) {
-      console.error('❌ Storage bucket not configured');
-      return false;
-    }
-
     console.log('✅ Storage configuration verified');
-    console.log('  Bucket:', storage.app.options.storageBucket);
+    console.log('  App Name:', storage().app.name);
     return true;
   } catch (error) {
     console.error('❌ Error verifying storage config:', error);

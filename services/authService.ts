@@ -1,17 +1,8 @@
 // services/authService.ts
 
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
-import rnFirebaseAuth from '@react-native-firebase/auth';
-import {
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
-  signOut,
-  updateProfile,
-  User,
-} from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
-import { auth, db } from '../config/firebaseConfig';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 
 // ============================================
 // INTERFACES & TYPES
@@ -23,7 +14,7 @@ export interface UserProfile {
   displayName: string;
   createdAt: Date;
   photoURL?: string | null;
-  phoneNumber?: string;
+  phoneNumber?: string | null;
   isProfileComplete: boolean;
   isNewUser?: boolean;
   hasPassword?: boolean;
@@ -76,6 +67,8 @@ const getErrorMessage = (errorCode: string): string => {
       return 'Invalid verification code. Please try again.';
     case 'auth/session-expired':
       return 'Verification session expired. Please request a new code.';
+    case 'auth/credential-already-in-use':
+      return 'This email is already registered. Please use a different email or login instead.';
     default:
       return 'An error occurred. Please try again.';
   }
@@ -87,14 +80,17 @@ const getErrorMessage = (errorCode: string): string => {
 
 export const checkProfileCompleteness = async (uid: string): Promise<boolean> => {
   try {
-    const userDocRef = doc(db, 'users', uid);
-    const userDocSnap = await getDoc(userDocRef);
+    const userDoc = await firestore().collection('users').doc(uid).get();
 
-    if (!userDocSnap.exists()) {
+    // ✅ FIXED: .exists() is a method in React Native Firebase v20+
+    if (!userDoc.exists()) {
       return false;
     }
 
-    const userData = userDocSnap.data();
+    const userData = userDoc.data();
+    if (!userData) {
+      return false;
+    }
 
     const requiredFields = [
       userData.displayName,
@@ -117,8 +113,7 @@ export const checkProfileCompleteness = async (uid: string): Promise<boolean> =>
 
 export const markProfileAsComplete = async (uid: string): Promise<void> => {
   try {
-    const userDocRef = doc(db, 'users', uid);
-    await updateDoc(userDocRef, {
+    await firestore().collection('users').doc(uid).update({
       isProfileComplete: true,
       isNewUser: false,
     });
@@ -133,9 +128,7 @@ export const completeProfileSetup = async (
   profileData: ProfileSetupData
 ): Promise<void> => {
   try {
-    const userDocRef = doc(db, 'users', uid);
-
-    await updateDoc(userDocRef, {
+    await firestore().collection('users').doc(uid).update({
       displayName: profileData.displayName,
       email: profileData.email,
       dateOfBirth: profileData.dateOfBirth ?? null,
@@ -146,13 +139,17 @@ export const completeProfileSetup = async (
       weight: profileData.weight ?? null,
       isProfileComplete: true,
       isNewUser: false,
-      updatedAt: new Date(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     });
 
-    if (profileData.displayName && auth.currentUser) {
-      await updateProfile(auth.currentUser, {
-        displayName: profileData.displayName,
-      });
+    // Update display name in Auth
+    if (profileData.displayName) {
+      const currentUser = auth().currentUser;
+      if (currentUser) {
+        await currentUser.updateProfile({
+          displayName: profileData.displayName,
+        });
+      }
     }
   } catch (error: any) {
     console.error('❌ Complete profile setup error:', error);
@@ -168,18 +165,20 @@ export const signUpWithEmail = async (
   email: string,
   password: string,
   displayName: string
-): Promise<User> => {
+): Promise<FirebaseAuthTypes.User> => {
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const userCredential = await auth().createUserWithEmailAndPassword(email, password);
     const user = userCredential.user;
 
-    await updateProfile(user, { displayName });
+    // Update display name
+    await user.updateProfile({ displayName });
 
+    // Create user document in Firestore
     const userDoc = {
       uid: user.uid,
       email: user.email,
       displayName,
-      createdAt: new Date(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
       photoURL: null,
       phoneNumber: null,
       isNewUser: true,
@@ -187,8 +186,9 @@ export const signUpWithEmail = async (
       hasPassword: true,
     };
 
-    await setDoc(doc(db, 'users', user.uid), userDoc);
+    await firestore().collection('users').doc(user.uid).set(userDoc);
 
+    console.log('✅ Email signup successful');
     return user;
   } catch (error: any) {
     console.error('❌ Email sign up error:', error.code, error.message);
@@ -197,25 +197,30 @@ export const signUpWithEmail = async (
   }
 };
 
-export const signInWithEmail = async (email: string, password: string): Promise<User> => {
+export const signInWithEmail = async (
+  email: string,
+  password: string
+): Promise<FirebaseAuthTypes.User> => {
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await auth().signInWithEmailAndPassword(email, password);
     const user = userCredential.user;
 
+    // Check profile completeness
     const isComplete = await checkProfileCompleteness(user.uid);
 
     if (isComplete) {
-      const userDocRef = doc(db, 'users', user.uid);
-      const userDocSnap = await getDoc(userDocRef);
+      const userDoc = await firestore().collection('users').doc(user.uid).get();
 
-      if (userDocSnap.exists() && userDocSnap.data().isProfileComplete !== true) {
-        await updateDoc(userDocRef, {
+      // ✅ FIXED: .exists() is a method in React Native Firebase v20+
+      if (userDoc.exists() && userDoc.data()?.isProfileComplete !== true) {
+        await firestore().collection('users').doc(user.uid).update({
           isProfileComplete: true,
           isNewUser: false,
         });
       }
     }
 
+    console.log('✅ Email login successful');
     return user;
   } catch (error: any) {
     console.error('❌ Sign in error:', error.code, error.message);
@@ -225,7 +230,7 @@ export const signInWithEmail = async (email: string, password: string): Promise<
 };
 
 // ============================================
-// PHONE AUTHENTICATION (React Native Firebase)
+// PHONE AUTHENTICATION
 // ============================================
 
 export const validatePhoneNumber = (phoneNumber: string): boolean => {
@@ -233,10 +238,12 @@ export const validatePhoneNumber = (phoneNumber: string): boolean => {
   return phoneRegex.test(phoneNumber);
 };
 
-export const sendPhoneOTP = async (phoneNumber: string): Promise<FirebaseAuthTypes.ConfirmationResult> => {
+export const sendPhoneOTP = async (
+  phoneNumber: string
+): Promise<FirebaseAuthTypes.ConfirmationResult> => {
   try {
     console.log('📞 Sending OTP to:', phoneNumber);
-    const confirmation = await rnFirebaseAuth().signInWithPhoneNumber(phoneNumber);
+    const confirmation = await auth().signInWithPhoneNumber(phoneNumber);
     console.log('✅ OTP sent successfully');
     return confirmation;
   } catch (error: any) {
@@ -249,50 +256,49 @@ export const verifyPhoneOTPForSignup = async (
   confirmation: FirebaseAuthTypes.ConfirmationResult,
   verificationCode: string,
   credentials: PhoneSignupCredentials
-): Promise<User> => {
+): Promise<FirebaseAuthTypes.User> => {
   try {
     console.log('🔐 Verifying OTP for signup...');
 
-    // Confirm the OTP with React Native Firebase
-    const userCredential = await confirmation.confirm(verificationCode);
-    
-    // Add null check for TypeScript
-    if (!userCredential || !userCredential.user) {
+    // Step 1: Confirm the OTP
+    const phoneUserCredential = await confirmation.confirm(verificationCode);
+
+    if (!phoneUserCredential || !phoneUserCredential.user) {
       throw new Error('Failed to verify OTP. Please try again.');
     }
-    
-    const phoneUser = userCredential.user;
 
-    console.log('✅ Phone verified, creating account...');
+    const phoneUser = phoneUserCredential.user;
+    console.log('✅ Phone verified:', phoneUser.phoneNumber);
 
-    // Create email/password account with Firebase JS SDK
-    const emailUserCredential = await createUserWithEmailAndPassword(
-      auth,
+    // Step 2: Link email/password to the phone-authenticated user
+    const emailCredential = auth.EmailAuthProvider.credential(
       credentials.email,
       credentials.password
     );
-    const user = emailUserCredential.user;
 
-    // Update display name
-    await updateProfile(user, { displayName: credentials.displayName });
+    await phoneUser.linkWithCredential(emailCredential);
+    console.log('✅ Email/password linked to phone account');
 
-    // Create user document
+    // Step 3: Update display name
+    await phoneUser.updateProfile({ displayName: credentials.displayName });
+
+    // Step 4: Create user document in Firestore
     const userDoc = {
-      uid: user.uid,
-      email: user.email,
+      uid: phoneUser.uid,
+      email: credentials.email,
       displayName: credentials.displayName,
       phoneNumber: phoneUser.phoneNumber,
-      createdAt: new Date(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
       photoURL: null,
       isNewUser: true,
       isProfileComplete: false,
       hasPassword: true,
     };
 
-    await setDoc(doc(db, 'users', user.uid), userDoc);
+    await firestore().collection('users').doc(phoneUser.uid).set(userDoc);
 
     console.log('✅ Account created successfully');
-    return user;
+    return phoneUser;
   } catch (error: any) {
     console.error('❌ Verify OTP for signup error:', error);
 
@@ -309,30 +315,28 @@ export const verifyPhoneOTPForSignup = async (
   }
 };
 
-
 export const verifyPhoneOTPForLogin = async (
   confirmation: FirebaseAuthTypes.ConfirmationResult,
   verificationCode: string
-): Promise<User> => {
+): Promise<FirebaseAuthTypes.User> => {
   try {
     console.log('🔐 Verifying OTP for login...');
 
     // Confirm the OTP
     const userCredential = await confirmation.confirm(verificationCode);
-    
-    // Add null check for TypeScript
+
     if (!userCredential || !userCredential.user) {
       throw new Error('Failed to verify OTP. Please try again.');
     }
-    
-    const phoneUser = userCredential.user;
 
+    const phoneUser = userCredential.user;
     console.log('✅ Phone verified');
 
     // Check if user exists in Firestore
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('phoneNumber', '==', phoneUser.phoneNumber));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await firestore()
+      .collection('users')
+      .where('phoneNumber', '==', phoneUser.phoneNumber)
+      .get();
 
     if (querySnapshot.empty) {
       throw new Error('No account found with this phone number. Please sign up first.');
@@ -343,15 +347,14 @@ export const verifyPhoneOTPForLogin = async (
     // Check profile completeness
     const isComplete = await checkProfileCompleteness(userDocData.uid);
     if (isComplete) {
-      const userDocRef = doc(db, 'users', userDocData.uid);
-      await updateDoc(userDocRef, {
+      await firestore().collection('users').doc(userDocData.uid).update({
         isProfileComplete: true,
         isNewUser: false,
       });
     }
 
-    // Return the Firebase Auth user (converting from RN Firebase to JS SDK format)
-    return phoneUser as unknown as User;
+    console.log('✅ Phone login successful');
+    return phoneUser;
   } catch (error: any) {
     console.error('❌ Verify OTP for login error:', error);
 
@@ -372,52 +375,22 @@ export const verifyPhoneOTPForLogin = async (
   }
 };
 
-
-export const verifyPhoneOTP = verifyPhoneOTPForSignup;
-
-export const signUpWithPhone = async (phoneNumber: string): Promise<FirebaseAuthTypes.ConfirmationResult> => {
-  try {
-    console.log('📞 Initiating phone signup for:', phoneNumber);
-    const confirmation = await rnFirebaseAuth().signInWithPhoneNumber(phoneNumber);
-    console.log('✅ OTP sent for signup');
-    return confirmation;
-  } catch (error: any) {
-    console.error('❌ Phone signup error:', error);
-    throw new Error(error.message || 'Failed to send OTP. Please try again.');
-  }
-};
-
-export const linkPhoneToAccount = async (user: User, phoneNumber: string): Promise<FirebaseAuthTypes.ConfirmationResult> => {
-  try {
-    console.log('🔗 Linking phone to account:', phoneNumber);
-    const confirmation = await rnFirebaseAuth().signInWithPhoneNumber(phoneNumber);
-    console.log('✅ OTP sent for phone linking');
-    return confirmation;
-  } catch (error: any) {
-    console.error('❌ Link phone error:', error);
-    throw new Error(error.message || 'Failed to link phone number.');
-  }
-};
-
-// ============================================
-// PHONE + PASSWORD LOGIN (NO OTP)
-// ============================================
-
 export const signInWithPhoneAndPassword = async (
   phoneNumber: string,
   password: string
-): Promise<User> => {
+): Promise<FirebaseAuthTypes.User> => {
   try {
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('phoneNumber', '==', phoneNumber));
-    const querySnapshot = await getDocs(q);
+    // Find user by phone number in Firestore
+    const querySnapshot = await firestore()
+      .collection('users')
+      .where('phoneNumber', '==', phoneNumber)
+      .get();
 
     if (querySnapshot.empty) {
       throw new Error('No account found with this phone number. Please sign up first.');
     }
 
-    const userDoc = querySnapshot.docs[0];
-    const userData = userDoc.data();
+    const userData = querySnapshot.docs[0].data();
 
     if (!userData.email) {
       throw new Error('No email linked to this account. Please contact support.');
@@ -427,18 +400,20 @@ export const signInWithPhoneAndPassword = async (
       throw new Error('No password set for this account. Please use OTP login or contact support.');
     }
 
-    const userCredential = await signInWithEmailAndPassword(auth, userData.email, password);
+    // Sign in with email and password
+    const userCredential = await auth().signInWithEmailAndPassword(userData.email, password);
     const user = userCredential.user;
 
+    // Check profile completeness
     const isComplete = await checkProfileCompleteness(user.uid);
     if (isComplete) {
-      const userDocRef = doc(db, 'users', user.uid);
-      await updateDoc(userDocRef, {
+      await firestore().collection('users').doc(user.uid).update({
         isProfileComplete: true,
         isNewUser: false,
       });
     }
 
+    console.log('✅ Phone + password login successful');
     return user;
   } catch (error: any) {
     console.error('❌ Phone + password login error:', error);
@@ -468,9 +443,8 @@ export const signInWithPhoneAndPassword = async (
 
 export const logOut = async (): Promise<void> => {
   try {
-    // Sign out from both Firebase JS SDK and React Native Firebase
-    await signOut(auth);
-    await rnFirebaseAuth().signOut();
+    await auth().signOut();
+    console.log('✅ User signed out successfully');
   } catch (error: any) {
     console.error('❌ Sign out error:', error.message);
     throw new Error('Failed to sign out. Please try again.');
@@ -479,7 +453,8 @@ export const logOut = async (): Promise<void> => {
 
 export const resetPassword = async (email: string): Promise<void> => {
   try {
-    await sendPasswordResetEmail(auth, email);
+    await auth().sendPasswordResetEmail(email);
+    console.log('✅ Password reset email sent');
   } catch (error: any) {
     console.error('❌ Password reset error:', error.code, error.message);
     const userMessage = getErrorMessage(error.code);
@@ -489,11 +464,15 @@ export const resetPassword = async (email: string): Promise<void> => {
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
   try {
-    const docRef = doc(db, 'users', uid);
-    const docSnap = await getDoc(docRef);
+    const docSnap = await firestore().collection('users').doc(uid).get();
 
+    // ✅ FIXED: .exists() is a method in React Native Firebase v20+
     if (docSnap.exists()) {
-      return docSnap.data() as UserProfile;
+      const data = docSnap.data();
+      return {
+        ...data,
+        createdAt: data?.createdAt?.toDate() || new Date(),
+      } as UserProfile;
     }
     return null;
   } catch (error: any) {
@@ -510,13 +489,10 @@ export const authService = {
   signUpWithEmail,
   signInWithEmail,
   sendPhoneOTP,
-  verifyPhoneOTP,
   verifyPhoneOTPForSignup,
   verifyPhoneOTPForLogin,
-  signUpWithPhone,
   signInWithPhoneAndPassword,
   validatePhoneNumber,
-  linkPhoneToAccount,
   checkProfileCompleteness,
   markProfileAsComplete,
   completeProfileSetup,

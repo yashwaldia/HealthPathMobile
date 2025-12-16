@@ -1,17 +1,5 @@
 // services/appNotificationService.ts
-import {
-  addDoc,
-  collection,
-  doc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-  writeBatch,
-} from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import firestore from '@react-native-firebase/firestore';
 
 export type AppNotificationType =
   | 'vitals'
@@ -40,7 +28,11 @@ const cleanData = (data: any): any => {
   const cleaned: any = {};
   Object.keys(data).forEach((key) => {
     if (data[key] !== undefined) {
-      if (typeof data[key] === 'object' && data[key] !== null && !Array.isArray(data[key])) {
+      if (
+        typeof data[key] === 'object' &&
+        data[key] !== null &&
+        !Array.isArray(data[key])
+      ) {
         cleaned[key] = cleanData(data[key]);
       } else {
         cleaned[key] = data[key];
@@ -50,6 +42,12 @@ const cleanData = (data: any): any => {
   return Object.keys(cleaned).length > 0 ? cleaned : null;
 };
 
+const getNotificationsCollection = (userId: string) =>
+  firestore()
+    .collection('users')
+    .doc(userId)
+    .collection('notifications');
+
 /**
  * Fetch notifications for a specific user
  */
@@ -57,9 +55,10 @@ export const getNotifications = async (
   userId: string
 ): Promise<AppNotification[]> => {
   try {
-    const notificationsRef = collection(db, 'users', userId, 'notifications');
-    const q = query(notificationsRef, orderBy('timestamp', 'desc'), limit(50));
-    const snapshot = await getDocs(q);
+    const snapshot = await getNotificationsCollection(userId)
+      .orderBy('timestamp', 'desc')
+      .limit(50)
+      .get();
 
     return snapshot.docs.map((d) => {
       const data = d.data() as any;
@@ -78,10 +77,14 @@ export const getNotifications = async (
 /**
  * Mark a single notification as read
  */
-export const markAsRead = async (userId: string, notificationId: string) => {
+export const markAsRead = async (
+  userId: string,
+  notificationId: string
+): Promise<void> => {
   try {
-    const notificationRef = doc(db, 'users', userId, 'notifications', notificationId);
-    await updateDoc(notificationRef, { read: true });
+    await getNotificationsCollection(userId)
+      .doc(notificationId)
+      .update({ read: true });
   } catch (error) {
     console.error('Error marking notification as read:', error);
   }
@@ -90,14 +93,14 @@ export const markAsRead = async (userId: string, notificationId: string) => {
 /**
  * Clear (delete) all notifications for a user
  */
-export const clearAllNotifications = async (userId: string) => {
+export const clearAllNotifications = async (userId: string): Promise<void> => {
   try {
-    const notificationsRef = collection(db, 'users', userId, 'notifications');
-    const snapshot = await getDocs(notificationsRef);
+    const collectionRef = getNotificationsCollection(userId);
+    const snapshot = await collectionRef.get();
 
     if (snapshot.empty) return;
 
-    const batch = writeBatch(db);
+    const batch = firestore().batch();
     snapshot.docs.forEach((d) => {
       batch.delete(d.ref);
     });
@@ -118,19 +121,19 @@ export const createNotification = async (
     type: AppNotificationType;
     data?: any;
   }
-) => {
+): Promise<void> => {
   try {
-    const notificationsRef = collection(db, 'users', userId, 'notifications');
-    
+    const notificationsRef = getNotificationsCollection(userId);
+
     const cleanedData = payload.data ? cleanData(payload.data) : null;
-    
-    await addDoc(notificationsRef, {
+
+    await notificationsRef.add({
       title: payload.title,
       body: payload.body,
       type: payload.type,
       data: cleanedData,
       read: false,
-      timestamp: serverTimestamp(),
+      timestamp: firestore.FieldValue.serverTimestamp(),
     });
   } catch (error) {
     console.error('Error creating notification:', error);
@@ -145,7 +148,7 @@ export const createVitalsNotification = async (
   title: string,
   body: string,
   data?: any
-) => {
+): Promise<void> => {
   return createNotification(userId, {
     title,
     body,
@@ -162,7 +165,7 @@ export const createReminderNotification = async (
   title: string,
   body: string,
   data?: any
-) => {
+): Promise<void> => {
   return createNotification(userId, {
     title,
     body,
@@ -182,10 +185,12 @@ export const createWeeklyReportNotification = async (
     reportId?: string;
     summary?: string;
   } = {}
-) => {
+): Promise<void> => {
   return createNotification(userId, {
     title: options.title || 'Weekly Health Report Ready',
-    body: options.body || 'Your AI health summary is ready. Tap to view this week report.',
+    body:
+      options.body ||
+      'Your AI health summary is ready. Tap to view this week report.',
     type: 'ai-insight',
     data: {
       type: 'weekly-report',
@@ -198,7 +203,9 @@ export const createWeeklyReportNotification = async (
 /**
  * Create a generic test notification
  */
-export const createTestNotification = async (userId: string) => {
+export const createTestNotification = async (
+  userId: string
+): Promise<void> => {
   try {
     await createNotification(userId, {
       title: 'Welcome to HealthPath',

@@ -1,6 +1,6 @@
+// services/storageService.ts
 import * as ImagePicker from 'expo-image-picker';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage } from '../config/firebaseConfig';
+import storage from '@react-native-firebase/storage';
 import { Alert, Platform } from 'react-native';
 
 class StorageService {
@@ -90,7 +90,7 @@ class StorageService {
       // Create a unique filename with timestamp
       const timestamp = Date.now();
       const filename = `profile_${userId}_${timestamp}.jpg`;
-      const storageRef = ref(storage, `profile-photos/${filename}`);
+      const storageRef = storage().ref(`profile-photos/${filename}`);
 
       console.log('📁 Storage path:', `profile-photos/${filename}`);
 
@@ -104,13 +104,13 @@ class StorageService {
       };
 
       console.log('⬆️ Uploading to Firebase Storage...');
-      console.log('🔑 Storage instance:', storage.app.name);
+      console.log('🔑 Storage instance:', storage().app.name);
       
-      const snapshot = await uploadBytes(storageRef, blob, metadata);
+      const snapshot = await storageRef.put(blob, metadata);
       console.log('✅ Upload complete!', snapshot.metadata.fullPath);
 
       // Get the download URL
-      const downloadURL = await getDownloadURL(snapshot.ref);
+      const downloadURL = await storageRef.getDownloadURL();
       console.log('🔗 Download URL:', downloadURL);
 
       return downloadURL;
@@ -154,8 +154,9 @@ class StorageService {
    */
   async deleteFile(fileUrl: string): Promise<boolean> {
     try {
-      const fileRef = ref(storage, fileUrl);
-      await deleteObject(fileRef);
+      // Extract path from URL for React Native Firebase
+      const path = decodeURIComponent(fileUrl.split('/o/')[1]?.split('?')[0] || fileUrl);
+      await storage().ref(path).delete();
       console.log('✅ File deleted successfully');
       return true;
     } catch (error) {
@@ -184,7 +185,7 @@ class StorageService {
 
       const timestamp = Date.now();
       const filename = `${documentType}_${userId}_${timestamp}`;
-      const storageRef = ref(storage, `documents/${userId}/${filename}`);
+      const storageRef = storage().ref(`documents/${userId}/${filename}`);
 
       const metadata = {
         contentType: blob.type,
@@ -195,8 +196,8 @@ class StorageService {
         },
       };
 
-      const snapshot = await uploadBytes(storageRef, blob, metadata);
-      const downloadURL = await getDownloadURL(snapshot.ref);
+      const snapshot = await storageRef.put(blob, metadata);
+      const downloadURL = await storageRef.getDownloadURL();
 
       return downloadURL;
     } catch (error) {

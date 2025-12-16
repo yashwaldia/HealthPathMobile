@@ -1,22 +1,5 @@
 // services/medicationService.ts
-
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  query, 
-  where, 
-  orderBy, 
-  deleteDoc, 
-  updateDoc,
-  serverTimestamp,
-  Timestamp 
-} from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
-
-// Import types from the types file
+import firestore from '@react-native-firebase/firestore';
 import { 
   Medication,
   DoseLog 
@@ -52,8 +35,7 @@ export const addMedication = async (
   medicationData: Omit<Medication, 'medicationId' | 'userId' | 'createdAt' | 'updatedAt'>
 ): Promise<string> => {
   try {
-    const medsRef = collection(db, `users/${userId}/medications`);
-    const newMedRef = doc(medsRef);
+    const newMedRef = firestore().collection(`users/${userId}/medications`).doc();
 
     const medication: Medication = {
       medicationId: newMedRef.id,
@@ -66,14 +48,14 @@ export const addMedication = async (
     // Clean data to remove undefined fields before saving
     const cleanedMedication = cleanData({
       ...medication,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     });
 
     console.log('💾 Saving cleaned medication data:', JSON.stringify(cleanedMedication, null, 2));
 
     // Save to Firestore
-    await setDoc(newMedRef, cleanedMedication);
+    await newMedRef.set(cleanedMedication);
 
     // ✅ UPDATED: Schedule notification reminders with userId parameter
     try {
@@ -99,15 +81,16 @@ export const addMedication = async (
  */
 export const getAllMedications = async (userId: string): Promise<Medication[]> => {
   try {
-    const medsRef = collection(db, `users/${userId}/medications`);
-    const q = query(medsRef, orderBy('createdAt', 'desc'));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await firestore()
+      .collection(`users/${userId}/medications`)
+      .orderBy('createdAt', 'desc')
+      .get();
 
     return querySnapshot.docs.map(doc => ({
       ...doc.data(),
       medicationId: doc.id,
-      createdAt: (doc.data().createdAt as Timestamp)?.toDate() || new Date(),
-      updatedAt: (doc.data().updatedAt as Timestamp)?.toDate() || new Date(),
+      createdAt: doc.data().createdAt?.toDate() || new Date(),
+      updatedAt: doc.data().updatedAt?.toDate() || new Date(),
     } as Medication));
   } catch (error) {
     console.error('Error getting medications:', error);
@@ -120,19 +103,17 @@ export const getAllMedications = async (userId: string): Promise<Medication[]> =
  */
 export const getActiveMedications = async (userId: string): Promise<Medication[]> => {
   try {
-    const medsRef = collection(db, `users/${userId}/medications`);
-    const q = query(
-      medsRef,
-      where('isActive', '==', true),
-      orderBy('createdAt', 'desc')
-    );
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await firestore()
+      .collection(`users/${userId}/medications`)
+      .where('isActive', '==', true)
+      .orderBy('createdAt', 'desc')
+      .get();
 
     return querySnapshot.docs.map(doc => ({
       ...doc.data(),
       medicationId: doc.id,
-      createdAt: (doc.data().createdAt as Timestamp)?.toDate() || new Date(),
-      updatedAt: (doc.data().updatedAt as Timestamp)?.toDate() || new Date(),
+      createdAt: doc.data().createdAt?.toDate() || new Date(),
+      updatedAt: doc.data().updatedAt?.toDate() || new Date(),
     } as Medication));
   } catch (error) {
     console.error('Error getting active medications:', error);
@@ -148,24 +129,32 @@ export const getMedication = async (
   medicationId: string
 ): Promise<Medication | null> => {
   try {
-    const medRef = doc(db, `users/${userId}/medications`, medicationId);
-    const medDoc = await getDoc(medRef);
+    const medDoc = await firestore()
+      .collection(`users/${userId}/medications`)
+      .doc(medicationId)
+      .get();
 
-    if (!medDoc.exists()) {
+    if (!medDoc.exists) {
+      return null;
+    }
+
+    const data = medDoc.data();
+    if (!data) {
       return null;
     }
 
     return {
-      ...medDoc.data(),
+      ...data,
       medicationId: medDoc.id,
-      createdAt: (medDoc.data().createdAt as Timestamp)?.toDate() || new Date(),
-      updatedAt: (medDoc.data().updatedAt as Timestamp)?.toDate() || new Date(),
+      createdAt: data.createdAt?.toDate() || new Date(),
+      updatedAt: data.updatedAt?.toDate() || new Date(),
     } as Medication;
   } catch (error) {
     console.error('Error getting medication:', error);
     throw error;
   }
 };
+
 
 /**
  * Update medication
@@ -177,16 +166,16 @@ export const updateMedication = async (
   updates: Partial<Medication>
 ): Promise<void> => {
   try {
-    const medRef = doc(db, `users/${userId}/medications`, medicationId);
+    const medRef = firestore().collection(`users/${userId}/medications`).doc(medicationId);
 
     // Filter out undefined values using cleanData helper
     const cleanedUpdates = cleanData({
       ...updates,
-      updatedAt: serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     });
 
     // Update in Firestore
-    await updateDoc(medRef, cleanedUpdates);
+    await medRef.update(cleanedUpdates);
 
     // ✅ UPDATED: Update notification reminders with userId parameter
     try {
@@ -232,8 +221,10 @@ export const deleteMedication = async (
     }
 
     // Delete from Firestore
-    const medRef = doc(db, `users/${userId}/medications`, medicationId);
-    await deleteDoc(medRef);
+    await firestore()
+      .collection(`users/${userId}/medications`)
+      .doc(medicationId)
+      .delete();
   } catch (error) {
     console.error('Error deleting medication:', error);
     throw error;
@@ -277,8 +268,9 @@ export const logDose = async (
   doseData: Omit<DoseLog, 'doseId' | 'medicationId' | 'createdAt'>
 ): Promise<string> => {
   try {
-    const dosesRef = collection(db, `users/${userId}/medications/${medicationId}/doses`);
-    const newDoseRef = doc(dosesRef);
+    const newDoseRef = firestore()
+      .collection(`users/${userId}/medications/${medicationId}/doses`)
+      .doc();
 
     const doseLog: DoseLog = {
       doseId: newDoseRef.id,
@@ -290,10 +282,10 @@ export const logDose = async (
     // Clean dose data
     const cleanedDoseLog = cleanData({
       ...doseLog,
-      createdAt: serverTimestamp(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
     });
 
-    await setDoc(newDoseRef, cleanedDoseLog);
+    await newDoseRef.set(cleanedDoseLog);
 
     console.log('✅ Dose logged successfully');
 
@@ -313,14 +305,16 @@ export const getDoseHistory = async (
   limit: number = 30
 ): Promise<DoseLog[]> => {
   try {
-    const dosesRef = collection(db, `users/${userId}/medications/${medicationId}/doses`);
-    const q = query(dosesRef, orderBy('scheduledTime', 'desc'));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await firestore()
+      .collection(`users/${userId}/medications/${medicationId}/doses`)
+      .orderBy('scheduledTime', 'desc')
+      .limit(limit)
+      .get();
 
-    return querySnapshot.docs.slice(0, limit).map(doc => ({
+    return querySnapshot.docs.map(doc => ({
       ...doc.data(),
       doseId: doc.id,
-      createdAt: (doc.data().createdAt as Timestamp)?.toDate() || new Date(),
+      createdAt: doc.data().createdAt?.toDate() || new Date(),
     } as DoseLog));
   } catch (error) {
     console.error('Error getting dose history:', error);
