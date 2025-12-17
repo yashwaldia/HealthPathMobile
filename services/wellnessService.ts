@@ -421,14 +421,13 @@ export const createChildProfile = async (
   else if (ageInMonths >= 6) developmentalStage = '6-12m';
   else if (ageInMonths >= 3) developmentalStage = '3-6m';
 
+  // ✅ Build profile object with only defined optional fields
   const profile: ChildCareProfile = {
     childId: newChildRef.id, 
     childName, 
     birthDate, 
     ageInMonths, 
     ageInDays, 
-    gender,
-    birthWeightKg, // ✅ NEW
     moduleType: 'child-care',
     isActive: true, 
     startDate: today.toISOString().split('T')[0], 
@@ -440,9 +439,17 @@ export const createChildProfile = async (
     notificationsEnabled: false, 
     developmentalStage, 
     lastTrackedDate: today.toISOString().split('T')[0],
-    vaccinations: {}, // ✅ NEW: Initialize empty vaccinations object
-    growthRecords: [], // ✅ NEW: Initialize empty growth records array
+    vaccinations: {}, 
+    growthRecords: [], 
   };
+
+  // ✅ Only add optional fields if they have values
+  if (gender) {
+    profile.gender = gender;
+  }
+  if (birthWeightKg) {
+    profile.birthWeightKg = birthWeightKg;
+  }
 
   await newChildRef.set({ 
     profile, 
@@ -463,7 +470,22 @@ export const createChildProfileManual = async (
   const today = new Date();
   const birthDate = new Date(today); 
   birthDate.setMonth(birthDate.getMonth() - ageInMonths);
-  return await createChildProfile(userId, childName, birthDate.toISOString().split('T')[0], gender);
+  
+  // ✅ Only pass gender if it's defined, don't pass birthWeightKg (undefined)
+  if (gender) {
+    return await createChildProfile(
+      userId, 
+      childName, 
+      birthDate.toISOString().split('T')[0], 
+      gender
+    );
+  } else {
+    return await createChildProfile(
+      userId, 
+      childName, 
+      birthDate.toISOString().split('T')[0]
+    );
+  }
 };
 
 export const getAllChildProfiles = async (userId: string): Promise<ChildProfileSummary[]> => {
@@ -849,6 +871,8 @@ export const getActiveModules = async (userId: string): Promise<WellnessModuleTy
     .filter((p: any) => p?.isActive)
     .map((p: any) => p.moduleType);
 };
+
+
 
 // ============================================================================
 // EXPORT SERVICE OBJECT

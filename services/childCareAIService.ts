@@ -71,9 +71,8 @@ function buildChildCareAnalysisPrompt(
           .join('\n');
 
   // VACCINATION_SCHEDULE is defined as { age: string; vaccines: string[] }[]
-  const dueVaccinesText = VACCINATION_SCHEDULE.map((row) => {
-    const r = row as unknown as { age: string; vaccines: string[] };
-    return `- Age: ${r.age} → ${r.vaccines.join(', ')}`;
+  const dueVaccinesText = VACCINATION_SCHEDULE.map((vaccine) => {
+    return `- ${vaccine.ageDescription} (${vaccine.ageInWeeks} weeks) → ${vaccine.name}`;
   }).join('\n');
 
   const milestoneText = `

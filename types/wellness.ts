@@ -172,7 +172,7 @@ export interface GrowthRecord {
 }
 
 // ✅ NEW: Vaccination status type
-export type VaccinationStatus = 'Completed' | 'Missed';
+export type VaccinationStatus = 'Completed' | 'Missed' | 'Pending' | 'Upcoming';
 
 // ✅ UPDATED: Enhanced ChildCareProfile with growth & vaccination tracking
 export interface ChildCareProfile extends WellnessModuleProfile {

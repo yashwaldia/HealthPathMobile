@@ -1,6 +1,6 @@
 // app/(tabs)/wellness/child-care/[childId].tsx
 // Individual Child Tracking Screen
-// Last Updated: December 17, 2025 - Added growth & vaccination cards, single-shot AI analysis
+// Last Updated: December 17, 2025 - ✅ Added markdown rendering for AI summaries
 
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,9 +14,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomToast from '../../../../components/ui/CustomToast';
+import AddGrowthRecordModal from '../../../../components/wellness/child-care/AddGrowthRecordModal';
 import ChildOverviewCard from '../../../../components/wellness/child-care/ChildOverviewCard';
+import GrowthChartCard from '../../../../components/wellness/child-care/GrowthChartCard';
+import VaccinationTrackerCard from '../../../../components/wellness/child-care/VaccinationTrackerCard';
 import DailyChecklistCard from '../../../../components/wellness/DailyChecklistCard';
 import MedicalRemindersCard from '../../../../components/wellness/MedicalRemindersCard';
 import PersonalizedSuggestionsCard from '../../../../components/wellness/PersonalizedSuggestionsCard';
@@ -25,8 +29,6 @@ import WarningSignsCard from '../../../../components/wellness/WarningSignsCard';
 import WeeklyMilestoneCard from '../../../../components/wellness/WeeklyMilestoneCard';
 import WeeklyReportModal from '../../../../components/wellness/WeeklyReportModal';
 import WellnessHeader from '../../../../components/wellness/WellnessHeader';
-import GrowthChartCard from '../../../../components/wellness/child-care/GrowthChartCard';
-import VaccinationTrackerCard from '../../../../components/wellness/child-care/VaccinationTrackerCard';
 import {
   AGE_MILESTONES,
   CHILD_CARE_WARNING_SIGNS,
@@ -45,7 +47,8 @@ import {
   DailyTracking,
   MedicalReminder,
   PersonalizedSuggestions,
-  WeeklyReport,
+  VaccinationStatus,
+  WeeklyReport
 } from '../../../../types/wellness';
 
 export default function IndividualChildCareScreen() {
@@ -71,6 +74,9 @@ export default function IndividualChildCareScreen() {
   const [toastType, setToastType] =
     useState<'success' | 'error' | 'info'>('success');
   const [aiSummaryMarkdown, setAiSummaryMarkdown] = useState<string | null>(null);
+  
+  const [growthModalVisible, setGrowthModalVisible] = useState(false);
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
 
   useEffect(() => {
     if (user && childId) {
@@ -170,7 +176,6 @@ export default function IndividualChildCareScreen() {
       const today = new Date().toISOString().split('T')[0];
       setTodayDate(today);
 
-      // STEP 1: Load today's tasks (from Firestore or static fallback)
       let tracking = await wellnessService.getChildDailyTracking(
         user.uid,
         childId,
@@ -194,7 +199,6 @@ export default function IndividualChildCareScreen() {
         setTodayTasks(tracking.tasks);
       }
 
-      // STEP 2: Static suggestions (fallback default)
       const ageGroup = getAgeGroup(prof.ageInMonths);
       const feeding =
         FEEDING_GUIDELINES[ageGroup as keyof typeof FEEDING_GUIDELINES];
@@ -222,27 +226,7 @@ export default function IndividualChildCareScreen() {
         ],
       });
 
-      // STEP 3: (Optional) non-vaccine medical reminders (kept for future use)
-      setMedicalReminders([]); // or keep existing logic if you add other reminders
-
-      // STEP 4: Optional single-shot AI analysis (non-blocking)
-      try {
-        const aiAnalysis = await analyzeChildCareWithAI(
-          prof,
-          prof.growthRecords || [],
-          prof.vaccinations || {},
-        );
-        setAiSummaryMarkdown(aiAnalysis.markdownSummary);
-        console.log('🤖 Child AI analysis generated');
-      } catch (aiErr) {
-        console.error(
-          '⚠️ Child AI analysis failed, using static suggestions only:',
-          aiErr,
-        );
-        setAiSummaryMarkdown(null);
-      }
-
-      // STEP 5: Weekly reports (placeholder)
+      setMedicalReminders([]);
       setLatestReport(null);
     } catch (error) {
       console.error('❌ Error loading child data:', error);
@@ -286,6 +270,100 @@ export default function IndividualChildCareScreen() {
     } catch (error) {
       console.error('❌ Error toggling task:', error);
       showToast('Failed to update task', 'error');
+    }
+  };
+
+  const handleAddGrowthRecord = async (heightCm: string, weightKg: string) => {
+    try {
+      if (!user || !childId || !profile) return;
+
+      const newRecord = await wellnessService.addGrowthRecord(
+        user.uid,
+        childId,
+        {
+          date: new Date().toISOString().split('T')[0],
+          heightCm,
+          weightKg,
+          ageInMonths: profile.ageInMonths,
+        }
+      );
+
+      setProfile({
+        ...profile,
+        growthRecords: [...(profile.growthRecords || []), newRecord],
+      });
+
+      setGrowthModalVisible(false);
+      showToast('Growth record added successfully!', 'success');
+    } catch (error) {
+      console.error('❌ Error adding growth record:', error);
+      showToast('Failed to add growth record', 'error');
+    }
+  };
+
+  const handleUpdateVaccinationStatus = async (
+    vaccineId: string,
+    status: VaccinationStatus | null
+  ) => {
+    try {
+      if (!user || !childId || !profile) return;
+
+      if (status === null) {
+        await wellnessService.removeVaccinationStatus(
+          user.uid,
+          childId,
+          vaccineId
+        );
+      } else {
+        await wellnessService.updateVaccinationStatus(
+          user.uid,
+          childId,
+          vaccineId,
+          status
+        );
+      }
+
+      const updatedVaccinations = { ...(profile.vaccinations || {}) };
+      if (status === null) {
+        delete updatedVaccinations[vaccineId];
+      } else {
+        updatedVaccinations[vaccineId] = status;
+      }
+
+      setProfile({
+        ...profile,
+        vaccinations: updatedVaccinations,
+      });
+
+      const statusText = 
+        status === null ? 'reset' :
+        status === 'Completed' ? 'marked as completed' :
+        'marked as missed';
+      
+      showToast(`Vaccination ${statusText}`, 'success');
+    } catch (error) {
+      console.error('❌ Error updating vaccination:', error);
+      showToast('Failed to update vaccination status', 'error');
+    }
+  };
+
+  const handleGenerateAIAnalysis = async () => {
+    if (!profile) return;
+    
+    try {
+      setAiAnalysisLoading(true);
+      const aiAnalysis = await analyzeChildCareWithAI(
+        profile,
+        profile.growthRecords || [],
+        profile.vaccinations || {},
+      );
+      setAiSummaryMarkdown(aiAnalysis.markdownSummary);
+      showToast('AI analysis generated!', 'success');
+    } catch (error) {
+      console.error('❌ AI analysis failed:', error);
+      showToast('Failed to generate AI analysis', 'error');
+    } finally {
+      setAiAnalysisLoading(false);
     }
   };
 
@@ -427,7 +505,6 @@ export default function IndividualChildCareScreen() {
           />
         }
       >
-        {/* Progress Tracker */}
         <ProgressTracker
           currentValue={profile.ageInMonths}
           totalValue={60}
@@ -438,7 +515,6 @@ export default function IndividualChildCareScreen() {
 
         <View style={styles.spacing} />
 
-        {/* Child Overview Card */}
         <ChildOverviewCard
           childName={profile.childName}
           ageInMonths={profile.ageInMonths}
@@ -450,7 +526,6 @@ export default function IndividualChildCareScreen() {
 
         <View style={styles.spacing} />
 
-        {/* Weekly Milestone Card (static milestone data) */}
         <WeeklyMilestoneCard
           weekNumber={Math.floor(profile.ageInMonths / 4)}
           title={milestone.range}
@@ -462,12 +537,13 @@ export default function IndividualChildCareScreen() {
 
         <View style={styles.spacing} />
 
-        {/* Growth Chart Card */}
-        <GrowthChartCard growthRecords={profile.growthRecords || []} />
+        <GrowthChartCard 
+          growthRecords={profile.growthRecords || []}
+          onAddRecord={() => setGrowthModalVisible(true)}
+        />
 
         <View style={styles.spacing} />
 
-        {/* Daily Checklist */}
         <DailyChecklistCard
           title="Today's Care Routine"
           date={new Date().toLocaleDateString('en-US', {
@@ -480,20 +556,51 @@ export default function IndividualChildCareScreen() {
 
         <View style={styles.spacing} />
 
-        {/* Personalized Suggestions */}
         <PersonalizedSuggestionsCard suggestions={suggestions} />
 
         <View style={styles.spacing} />
 
-        {/* Vaccination Tracker */}
         <VaccinationTrackerCard
           childAgeInMonths={profile.ageInMonths}
           vaccinations={profile.vaccinations || {}}
+          onUpdateStatus={handleUpdateVaccinationStatus}
         />
 
         <View style={styles.spacing} />
 
-        {/* Medical Reminders (non-vaccine, if you add any later) */}
+        <TouchableOpacity
+          style={styles.aiAnalysisButton}
+          onPress={handleGenerateAIAnalysis}
+          disabled={aiAnalysisLoading}
+        >
+          <Ionicons 
+            name={aiAnalysisLoading ? "hourglass-outline" : "sparkles"} 
+            size={20} 
+            color="#fff" 
+          />
+          <Text style={styles.aiAnalysisButtonText}>
+            {aiAnalysisLoading ? 'Analyzing...' : 'Generate AI Health Summary'}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.spacing} />
+
+        {aiSummaryMarkdown && (
+          <>
+            <View style={styles.aiSummaryCard}>
+              <View style={styles.aiSummaryHeader}>
+                <Ionicons name="sparkles" size={20} color={Colors.light.primary} />
+                <Text style={styles.aiSummaryTitle}>AI Health Analysis</Text>
+              </View>
+              
+              <Markdown style={markdownStyles}>
+                {aiSummaryMarkdown}
+              </Markdown>
+            </View>
+            <View style={styles.spacing} />
+          </>
+        )}
+
         {medicalReminders.length > 0 && (
           <>
             <MedicalRemindersCard
@@ -504,7 +611,6 @@ export default function IndividualChildCareScreen() {
           </>
         )}
 
-        {/* Warning Signs */}
         <WarningSignsCard warningsSigns={CHILD_CARE_WARNING_SIGNS} />
 
         {latestReport && (
@@ -522,24 +628,6 @@ export default function IndividualChildCareScreen() {
 
         <View style={styles.spacing} />
 
-        {/* AI analysis note (optional display) */}
-        {aiSummaryMarkdown && (
-          <View style={styles.disclaimerCard}>
-            <Ionicons
-              name="sparkles-outline"
-              size={20}
-              color={Colors.light.primary}
-            />
-            <Text style={styles.disclaimerText}>
-              This child’s summary includes AI-generated insights. View it in the
-              Child Health AI section.
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.spacing} />
-
-        {/* Disclaimer */}
         <View style={styles.disclaimerCard}>
           <Ionicons
             name="information-circle"
@@ -554,7 +642,6 @@ export default function IndividualChildCareScreen() {
 
         <View style={styles.spacing} />
 
-        {/* Delete Button */}
         <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteProfile}>
           <Ionicons name="trash-outline" size={20} color="#FF3B30" />
           <Text style={styles.deleteButtonText}>
@@ -571,6 +658,13 @@ export default function IndividualChildCareScreen() {
         onClose={() => setWeeklyReportVisible(false)}
       />
 
+      <AddGrowthRecordModal
+        visible={growthModalVisible}
+        childName={profile.childName}
+        onConfirm={handleAddGrowthRecord}
+        onCancel={() => setGrowthModalVisible(false)}
+      />
+
       <CustomToast
         visible={toastVisible}
         message={toastMessage}
@@ -580,6 +674,90 @@ export default function IndividualChildCareScreen() {
     </SafeAreaView>
   );
 }
+
+// ✅ FIXED: Properly typed Markdown styles
+const markdownStyles = StyleSheet.create({
+  body: {
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    lineHeight: 22,
+  },
+  heading1: {
+    fontSize: 18,
+    fontWeight: '700' as '700',
+    color: Colors.light.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  heading2: {
+    fontSize: 16,
+    fontWeight: '700' as '700',
+    color: Colors.light.text,
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  heading3: {
+    fontSize: 15,
+    fontWeight: '600' as '600',
+    color: Colors.light.text,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  paragraph: {
+    marginTop: 0,
+    marginBottom: 10,
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    lineHeight: 22,
+  },
+  bullet_list: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  ordered_list: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  list_item: {
+    marginBottom: 4,
+    flexDirection: 'row' as 'row',
+    alignItems: 'flex-start' as 'flex-start',
+  },
+  bullet_list_icon: {
+    fontSize: 14,
+    color: Colors.light.primary,
+    marginRight: 8,
+    marginTop: 3,
+  },
+  strong: {
+    fontWeight: '700' as '700',
+    color: Colors.light.text,
+  },
+  em: {
+    fontStyle: 'italic' as 'italic',
+  },
+  code_inline: {
+    backgroundColor: Colors.light.border + '40',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    fontSize: 13,
+    fontFamily: 'monospace',
+  },
+  blockquote: {
+    backgroundColor: Colors.light.primary + '10',
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.light.primary,
+    paddingLeft: 12,
+    paddingVertical: 8,
+    marginVertical: 8,
+  },
+  hr: {
+    backgroundColor: Colors.light.border,
+    height: 1,
+    marginVertical: 16,
+  },
+});
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -647,6 +825,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#fff',
+  },
+  aiAnalysisButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  aiAnalysisButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  aiSummaryCard: {
+    backgroundColor: Colors.light.cardBackground,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.primary + '30',
+  },
+  aiSummaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  aiSummaryTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.light.text,
   },
   disclaimerCard: {
     flexDirection: 'row',
