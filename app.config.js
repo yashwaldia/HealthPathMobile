@@ -13,16 +13,16 @@ module.exports = {
       resizeMode: "contain",
       backgroundColor: "#fa8a61"
     },
-    ios: {
-      supportsTablet: true,
-      infoPlist: {
-        NSPhotoLibraryUsageDescription: "This app needs access to your photo library to upload medical documents.",
-        NSCameraUsageDescription: "This app needs access to your camera to capture medical documents.",
-        NSPhotoLibraryAddUsageDescription: "This app needs access to save processed medical documents."
-      },
-      bundleIdentifier: "com.ab1224.HealthPathMobile",
-      googleServicesFile: process.env.GOOGLE_SERVICES_PLIST ?? "./GoogleService-Info.plist"
-    },
+    // ios: {
+    //   supportsTablet: true,
+    //   infoPlist: {
+    //     NSPhotoLibraryUsageDescription: "This app needs access to your photo library to upload medical documents.",
+    //     NSCameraUsageDescription: "This app needs access to your camera to capture medical documents.",
+    //     NSPhotoLibraryAddUsageDescription: "This app needs access to save processed medical documents."
+    //   },
+    //   bundleIdentifier: "com.ab1224.HealthPathMobile",
+    //   googleServicesFile: process.env.GOOGLE_SERVICES_PLIST ?? "./GoogleService-Info.plist"
+    // },
     android: {
       adaptiveIcon: {
         foregroundImage: "./assets/images/android-icon-512.png",

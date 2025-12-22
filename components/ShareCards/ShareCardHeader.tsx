@@ -32,7 +32,7 @@ export default function ShareCardHeader({
       {/* Logo and App Name */}
       <View style={styles.logoContainer}>
         <Image
-          source={require('@/assets/images/icon.png')}
+          source={require('../../assets/images/android-icon-512.png')}
           style={styles.logo}
           resizeMode="contain"
         />
