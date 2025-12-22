@@ -1,3 +1,7 @@
+// app/(tabs)/symptoms.tsx
+// ✅ REFACTORED: Bulk category selection + main analyze button + View AI Analysis from history
+// Last Updated: December 19, 2025
+
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -23,21 +27,29 @@ import { Colors } from '../../constants/colors';
 import { SYMPTOM_CATEGORIES } from '../../constants/symptomData';
 import { useAuth } from '../../context/AuthContext';
 import {
-  addSymptomLogWithAnalysis,
-  analyzeSymptomWithAI,
+  addBulkSymptomLogWithAnalysis,
+  analyzeMultipleCategoriesWithAI,
   deleteSymptomLog,
   getRecentSymptomLogs,
   SymptomAIAnalysis,
 } from '../../services/symptomService';
-import { SymptomCategory, SymptomFormData, SymptomLog } from '../../types/symptom';
+import { SymptomCategory, SymptomLog } from '../../types/symptom';
+
+// ✅ NEW: Type for categorized symptoms
+interface CategorizedSymptoms {
+  [categoryId: string]: {
+    categoryName: string;
+    symptoms: string[];
+  };
+}
 
 export default function SymptomsScreen() {
   const router = useRouter();
   const { user } = useAuth();
 
-  // Selection State
+  // ✅ NEW: Store symptoms grouped by category
+  const [categorizedSymptoms, setCategorizedSymptoms] = useState<CategorizedSymptoms>({});
   const [selectedCategory, setSelectedCategory] = useState<SymptomCategory | null>(null);
-  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
 
   // Modal States
   const [showSymptomPicker, setShowSymptomPicker] = useState(false);
@@ -59,13 +71,14 @@ export default function SymptomsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
+  
+  // ✅ NEW: Track if viewing analysis from history (read-only mode)
+  const [isViewingHistoryAnalysis, setIsViewingHistoryAnalysis] = useState(false);
 
-  // Show toast helper
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning') => {
     setToast({ visible: true, message, type });
   };
 
-  // Load symptom logs
   const loadSymptomLogs = useCallback(async () => {
     if (!user?.uid) return;
 
@@ -85,60 +98,112 @@ export default function SymptomsScreen() {
     loadSymptomLogs();
   }, [loadSymptomLogs]);
 
-  // Refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadSymptomLogs();
     setRefreshing(false);
   }, [loadSymptomLogs]);
 
-  // Handle category selection
+  // ✅ NEW: Handle category press - open symptom picker
   const handleCategoryPress = (category: SymptomCategory) => {
-    if (selectedCategory?.id === category.id) {
-      setSelectedCategory(null);
-      setShowSymptomPicker(false);
-    } else {
-      setSelectedCategory(category);
-      setShowSymptomPicker(true);
-    }
+    setSelectedCategory(category);
+    setShowSymptomPicker(true);
   };
 
-  // Toggle symptom selection
+  // ✅ NEW: Get current category's selected symptoms
+  const getCurrentCategorySymptoms = (): string[] => {
+    if (!selectedCategory) return [];
+    return categorizedSymptoms[selectedCategory.id]?.symptoms || [];
+  };
+
+  // ✅ NEW: Toggle symptom in current category
   const toggleSymptom = (symptom: string) => {
-    setSelectedSymptoms((prev) =>
-      prev.includes(symptom) ? prev.filter((s) => s !== symptom) : [...prev, symptom]
+    if (!selectedCategory) return;
+
+    setCategorizedSymptoms(prev => {
+      const categoryId = selectedCategory.id;
+      const currentSymptoms = prev[categoryId]?.symptoms || [];
+      
+      const newSymptoms = currentSymptoms.includes(symptom)
+        ? currentSymptoms.filter(s => s !== symptom)
+        : [...currentSymptoms, symptom];
+
+      // If no symptoms left, remove category entirely
+      if (newSymptoms.length === 0) {
+        const { [categoryId]: removed, ...rest } = prev;
+        return rest;
+      }
+
+      return {
+        ...prev,
+        [categoryId]: {
+          categoryName: selectedCategory.name,
+          symptoms: newSymptoms,
+        },
+      };
+    });
+  };
+
+  // ✅ NEW: Remove specific symptom from specific category
+  const removeSymptom = (categoryId: string, symptom: string) => {
+    setCategorizedSymptoms(prev => {
+      const currentSymptoms = prev[categoryId]?.symptoms || [];
+      const newSymptoms = currentSymptoms.filter(s => s !== symptom);
+
+      if (newSymptoms.length === 0) {
+        const { [categoryId]: removed, ...rest } = prev;
+        return rest;
+      }
+
+      return {
+        ...prev,
+        [categoryId]: {
+          ...prev[categoryId],
+          symptoms: newSymptoms,
+        },
+      };
+    });
+  };
+
+  // ✅ NEW: Clear all symptoms from a category
+  const clearCategory = (categoryId: string) => {
+    setCategorizedSymptoms(prev => {
+      const { [categoryId]: removed, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  // ✅ NEW: Get total symptom count
+  const getTotalSymptomCount = (): number => {
+    return Object.values(categorizedSymptoms).reduce(
+      (total, cat) => total + cat.symptoms.length,
+      0
     );
   };
 
-  // Remove symptom
-  const removeSymptom = (symptom: string) => {
-    setSelectedSymptoms((prev) => prev.filter((s) => s !== symptom));
-  };
+  // ✅ NEW: Analyze all selected symptoms
+  const handleAnalyzeAllSymptoms = async () => {
+    if (!user?.uid) return;
 
-  // Analyze symptoms with AI
-  const handleAnalyzeSymptoms = async () => {
-    if (!user?.uid || !selectedCategory) return;
-
-    if (selectedSymptoms.length === 0) {
+    const totalSymptoms = getTotalSymptomCount();
+    if (totalSymptoms === 0) {
       showToast('Please select at least one symptom', 'warning');
       return;
     }
 
     try {
       setAnalyzing(true);
-      setShowSymptomPicker(false);
 
-      const formData: SymptomFormData = {
-        category: selectedCategory.id,
-        categoryName: selectedCategory.name,
-        symptoms: selectedSymptoms,
-        severity: 3,
-        duration: 'days',
-        durationValue: 1,
-      };
+      // Convert to array format for API
+      const symptomsArray = Object.entries(categorizedSymptoms).map(([catId, data]) => ({
+        category: catId,
+        categoryName: data.categoryName,
+        symptoms: data.symptoms,
+      }));
 
-      const analysis = await analyzeSymptomWithAI(formData);
+      const analysis = await analyzeMultipleCategoriesWithAI(symptomsArray);
       setAIAnalysis(analysis);
+      setIsViewingHistoryAnalysis(false); // New analysis, can be saved
       setShowAIAnalysis(true);
     } catch (error: any) {
       console.error('Error analyzing symptoms:', error);
@@ -148,31 +213,37 @@ export default function SymptomsScreen() {
     }
   };
 
-  // Save symptom log with AI analysis
+  // ✅ NEW: View AI analysis from history log
+  const handleViewAnalysis = (log: SymptomLog) => {
+    if (log.aiAnalysis) {
+      setAIAnalysis(log.aiAnalysis);
+      setIsViewingHistoryAnalysis(true); // Read-only mode
+      setShowAIAnalysis(true);
+    }
+  };
+
+  // ✅ NEW: Save bulk analysis
   const handleSaveAnalysis = async () => {
-    if (!user?.uid || !selectedCategory || !aiAnalysis) return;
+    if (!user?.uid || !aiAnalysis) return;
 
     try {
       setSaving(true);
 
-      const formData: SymptomFormData = {
-        category: selectedCategory.id,
-        categoryName: selectedCategory.name,
-        symptoms: selectedSymptoms,
-        severity: 3,
-        duration: 'days',
-        durationValue: 1,
-      };
+      const symptomsArray = Object.entries(categorizedSymptoms).map(([catId, data]) => ({
+        category: catId,
+        categoryName: data.categoryName,
+        symptoms: data.symptoms,
+      }));
 
-      await addSymptomLogWithAnalysis(user.uid, formData, aiAnalysis);
+      await addBulkSymptomLogWithAnalysis(user.uid, symptomsArray, aiAnalysis);
 
       showToast('Symptom analysis saved successfully!', 'success');
 
       // Reset form
-      setSelectedCategory(null);
-      setSelectedSymptoms([]);
+      setCategorizedSymptoms({});
       setAIAnalysis(null);
       setShowAIAnalysis(false);
+      setIsViewingHistoryAnalysis(false);
 
       // Reload logs
       await loadSymptomLogs();
@@ -184,13 +255,11 @@ export default function SymptomsScreen() {
     }
   };
 
-  // Show delete confirmation
   const handleDeleteLog = (symptomId: string) => {
     setDeleteTargetId(symptomId);
     setShowDeleteConfirm(true);
   };
 
-  // Confirm delete
   const confirmDelete = async () => {
     if (!user?.uid || !deleteTargetId) return;
 
@@ -206,12 +275,16 @@ export default function SymptomsScreen() {
     }
   };
 
-  // Loading state
+  // ✅ NEW: Check if category has symptoms selected
+  const categoryHasSymptoms = (categoryId: string): boolean => {
+    return (categorizedSymptoms[categoryId]?.symptoms.length || 0) > 0;
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)')} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Symptom Tracker</Text>
@@ -225,9 +298,10 @@ export default function SymptomsScreen() {
     );
   }
 
+  const totalSymptoms = getTotalSymptomCount();
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Custom Toast */}
       <CustomToast
         visible={toast.visible}
         message={toast.message}
@@ -237,15 +311,19 @@ export default function SymptomsScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.push('/(tabs)')} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Symptom Tracker</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Selected Symptoms Bar */}
-      <SelectedSymptomsBar symptoms={selectedSymptoms} onRemove={removeSymptom} />
+      {/* ✅ NEW: Enhanced Selected Symptoms Bar */}
+      <SelectedSymptomsBar
+        categorizedSymptoms={categorizedSymptoms}
+        onRemoveSymptom={removeSymptom}
+        onClearCategory={clearCategory}
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -257,7 +335,7 @@ export default function SymptomsScreen() {
         <View style={styles.instructions}>
           <Ionicons name="information-circle-outline" size={20} color={Colors.light.primary} />
           <Text style={styles.instructionsText}>
-            Select a body part below, choose symptoms, then click "Analyze" for AI insights
+            Select body parts and add symptoms. Use "Analyze Symptoms" button below for AI insights
           </Text>
         </View>
 
@@ -268,10 +346,26 @@ export default function SymptomsScreen() {
               key={category.id}
               category={category}
               isSelected={selectedCategory?.id === category.id}
+              hasSymptoms={categoryHasSymptoms(category.id)}
+              symptomCount={categorizedSymptoms[category.id]?.symptoms.length || 0}
               onPress={() => handleCategoryPress(category)}
             />
           ))}
         </View>
+
+        {/* ✅ NEW: Main Analyze Button (only shows when symptoms selected) */}
+        {totalSymptoms > 0 && (
+          <TouchableOpacity
+            style={styles.analyzeButton}
+            onPress={handleAnalyzeAllSymptoms}
+            disabled={analyzing}
+          >
+            <Ionicons name="sparkles" size={20} color="white" />
+            <Text style={styles.analyzeButtonText}>
+              Analyze {totalSymptoms} Symptom{totalSymptoms !== 1 ? 's' : ''}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* Recent Logs */}
         {symptomLogs.length > 0 && (
@@ -279,14 +373,20 @@ export default function SymptomsScreen() {
             <Text style={styles.sectionTitle}>Recent Symptom Logs</Text>
             <FlatList
               data={symptomLogs}
-              renderItem={({ item }) => <SymptomLogCard log={item} onDelete={handleDeleteLog} />}
+              renderItem={({ item }) => (
+                <SymptomLogCard
+                  log={item}
+                  onDelete={handleDeleteLog}
+                  onViewAnalysis={handleViewAnalysis}
+                />
+              )}
               keyExtractor={(item) => item.symptomId}
               scrollEnabled={false}
             />
           </View>
         )}
 
-        {symptomLogs.length === 0 && (
+        {symptomLogs.length === 0 && totalSymptoms === 0 && (
           <View style={styles.emptyState}>
             <Ionicons name="medical-outline" size={64} color={Colors.light.border} />
             <Text style={styles.emptyTitle}>No Symptoms Logged Yet</Text>
@@ -297,22 +397,27 @@ export default function SymptomsScreen() {
         )}
       </ScrollView>
 
-      {/* Symptom Picker Modal */}
+      {/* ✅ UPDATED: Symptom Picker Modal (removed analyze button) */}
       <SymptomPickerModal
         visible={showSymptomPicker}
         category={selectedCategory}
-        selectedSymptoms={selectedSymptoms}
-        onClose={() => setShowSymptomPicker(false)}
+        selectedSymptoms={getCurrentCategorySymptoms()}
+        onClose={() => {
+          setShowSymptomPicker(false);
+          setSelectedCategory(null);
+        }}
         onToggleSymptom={toggleSymptom}
-        onAnalyze={handleAnalyzeSymptoms}
       />
 
-      {/* AI Analysis Result Modal */}
+      {/* ✅ UPDATED: AI Analysis Result Modal with conditional save button */}
       <AIAnalysisModal
         visible={showAIAnalysis}
         analysis={aiAnalysis}
-        onClose={() => setShowAIAnalysis(false)}
-        onSave={handleSaveAnalysis}
+        onClose={() => {
+          setShowAIAnalysis(false);
+          setIsViewingHistoryAnalysis(false);
+        }}
+        onSave={isViewingHistoryAnalysis ? undefined : handleSaveAnalysis}
         saving={saving}
       />
 
@@ -403,8 +508,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
+  // ✅ NEW: Main analyze button styles
+  analyzeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginTop: 24,
+    marginBottom: 16,
+    gap: 8,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  analyzeButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   logsSection: {
-    marginTop: 5,
+    marginTop: 24,
   },
   sectionTitle: {
     fontSize: 18,
@@ -429,6 +556,7 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     textAlign: 'center',
     marginTop: 8,
+    paddingHorizontal: 40,
   },
   analyzingOverlay: {
     position: 'absolute',
@@ -439,6 +567,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1000,
   },
   analyzingContainer: {
     backgroundColor: Colors.light.cardBackground,

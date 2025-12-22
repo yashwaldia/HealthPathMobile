@@ -1,18 +1,20 @@
 // components/nutrition/ImageComparisonScreen.tsx
 
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Colors } from '../../constants/colors';
 import {
   analyzeAndCompareMealImages,
@@ -30,8 +32,60 @@ export default function ImageComparisonScreen({ onShowToast }: Props) {
   const [compareResult, setCompareResult] = useState<MealCompareResult | null>(
     null,
   );
+  const [imageSourceModal, setImageSourceModal] = useState<{
+    visible: boolean;
+    slot: 'A' | 'B' | null;
+  }>({ visible: false, slot: null });
 
-  // Request permissions and pick image
+  // Show image source selection modal
+  const showImageSourceModal = (slot: 'A' | 'B') => {
+    setImageSourceModal({ visible: true, slot });
+  };
+
+  // Hide image source selection modal
+  const hideImageSourceModal = () => {
+    setImageSourceModal({ visible: false, slot: null });
+  };
+
+  // Take photo with camera
+  const takePhoto = async (slot: 'A' | 'B') => {
+    try {
+      // Request camera permission
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Please grant camera permissions to take photos.',
+        );
+        return;
+      }
+
+      // Launch camera
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const uri = result.assets[0].uri;
+        if (slot === 'A') {
+          setImageAUri(uri);
+          console.log('✅ Image A captured:', uri);
+        } else {
+          setImageBUri(uri);
+          console.log('✅ Image B captured:', uri);
+        }
+        // Clear previous result when new image is selected
+        setCompareResult(null);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      onShowToast('Failed to take photo', 'error');
+    }
+  };
+
+  // Pick image from gallery
   const pickImage = async (slot: 'A' | 'B') => {
     try {
       // Request permission
@@ -69,6 +123,20 @@ export default function ImageComparisonScreen({ onShowToast }: Props) {
     }
   };
 
+  // Handle image source selection
+  const handleImageSourceSelect = async (source: 'camera' | 'gallery') => {
+    const slot = imageSourceModal.slot;
+    hideImageSourceModal();
+
+    if (!slot) return;
+
+    if (source === 'camera') {
+      await takePhoto(slot);
+    } else {
+      await pickImage(slot);
+    }
+  };
+
   // Handle comparison
   const handleCompare = async () => {
     if (!imageAUri || !imageBUri) {
@@ -80,15 +148,15 @@ export default function ImageComparisonScreen({ onShowToast }: Props) {
     setCompareResult(null);
 
     try {
-      console.log('🧮 Starting comparison...');
+      console.log('🧮 Starting analysis...');
       const result = await analyzeAndCompareMealImages(imageAUri, imageBUri);
-      console.log('✅ Comparison complete:', result);
+      console.log('✅ Analysis complete:', result);
       setCompareResult(result);
-      onShowToast('Comparison complete!', 'success');
+      onShowToast('Analysis complete!', 'success');
     } catch (error: any) {
-      console.error('❌ Comparison error:', error);
+      console.error('❌ Analysis error:', error);
       onShowToast(
-        error?.message || 'Failed to compare images. Please try again.',
+        error?.message || 'Failed to analyze images. Please try again.',
         'error',
       );
     } finally {
@@ -113,7 +181,7 @@ export default function ImageComparisonScreen({ onShowToast }: Props) {
       <Text style={styles.pickerLabel}>{label}</Text>
       <TouchableOpacity
         style={[styles.imageBox, uri && styles.imageBoxFilled]}
-        onPress={() => pickImage(slot)}
+        onPress={() => showImageSourceModal(slot)}
         activeOpacity={0.7}
       >
         {uri ? (
@@ -132,8 +200,10 @@ export default function ImageComparisonScreen({ onShowToast }: Props) {
           </>
         ) : (
           <View style={styles.imagePlaceholder}>
-            <Ionicons name="image-outline" size={48} color="#CBD5E0" />
-            <Text style={styles.placeholderText}>Tap to select meal photo</Text>
+            <Ionicons name="camera-outline" size={48} color="#CBD5E0" />
+            <Text style={styles.placeholderText}>
+              Tap to capture or select photo
+            </Text>
           </View>
         )}
       </TouchableOpacity>
@@ -155,7 +225,7 @@ export default function ImageComparisonScreen({ onShowToast }: Props) {
             size={24}
             color={Colors.light.primary}
           />
-          <Text style={styles.resultTitle}>Nutrient Comparison</Text>
+          <Text style={styles.resultTitle}>Nutrient Analysis</Text>
         </View>
 
         {/* Table */}
@@ -201,6 +271,64 @@ export default function ImageComparisonScreen({ onShowToast }: Props) {
     );
   };
 
+  // Render image source selection modal
+  const renderImageSourceModal = () => (
+    <Modal
+      visible={imageSourceModal.visible}
+      transparent
+      animationType="fade"
+      onRequestClose={hideImageSourceModal}
+    >
+      <Pressable style={styles.modalOverlay} onPress={hideImageSourceModal}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Select Image Source</Text>
+
+          <TouchableOpacity
+            style={styles.modalOption}
+            onPress={() => handleImageSourceSelect('camera')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.modalOptionIcon}>
+              <Ionicons name="camera" size={24} color={Colors.light.primary} />
+            </View>
+            <View style={styles.modalOptionText}>
+              <Text style={styles.modalOptionTitle}>Take Photo</Text>
+              <Text style={styles.modalOptionSubtitle}>
+                Capture with camera
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#CBD5E0" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.modalOption}
+            onPress={() => handleImageSourceSelect('gallery')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.modalOptionIcon}>
+              <Ionicons name="images" size={24} color={Colors.light.primary} />
+            </View>
+            <View style={styles.modalOptionText}>
+              <Text style={styles.modalOptionTitle}>Choose from Gallery</Text>
+              <Text style={styles.modalOptionSubtitle}>
+                Select existing photo
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#CBD5E0" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.modalCancelButton}
+            onPress={hideImageSourceModal}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.modalCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+
   return (
     <ScrollView
       style={styles.container}
@@ -209,10 +337,10 @@ export default function ImageComparisonScreen({ onShowToast }: Props) {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Image Nutrient Comparator</Text>
+        <Text style={styles.title}>Image Nutrient Analyzer</Text>
         <Text style={styles.subtitle}>
-          Select two meal photos to compare their nutritional profiles with AI
-          analysis.
+          Capture or select two meal photos to analyze and compare their
+          nutritional profiles with AI.
         </Text>
       </View>
 
@@ -239,7 +367,7 @@ export default function ImageComparisonScreen({ onShowToast }: Props) {
           ) : (
             <>
               <Ionicons name="git-compare-outline" size={20} color="#fff" />
-              <Text style={styles.compareButtonText}>Compare with AI</Text>
+              <Text style={styles.compareButtonText}>Analyze with AI</Text>
             </>
           )}
         </TouchableOpacity>
@@ -268,6 +396,9 @@ export default function ImageComparisonScreen({ onShowToast }: Props) {
 
       {/* Comparison result */}
       {!loading && renderComparisonTable()}
+
+      {/* Image source selection modal */}
+      {renderImageSourceModal()}
     </ScrollView>
   );
 }
@@ -481,5 +612,67 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#718096',
     lineHeight: 20,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 32,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#F7FAFC',
+    marginBottom: 12,
+  },
+  modalOptionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  modalOptionText: {
+    flex: 1,
+  },
+  modalOptionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 2,
+  },
+  modalOptionSubtitle: {
+    fontSize: 13,
+    color: '#718096',
+  },
+  modalCancelButton: {
+    marginTop: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#718096',
   },
 });

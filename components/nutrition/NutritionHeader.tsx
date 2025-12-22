@@ -1,16 +1,12 @@
 // components/nutrition/NutritionHeader.tsx
 
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../../constants/colors';
 
-type Props = {
-  onPressMenu?: () => void;
-};
-
-export default function NutritionHeader({ onPressMenu }: Props) {
+export default function NutritionHeader() {
   const router = useRouter();
 
   return (
@@ -35,22 +31,8 @@ export default function NutritionHeader({ onPressMenu }: Props) {
         {/* <Text style={styles.subtitle}>Track meals and nutrients</Text> */}
       </View>
 
-      {/* Right: menu button (3-line icon) */}
-      <View style={styles.right}>
-        {onPressMenu ? (
-          <TouchableOpacity
-            onPress={onPressMenu}
-            style={styles.menuButton}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons
-              name="menu-outline"
-              size={24}
-              color={Colors.light.text}
-            />
-          </TouchableOpacity>
-        ) : null}
-      </View>
+      {/* Right: empty space for symmetry */}
+      <View style={styles.right} />
     </View>
   );
 }
@@ -78,10 +60,6 @@ const styles = StyleSheet.create({
     width: 40,
     alignItems: 'flex-end',
     justifyContent: 'center',
-  },
-  menuButton: {
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   title: {
     fontSize: 20,

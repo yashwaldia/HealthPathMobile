@@ -46,6 +46,7 @@ export interface Medication {
   updatedAt: Date;
 }
 
+
 /**
  * Dosage Form Types
  */
@@ -61,6 +62,7 @@ export type DosageForm =
   | 'Patch'
   | 'Suppository'
   | 'Other';
+
 
 /**
  * Frequency Types
@@ -78,6 +80,7 @@ export type FrequencyType =
   | 'Weekly'
   | 'Custom';
 
+
 /**
  * Meal Relation Types
  */
@@ -87,6 +90,7 @@ export type MealRelation =
   | 'With meals' 
   | 'Empty stomach'
   | 'Any time';
+
 
 /**
  * Dose Log for tracking adherence
@@ -102,6 +106,7 @@ export interface DoseLog {
   createdAt: Date;
 }
 
+
 /**
  * Medication Reminder
  */
@@ -113,19 +118,128 @@ export interface MedicationReminder {
   daysOfWeek?: number[]; // 0-6 (Sunday-Saturday)
 }
 
+
 /**
- * Extracted Medication from AI (for Smart Upload)
+ * Extracted Medication from AI (for Smart Import)
+ * Enhanced with additional fields from web version
  */
 export interface ExtractedMedication {
   name: string;
   strength?: string;
-  dosageForm?: string;
-  frequency?: string;
-  duration?: string;
+  dosageForm?: DosageForm;
+  frequency?: FrequencyType;
+  customFrequency?: string;
+  mealRelation?: MealRelation;
+  duration?: string; // Will be parsed to durationDays
+  durationDays?: number;
+  startDate?: string;
+  endDate?: string;
   instructions?: string;
   prescribedBy?: string;
-  confidence?: number; // AI confidence score
+  purpose?: string;
+  genericName?: string;
+  classification?: string;
+  confidence?: number; // AI confidence score (0-100)
 }
+
+
+/**
+ * AI Classification Result
+ * Used for duplicate detection and merging
+ */
+export interface AIClassificationResult {
+  originalName: string;
+  genericName: string;
+  classification: string; // e.g., "Painkiller", "Antibiotic", "Antacid"
+  confidence?: number;
+}
+
+
+/**
+ * Merge Conflict Interface
+ * Represents a potential duplicate medication that needs user resolution
+ */
+export interface MergeConflict {
+  existingMed: Medication;
+  newMed: ExtractedMedication & {
+    genericName?: string;
+    classification?: string;
+  };
+}
+
+
+/**
+ * AI Medication Comparison Result
+ * Suggestion from AI about whether to merge or keep separate
+ */
+export interface MedicationComparisonResult {
+  suggestion: 'merge' | 'add_new' | 'uncertain';
+  reasoning: string;
+  confidence: number; // 0-100
+  recommendedAction?: string;
+}
+
+
+/**
+ * Smart Import Input
+ * Input format for smart import feature
+ */
+export interface SmartImportInput {
+  text?: string;
+  images?: string[]; // base64 or URIs
+}
+
+
+/**
+ * Smart Import Stage
+ * Controls the flow of smart import modal
+ */
+export type SmartImportStage = 'input' | 'review';
+
+
+/**
+ * Smart Import Input Mode
+ * Type of input for smart import
+ */
+export type SmartImportInputMode = 'upload' | 'text';
+
+
+/**
+ * Calendar Day Data
+ * Represents a single day in the medication calendar
+ */
+export interface CalendarDayData {
+  date: Date;
+  medications: Medication[];
+  hasDoses: boolean;
+}
+
+
+/**
+ * Calendar Month Data
+ * Complete data for calendar month view
+ */
+export interface CalendarMonthData {
+  year: number;
+  month: number;
+  monthName: string;
+  days: (CalendarDayData | null)[]; // null for empty cells
+}
+
+
+/**
+ * Medication Status
+ * Runtime calculated status for a medication
+ */
+export interface MedicationStatus {
+  adherence: number; // Percentage (0-100)
+  dosesTakenToday: number;
+  expectedDoses: number;
+  isDue: boolean;
+  isActive: boolean;
+  daysRemaining?: number;
+}
+
 
 /**
  * Medication Statistics
@@ -139,6 +253,7 @@ export interface MedicationStats {
   upcomingRefills: Medication[];
 }
 
+
 /**
  * Quick Add Medication (for simplified input)
  */
@@ -147,4 +262,26 @@ export interface QuickAddMedication {
   strength: string;
   frequency: FrequencyType;
   startDate: string;
+}
+
+
+/**
+ * Motivational Toast Type
+ * Different categories of motivational messages
+ */
+export type MotivationalToastType = 
+  | 'dose_taken'
+  | 'all_done'
+  | 'streak'
+  | 'reminder'
+  | 'encouragement';
+
+
+/**
+ * Motivational Toast Message
+ */
+export interface MotivationalToast {
+  type: MotivationalToastType;
+  message: string;
+  emoji?: string;
 }

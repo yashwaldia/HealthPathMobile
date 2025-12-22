@@ -1,16 +1,16 @@
 // components/nutrition/NutritionSidebar.tsx
 
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
   Modal,
   Pressable,
   ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 
 export type NutritionMode = 'dashboard' | 'image-compare';
@@ -31,9 +31,9 @@ const NUTRITION_TABS: MenuItem[] = [
   },
   {
     id: 'image-compare',
-    label: 'Image Comparator',
+    label: 'Image Analyzer',
     icon: 'images-outline',
-    description: 'Compare two meal photos with AI',
+    description: 'Analyze two meal photos with AI',
   },
 ];
 

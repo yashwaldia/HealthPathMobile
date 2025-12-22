@@ -1,26 +1,43 @@
 // constants/fitcalcConfig.ts
 
-import { FitCalcId } from '../types/fitcalc';
 import { FitCalcField } from '../components/fitcalc/FitCalcCard';
+import { CategoryId, FitCalcId } from '../types/fitcalc';
+
+// ============================================================================
+// TYPES
+// ============================================================================
 
 export type FitCalcConfigEntry = {
   title: string;
   description?: string;
   fields: FitCalcField[];
+  category: CategoryId;
+  icon: string; // Ionicons name
 };
 
+// ============================================================================
+// CALCULATOR CONFIGURATIONS
+// ============================================================================
+
 export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
+  // ========== FITNESS CATEGORY ==========
+  
   bmi: {
-    title: 'Body Mass Index (BMI)',
+    title: 'BMI',
     description: 'Estimate of body fat based on height and weight.',
+    category: 'fitness',
+    icon: 'body-outline',
     fields: [
       { key: 'height', label: 'Height (cm)', type: 'number', keyboardType: 'numeric' },
       { key: 'weight', label: 'Weight (kg)', type: 'number', keyboardType: 'numeric' },
     ],
   },
+  
   bmr: {
-    title: 'Basal Metabolic Rate (BMR)',
+    title: 'BMR',
     description: 'Calories your body burns each day at complete rest.',
+    category: 'fitness',
+    icon: 'flame-outline',
     fields: [
       {
         key: 'gender',
@@ -45,9 +62,12 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
       },
     ],
   },
+  
   tdee: {
-    title: 'Total Daily Energy Expenditure (TDEE)',
+    title: 'TDEE',
     description: 'Daily calories burned including your typical activity.',
+    category: 'fitness',
+    icon: 'speedometer-outline',
     fields: [
       { key: 'bmr', label: 'BMR (kcal/day)', type: 'number', keyboardType: 'numeric' },
       {
@@ -58,7 +78,7 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
           { value: '1.2', label: 'Sedentary' },
           { value: '1.375', label: 'Light' },
           { value: '1.55', label: 'Moderate' },
-          { value: '1.725', label: 'Very' },
+          { value: '1.725', label: 'Very Active' },
           { value: '1.9', label: 'Extreme' },
         ],
       },
@@ -68,15 +88,18 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
         type: 'chips',
         options: [
           { value: 'maintain', label: 'Maintain' },
-          { value: 'lose', label: 'Lose' },
-          { value: 'gain', label: 'Gain' },
+          { value: 'lose', label: 'Lose Weight' },
+          { value: 'gain', label: 'Gain Weight' },
         ],
       },
     ],
   },
+  
   macros: {
-    title: 'Macronutrients',
-    description: 'Split your daily calories into protein, carbs and fats using presets.',
+    title: 'Macros',
+    description: 'Split daily calories into protein, carbs and fats.',
+    category: 'fitness',
+    icon: 'restaurant-outline',
     fields: [
       {
         key: 'calories',
@@ -89,17 +112,20 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
         label: 'Macro preset',
         type: 'chips',
         options: [
-          { value: 'balanced', label: 'Balanced' },      // P 30 / C 40 / F 30
-          { value: 'keto', label: 'Ketogenic' },        // P 20 / C 5  / F 75
-          { value: 'highp', label: 'High Protein' },    // P 35 / C 35 / F 30
-          { value: 'lowcarb', label: 'Low Carb' },      // P 30 / C 25 / F 45
+          { value: 'balanced', label: 'Balanced' },
+          { value: 'keto', label: 'Ketogenic' },
+          { value: 'highp', label: 'High Protein' },
+          { value: 'lowcarb', label: 'Low Carb' },
         ],
       },
     ],
   },
+  
   onerm: {
-    title: 'One-Rep Max (1RM)',
-    description: 'Estimate the max weight you can lift for one repetition.',
+    title: '1RM',
+    description: 'Estimate max weight you can lift for one repetition.',
+    category: 'fitness',
+    icon: 'barbell-outline',
     fields: [
       {
         key: 'weight',
@@ -125,9 +151,12 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
       },
     ],
   },
+  
   bodyfat: {
-    title: 'Body Fat % (US Navy)',
-    description: 'Estimate body fat percentage from body measurements.',
+    title: 'Body Fat %',
+    description: 'Estimate body fat percentage from measurements.',
+    category: 'fitness',
+    icon: 'scale-outline',
     fields: [
       {
         key: 'gender',
@@ -141,12 +170,36 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
       { key: 'height', label: 'Height (cm)', type: 'number', keyboardType: 'numeric' },
       { key: 'waist', label: 'Waist (cm)', type: 'number', keyboardType: 'numeric' },
       { key: 'neck', label: 'Neck (cm)', type: 'number', keyboardType: 'numeric' },
-      { key: 'hip', label: 'Hip (cm, women)', type: 'number', keyboardType: 'numeric' },
+      { key: 'hip', label: 'Hip (cm, women only)', type: 'number', keyboardType: 'numeric' },
     ],
   },
+  
+  idealweight: {
+    title: 'Ideal Weight',
+    description: 'Healthy weight estimates from different formulas.',
+    category: 'fitness',
+    icon: 'accessibility-outline',
+    fields: [
+      {
+        key: 'gender',
+        label: 'Gender',
+        type: 'chips',
+        options: [
+          { value: 'male', label: 'Male' },
+          { value: 'female', label: 'Female' },
+        ],
+      },
+      { key: 'height', label: 'Height (cm)', type: 'number', keyboardType: 'numeric' },
+    ],
+  },
+  
+  // ========== HEART CATEGORY ==========
+  
   hrzones: {
-    title: 'Heart Rate Zones',
+    title: 'HR Zones',
     description: 'Training intensity zones based on your age and HR.',
+    category: 'heart',
+    icon: 'pulse-outline',
     fields: [
       { key: 'age', label: 'Age (years)', type: 'number', keyboardType: 'numeric' },
       {
@@ -157,21 +210,83 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
       },
     ],
   },
+  
   vo2max: {
-    title: 'VO₂max (1.5 mile test)',
+    title: 'VO₂max',
     description: 'Estimate aerobic fitness from 1.5 mile run time.',
+    category: 'heart',
+    icon: 'trail-sign-outline',
     fields: [
       {
         key: 'time',
         label: '1.5 mile time (mm:ss)',
         type: 'text',
         keyboardType: 'default',
+        helperText: 'e.g., 12:30',
       },
     ],
   },
+  
+  // ========== DAILY HEALTH CATEGORY ==========
+  
+  water: {
+    title: 'Water',
+    description: 'Daily water needs based on weight and activity.',
+    category: 'dailyhealth',
+    icon: 'water-outline',
+    fields: [
+      { key: 'weight', label: 'Weight (kg)', type: 'number', keyboardType: 'numeric' },
+      {
+        key: 'activity',
+        label: 'Activity level',
+        type: 'chips',
+        options: [
+          { value: 'sedentary', label: 'Sedentary' },
+          { value: 'lightly', label: 'Light' },
+          { value: 'moderately', label: 'Moderate' },
+          { value: 'very', label: 'Very Active' },
+        ],
+      },
+    ],
+  },
+  
+  protein: {
+    title: 'Protein',
+    description: 'Daily protein based on weight, activity and goal.',
+    category: 'dailyhealth',
+    icon: 'fitness-outline',
+    fields: [
+      { key: 'weight', label: 'Weight (kg)', type: 'number', keyboardType: 'numeric' },
+      {
+        key: 'activity',
+        label: 'Activity level',
+        type: 'chips',
+        options: [
+          { value: 'sedentary', label: 'Sedentary' },
+          { value: 'lightly', label: 'Light' },
+          { value: 'moderately', label: 'Moderate' },
+          { value: 'very', label: 'Very Active' },
+          { value: 'athlete', label: 'Athlete' },
+        ],
+      },
+      {
+        key: 'goal',
+        label: 'Goal',
+        type: 'chips',
+        options: [
+          { value: 'maintain', label: 'Maintain' },
+          { value: 'lose', label: 'Fat Loss' },
+          { value: 'gain', label: 'Muscle Gain' },
+        ],
+      },
+    ],
+  },
+  
   activity: {
-    title: 'Activity Calories',
+    title: 'Activity Cals',
     description: 'Estimate calories burned for a workout.',
+    category: 'dailyhealth',
+    icon: 'walk-outline',
     fields: [
       {
         key: 'type',
@@ -182,7 +297,7 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
           { value: 'running', label: 'Running' },
           { value: 'cycling', label: 'Cycling' },
           { value: 'swimming', label: 'Swimming' },
-          { value: 'weightlifting', label: 'Weightlifting' },
+          { value: 'weightlifting', label: 'Lifting' },
         ],
       },
       {
@@ -204,52 +319,12 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
       { key: 'weight', label: 'Weight (kg)', type: 'number', keyboardType: 'numeric' },
     ],
   },
-  ratios: {
-    title: 'Body Ratios',
-    description: 'Waist-to-height and waist-to-hip ratios.',
-    fields: [
-      { key: 'height', label: 'Height (cm)', type: 'number', keyboardType: 'numeric' },
-      { key: 'waist', label: 'Waist (cm)', type: 'number', keyboardType: 'numeric' },
-      { key: 'hip', label: 'Hip (cm)', type: 'number', keyboardType: 'numeric' },
-    ],
-  },
-  idealweight: {
-    title: 'Ideal Weight',
-    description: 'Healthy weight estimates from different formulas.',
-    fields: [
-      {
-        key: 'gender',
-        label: 'Gender',
-        type: 'chips',
-        options: [
-          { value: 'male', label: 'Male' },
-          { value: 'female', label: 'Female' },
-        ],
-      },
-      { key: 'height', label: 'Height (cm)', type: 'number', keyboardType: 'numeric' },
-    ],
-  },
-  water: {
-    title: 'Water Intake',
-    description: 'Daily water needs based on weight and activity.',
-    fields: [
-      { key: 'weight', label: 'Weight (kg)', type: 'number', keyboardType: 'numeric' },
-      {
-        key: 'activity',
-        label: 'Activity level',
-        type: 'chips',
-        options: [
-          { value: 'sedentary', label: 'Sedentary' },
-          { value: 'lightly', label: 'Lightly active' },
-          { value: 'moderately', label: 'Moderately active' },
-          { value: 'very', label: 'Very active' },
-        ],
-      },
-    ],
-  },
+  
   running: {
     title: 'Running Pace',
-    description: 'Pace and speed from distance and time.',
+    description: 'Calculate pace and speed from distance and time.',
+    category: 'dailyhealth',
+    icon: 'footsteps-outline',
     fields: [
       { key: 'distance', label: 'Distance (km)', type: 'number', keyboardType: 'numeric' },
       {
@@ -257,36 +332,111 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
         label: 'Time (hh:mm:ss)',
         type: 'text',
         keyboardType: 'default',
+        helperText: 'e.g., 00:45:30',
       },
     ],
   },
-  protein: {
-    title: 'Protein Intake',
-    description: 'Daily protein based on weight, activity and goal.',
+  
+  ratios: {
+    title: 'Body Ratios',
+    description: 'Waist-to-height and waist-to-hip ratios.',
+    category: 'dailyhealth',
+    icon: 'stats-chart-outline',
     fields: [
-      { key: 'weight', label: 'Weight (kg)', type: 'number', keyboardType: 'numeric' },
-      {
-        key: 'activity',
-        label: 'Activity level',
-        type: 'chips',
-        options: [
-          { value: 'sedentary', label: 'Sedentary' },
-          { value: 'lightly', label: 'Lightly active' },
-          { value: 'moderately', label: 'Moderately active' },
-          { value: 'very', label: 'Very active' },
-          { value: 'athlete', label: 'Athlete' },
-        ],
-      },
-      {
-        key: 'goal',
-        label: 'Goal',
-        type: 'chips',
-        options: [
-          { value: 'maintain', label: 'Maintain' },
-          { value: 'lose', label: 'Fat loss' },
-          { value: 'gain', label: 'Muscle gain' },
-        ],
-      },
+      { key: 'height', label: 'Height (cm)', type: 'number', keyboardType: 'numeric' },
+      { key: 'waist', label: 'Waist (cm)', type: 'number', keyboardType: 'numeric' },
+      { key: 'hip', label: 'Hip (cm)', type: 'number', keyboardType: 'numeric' },
     ],
   },
 };
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Get all calculators for a specific category
+ */
+export function getCalculatorsByCategory(categoryId: CategoryId): FitCalcId[] {
+  return (Object.keys(FITCALC_CONFIG) as FitCalcId[]).filter(
+    (calcId) => FITCALC_CONFIG[calcId].category === categoryId
+  );
+}
+
+/**
+ * Get calculator config by ID
+ */
+export function getCalculatorConfig(calcId: FitCalcId): FitCalcConfigEntry {
+  return FITCALC_CONFIG[calcId];
+}
+
+/**
+ * Get calculator title by ID
+ */
+export function getCalculatorTitle(calcId: FitCalcId): string {
+  return FITCALC_CONFIG[calcId].title;
+}
+
+/**
+ * Get calculator category by ID
+ */
+export function getCalculatorCategory(calcId: FitCalcId): CategoryId {
+  return FITCALC_CONFIG[calcId].category;
+}
+
+/**
+ * Check if calculator exists
+ */
+export function isValidCalculator(calcId: string): calcId is FitCalcId {
+  return calcId in FITCALC_CONFIG;
+}
+
+// ============================================================================
+// CATEGORY DEFINITIONS
+// ============================================================================
+
+export const CATEGORIES = [
+  {
+    id: 'fitness' as CategoryId,
+    label: 'Fitness',
+    icon: 'barbell-outline',
+    calculators: getCalculatorsByCategory('fitness'),
+  },
+  {
+    id: 'heart' as CategoryId,
+    label: 'Heart',
+    icon: 'heart-outline',
+    calculators: getCalculatorsByCategory('heart'),
+  },
+  {
+    id: 'dailyhealth' as CategoryId,
+    label: 'Daily Health',
+    icon: 'fitness-outline',
+    calculators: getCalculatorsByCategory('dailyhealth'),
+  },
+] as const;
+
+// ============================================================================
+// VALIDATION
+// ============================================================================
+
+/**
+ * Validate that all calculators are assigned to a category
+ */
+function validateConfig() {
+  const allCalcIds = Object.keys(FITCALC_CONFIG) as FitCalcId[];
+  const categorizedCalcs = CATEGORIES.flatMap(cat => cat.calculators);
+  
+  const uncategorized = allCalcIds.filter(id => !categorizedCalcs.includes(id));
+  
+  if (uncategorized.length > 0) {
+    console.warn('Uncategorized calculators:', uncategorized);
+  }
+  
+  return uncategorized.length === 0;
+}
+
+// Run validation in development
+if (__DEV__) {
+  validateConfig();
+}

@@ -14,10 +14,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, getConfidenceColor } from '../constants/colors';
-import { useAuth } from '../context/AuthContext';
-import { getLabReport, updateLabReport, deleteLabReport } from '../services/labReportService';
-import { LabReport, TestResult } from '../types/upload';
+import { Colors, getConfidenceColor } from '../../constants/colors';
+import { useAuth } from '../../context/AuthContext';
+import { getLabReport, updateLabReport, deleteLabReport } from '../../services/labReportService';
+import { LabReport, TestResult } from '../../types/upload';
 
 export default function ReportDetailScreen() {
   const router = useRouter();

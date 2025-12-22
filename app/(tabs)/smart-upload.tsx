@@ -12,22 +12,22 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
-import { useAuth } from '../context/AuthContext';
+import { Colors } from '../../constants/colors';
+import { useAuth } from '../../context/AuthContext';
 
-import { UploadButton } from '../components/upload/UploadButton';
-import { FilePreview } from '../components/upload/FilePreview';
-import { UploadProgressBar } from '../components/upload/UploadProgressBar';
-import { ClassificationCard } from '../components/upload/ClassificationCard';
+import { UploadButton } from '../../components/upload/UploadButton';
+import { FilePreview } from '../../components/upload/FilePreview';
+import { UploadProgressBar } from '../../components/upload/UploadProgressBar';
+import { ClassificationCard } from '../../components/upload/ClassificationCard';
 
-import { showFilePickerOptions, PickedFile } from '../services/filePickerService';
-import { uploadFileToStorage } from '../services/uploadService';
-import { classifyDocument, extractLabResults, generateInterpretation } from '../services/classificationService';
-import { saveLabReport, checkDuplicateReport } from '../services/labReportService';
-import { addMedication } from '../services/medicationService';
+import { showFilePickerOptions, PickedFile } from '../../services/filePickerService';
+import { uploadFileToStorage } from '../../services/uploadService';
+import { classifyDocument, extractLabResults, generateInterpretation } from '../../services/classificationService';
+import { saveLabReport, checkDuplicateReport } from '../../services/labReportService';
+import { addMedication } from '../../services/medicationService';
 
-import { UploadProgress, ClassificationResult, UploadedFile } from '../types/upload';
-import { DosageForm, FrequencyType, MealRelation } from '../types/medication';
+import { UploadProgress, ClassificationResult, UploadedFile } from '../../types/upload';
+import { DosageForm, FrequencyType, MealRelation } from '../../types/medication';
 
 export default function SmartUploadScreen() {
   const router = useRouter();

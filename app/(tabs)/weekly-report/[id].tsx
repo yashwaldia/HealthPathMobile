@@ -5,8 +5,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import firestore from '@react-native-firebase/firestore';
-import { useAuth } from '../../context/AuthContext';
-import { Colors } from '../../constants/colors';
+import { useAuth } from '../../../context/AuthContext';
+import { Colors } from '../../../constants/colors';
 
 interface WeeklyReport {
   weekStartDate: string;

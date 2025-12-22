@@ -1,24 +1,28 @@
 // components/fitcalc/FitCalcCard.tsx
 
-import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import React, { memo, useCallback } from 'react';
 import {
-  View,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { FitCalcHistoryEntry } from '../../services/fitCalcService';
+
+// ============================================================================
+// TYPES
+// ============================================================================
 
 export type FitCalcField =
   | {
       key: string;
       label: string;
       type: 'text' | 'number';
-      keyboardType?: 'default' | 'numeric';
+      keyboardType?: 'default' | 'numeric' | 'decimal-pad' | 'phone-pad';
       helperText?: string;
     }
   | {
@@ -47,7 +51,120 @@ type Props = {
   };
 };
 
-export function FitCalcCard({
+// ============================================================================
+// SUBCOMPONENTS
+// ============================================================================
+
+const ChipField = memo(
+  ({
+    field,
+    value,
+    onChange,
+  }: {
+    field: Extract<FitCalcField, { type: 'chips' }>;
+    value: string;
+    onChange: (key: string, val: string) => void;
+  }) => (
+    <View style={styles.field}>
+      <Text style={styles.label}>{field.label}</Text>
+      <View style={styles.chipRow}>
+        {field.options.map((opt) => {
+          const active = value === opt.value;
+          return (
+            <TouchableOpacity
+              key={opt.value}
+              style={[styles.chip, active && styles.chipActive]}
+              onPress={() => onChange(field.key, opt.value)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[styles.chipText, active && styles.chipTextActive]}
+                numberOfLines={1}
+              >
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  )
+);
+
+ChipField.displayName = 'ChipField';
+
+const InputField = memo(
+  ({
+    field,
+    value,
+    onChange,
+  }: {
+    field: Extract<FitCalcField, { type: 'text' | 'number' }>;
+    value: string;
+    onChange: (key: string, val: string) => void;
+  }) => (
+    <View style={styles.field}>
+      <Text style={styles.label}>{field.label}</Text>
+      <TextInput
+        keyboardType={field.keyboardType ?? 'default'}
+        placeholder={field.helperText || field.label}
+        placeholderTextColor={Colors.light.textSecondary}
+        value={value}
+        onChangeText={(v) => onChange(field.key, v)}
+        style={styles.input}
+        returnKeyType="done"
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+    </View>
+  )
+);
+
+InputField.displayName = 'InputField';
+
+const HistoryCard = memo(
+  ({
+    entry,
+    renderRow,
+    onDelete,
+  }: {
+    entry: FitCalcHistoryEntry;
+    renderRow: (entry: FitCalcHistoryEntry) => {
+      line1: string;
+      line2?: string;
+      line3?: string;
+    };
+    onDelete: (id: string) => void;
+  }) => {
+    const row = renderRow(entry);
+    
+    return (
+      <View style={styles.historyCard}>
+        <View style={styles.historyCardLeft}>
+          <Text style={styles.historyLine1}>{row.line1}</Text>
+          {row.line2 && <Text style={styles.historyLine2}>{row.line2}</Text>}
+          {row.line3 && <Text style={styles.historyLine3}>{row.line3}</Text>}
+        </View>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => onDelete(entry.entryId)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          activeOpacity={0.6}
+        >
+          <Ionicons name="trash-outline" size={18} color={Colors.light.error} />
+        </TouchableOpacity>
+      </View>
+    );
+  }
+);
+
+HistoryCard.displayName = 'HistoryCard';
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+export const FitCalcCard = memo(function FitCalcCard({
   title,
   description,
   fields,
@@ -63,110 +180,116 @@ export function FitCalcCard({
 }: Props) {
   const hasResult = !!resultNode;
 
+  const handleFieldChange = useCallback(
+    (fieldKey: string, value: string) => {
+      onChange(fieldKey, value);
+    },
+    [onChange]
+  );
+
+  const renderField = useCallback(
+    (field: FitCalcField) => {
+      const value = (inputs[field.key] as string | undefined) ?? '';
+
+      if (field.type === 'chips') {
+        return (
+          <ChipField
+            key={field.key}
+            field={field}
+            value={value}
+            onChange={handleFieldChange}
+          />
+        );
+      }
+
+      return (
+        <InputField
+          key={field.key}
+          field={field}
+          value={value}
+          onChange={handleFieldChange}
+        />
+      );
+    },
+    [inputs, handleFieldChange]
+  );
+
   return (
     <View style={styles.card}>
+      {/* Input Section */}
       <View style={styles.inputSection}>
         <Text style={styles.title}>{title}</Text>
-        {description ? <Text style={styles.description}>{description}</Text> : null}
+        {description && <Text style={styles.description}>{description}</Text>}
 
-        {fields.map((field) => {
-          if (field.type === 'chips') {
-            const value = (inputs[field.key] as string | undefined) ?? '';
-            return (
-              <View style={styles.field} key={field.key}>
-                <Text style={styles.label}>{field.label}</Text>
-                <View style={styles.chipRow}>
-                  {field.options.map((opt) => {
-                    const active = value === opt.value;
-                    return (
-                      <TouchableOpacity
-                        key={opt.value}
-                        style={[styles.chip, active && styles.chipActive]}
-                        onPress={() => onChange(field.key, opt.value)}
-                      >
-                        <Text
-                          style={[styles.chipText, active && styles.chipTextActive]}
-                          numberOfLines={1}
-                        >
-                          {opt.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            );
-          }
+        {/* Fields */}
+        {fields.map(renderField)}
 
-          const value = (inputs[field.key] as string | undefined) ?? '';
-          return (
-            <View style={styles.field} key={field.key}>
-              <Text style={styles.label}>{field.label}</Text>
-              <TextInput
-                keyboardType={field.keyboardType ?? 'default'}
-                placeholder={field.helperText || field.label}
-                placeholderTextColor={Colors.light.textSecondary}
-                value={value}
-                onChangeText={(v) => onChange(field.key, v)}
-                style={styles.input}
-              />
-            </View>
-          );
-        })}
-
-        <TouchableOpacity style={styles.button} onPress={onCalculate}>
+        {/* Calculate Button */}
+        <TouchableOpacity
+          style={styles.button}
+          onPress={onCalculate}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="calculator-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
           <Text style={styles.buttonText}>Calculate</Text>
         </TouchableOpacity>
 
+        {/* Result Section */}
         {hasResult && (
           <View style={styles.resultContainer}>
             {resultNode}
+            
+            {/* Save/Saved Status */}
             {resultSaved === false && (
-              <TouchableOpacity style={styles.saveButton} onPress={onSave}>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={onSave}
+                activeOpacity={0.8}
+              >
                 <Ionicons name="bookmark-outline" size={16} color="#fff" />
                 <Text style={styles.saveButtonText}>Save Result</Text>
               </TouchableOpacity>
             )}
+            
             {resultSaved === true && (
               <View style={styles.savedBadge}>
                 <Ionicons name="checkmark-circle" size={16} color={Colors.light.success} />
-                <Text style={styles.savedText}>Saved</Text>
+                <Text style={styles.savedText}>Saved to History</Text>
               </View>
             )}
           </View>
         )}
       </View>
 
+      {/* History Section */}
       {history.length > 0 && (
         <View style={styles.historySection}>
-          <Text style={styles.historyTitle}>Past Calculations</Text>
-          {history.map((entry) => {
-            const row = renderHistoryRow(entry);
-            return (
-              <View key={entry.entryId} style={styles.historyCard}>
-                <View style={styles.historyCardLeft}>
-                  <Text style={styles.historyLine1}>{row.line1}</Text>
-                  {row.line2 ? (
-                    <Text style={styles.historyLine2}>{row.line2}</Text>
-                  ) : null}
-                  {row.line3 ? (
-                    <Text style={styles.historyLine3}>{row.line3}</Text>
-                  ) : null}
-                </View>
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => onDeleteHistory(entry.entryId)}
-                >
-                  <Ionicons name="trash-outline" size={18} color={Colors.light.error} />
-                </TouchableOpacity>
-              </View>
-            );
-          })}
+          <View style={styles.historyHeader}>
+            <Ionicons name="time-outline" size={18} color={Colors.light.text} />
+            <Text style={styles.historyTitle}>Past Calculations</Text>
+          </View>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+          >
+            {history.map((entry) => (
+              <HistoryCard
+                key={entry.entryId}
+                entry={entry}
+                renderRow={renderHistoryRow}
+                onDelete={onDeleteHistory}
+              />
+            ))}
+          </ScrollView>
         </View>
       )}
     </View>
   );
-}
+});
+
+// ============================================================================
+// STYLES
+// ============================================================================
 
 const styles = StyleSheet.create({
   card: {
@@ -180,6 +303,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   title: {
     fontSize: 18,
@@ -190,22 +318,24 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 13,
     color: Colors.light.textSecondary,
-    marginBottom: 12,
+    marginBottom: 16,
+    lineHeight: 18,
   },
   field: {
-    marginBottom: 10,
+    marginBottom: 14,
   },
   label: {
     fontSize: 13,
+    fontWeight: '600',
     color: Colors.light.textSecondary,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   input: {
     borderWidth: 1,
     borderColor: Colors.light.border,
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
     color: Colors.light.text,
     fontSize: 14,
     backgroundColor: Colors.light.background,
@@ -216,11 +346,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: Colors.light.border,
+    backgroundColor: Colors.light.background,
   },
   chipActive: {
     backgroundColor: Colors.light.primary + '15',
@@ -229,24 +360,33 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 12,
     color: Colors.light.textSecondary,
+    fontWeight: '500',
   },
   chipTextActive: {
     color: Colors.light.primary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   button: {
-    marginTop: 8,
+    marginTop: 12,
     backgroundColor: Colors.light.primary,
     borderRadius: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   buttonText: {
-    color: Colors.light.cardBackground,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
   },
   resultContainer: {
-    marginTop: 12,
+    marginTop: 16,
   },
   saveButton: {
     marginTop: 12,
@@ -254,8 +394,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.light.primary,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 10,
+    borderRadius: 10,
     gap: 6,
   },
   saveButtonText: {
@@ -269,6 +409,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    paddingVertical: 8,
+    backgroundColor: Colors.light.success + '10',
+    borderRadius: 8,
   },
   savedText: {
     color: Colors.light.success,
@@ -277,38 +420,47 @@ const styles = StyleSheet.create({
   },
   historySection: {
     marginTop: 4,
-    paddingHorizontal: 4,
-    paddingBottom: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 6,
   },
   historyTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 8,
-    marginLeft: 4,
   },
   historyCard: {
     flexDirection: 'row',
     backgroundColor: Colors.light.cardBackground,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
     marginBottom: 8,
-    marginHorizontal: 4,
     borderWidth: 1,
     borderColor: Colors.light.border,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   historyCardLeft: {
     flex: 1,
   },
   historyLine1: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.light.textSecondary,
-    marginBottom: 2,
+    marginBottom: 4,
+    fontWeight: '500',
   },
   historyLine2: {
     fontSize: 12,
     color: Colors.light.text,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   historyLine3: {
     fontSize: 13,
@@ -317,5 +469,6 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     padding: 4,
+    alignSelf: 'flex-start',
   },
 });

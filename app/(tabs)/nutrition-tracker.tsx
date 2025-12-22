@@ -1,39 +1,38 @@
 // app/(tabs)/nutrition-tracker.tsx
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
   ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import CustomToast from '../../components/ui/CustomToast';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import {
-  nutritionService,
   NutritionEntry,
+  nutritionService,
 } from '../../services/nutritionService';
 import { getTodayISO } from '../../utils/dateUtils';
-import CustomToast from '../../components/ui/CustomToast';
 
-import NutritionHeader from '../../components/nutrition/NutritionHeader';
-import NutritionSummaryCards from '../../components/nutrition/NutritionSummaryCards';
-import NutritionQuickActions from '../../components/nutrition/NutritionQuickActions';
+import ManualFoodModal from '../../components/nutrition/ManualFoodModal';
 import NutritionCaloriesChart from '../../components/nutrition/NutritionCaloriesChart';
 import NutritionDeficiencyCard from '../../components/nutrition/NutritionDeficiencyCard';
+import NutritionHeader from '../../components/nutrition/NutritionHeader';
 import NutritionMealList from '../../components/nutrition/NutritionMealList';
-import ManualFoodModal from '../../components/nutrition/ManualFoodModal';
-
-// Sidebar + modes
-import {
-  NutritionSidebar,
-  NutritionMode,
-} from '../../components/nutrition/NutritionSidebar';
+import NutritionQuickActions from '../../components/nutrition/NutritionQuickActions';
+import NutritionSummaryCards from '../../components/nutrition/NutritionSummaryCards';
 
 // Image comparison screen
 import ImageComparisonScreen from '../../components/nutrition/ImageComparisonScreen';
+
+// Mode type
+export type NutritionMode = 'dashboard' | 'image-compare';
 
 // Helper: Get Monday of the week containing the given date
 function getMondayOfWeek(dateISO: string): string {
@@ -78,8 +77,7 @@ export default function NutritionTrackerScreen() {
     getMondayOfWeek(getTodayISO()),
   );
 
-  // Sidebar + active mode
-  const [sidebarVisible, setSidebarVisible] = useState(false);
+  // Active mode
   const [activeMode, setActiveMode] =
     useState<NutritionMode>('dashboard'); // 'dashboard' | 'image-compare'
 
@@ -305,8 +303,50 @@ export default function NutritionTrackerScreen() {
           onHide={() => setToast({ ...toast, visible: false })}
         />
 
-        {/* Header with built-in menu button */}
-        <NutritionHeader onPressMenu={() => setSidebarVisible(true)} />
+        {/* Header with title only */}
+        <NutritionHeader />
+
+        {/* Tab Switch Section */}
+        <View style={styles.tabSwitchContainer}>
+          <View style={styles.tabButtonsContainer}>
+            <TouchableOpacity
+              style={[
+                styles.tabButton,
+                styles.tabButtonLeft,
+                activeMode === 'dashboard' && styles.tabButtonActive,
+              ]}
+              onPress={() => setActiveMode('dashboard')}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.tabButtonText,
+                  activeMode === 'dashboard' && styles.tabButtonTextActive,
+                ]}
+              >
+                Dashboard
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.tabButton,
+                styles.tabButtonRight,
+                activeMode === 'image-compare' && styles.tabButtonActive,
+              ]}
+              onPress={() => setActiveMode('image-compare')}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.tabButtonText,
+                  activeMode === 'image-compare' && styles.tabButtonTextActive,
+                ]}
+              >
+                Image Analyzer
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* Main content: switch by activeMode */}
         {activeMode === 'dashboard' ? renderDashboard() : renderImageCompare()}
@@ -318,16 +358,6 @@ export default function NutritionTrackerScreen() {
           onSave={handleSaveManualMeal}
           dateISO={todayISO}
           initialEntry={editingEntry}
-        />
-
-        {/* Nutrition sidebar (slide-in menu like FitCalcSidebar) */}
-        <NutritionSidebar
-          visible={sidebarVisible}
-          activeId={activeMode}
-          onSelect={(mode) => {
-            setActiveMode(mode);
-          }}
-          onClose={() => setSidebarVisible(false)}
         />
       </View>
     </SafeAreaView>
@@ -353,5 +383,41 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  tabSwitchContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+    backgroundColor: Colors.light.background,
+  },
+  tabButtonsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 10,
+    padding: 4,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  tabButtonLeft: {
+    marginRight: 2,
+  },
+  tabButtonRight: {
+    marginLeft: 2,
+  },
+  tabButtonActive: {
+    backgroundColor: Colors.light.primary,
+  },
+  tabButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#718096',
+  },
+  tabButtonTextActive: {
+    color: '#FFFFFF',
   },
 });

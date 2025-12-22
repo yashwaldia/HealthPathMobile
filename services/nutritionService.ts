@@ -99,7 +99,6 @@ export const nutritionService = {
   async getForDate(userId: string, date: string): Promise<NutritionEntry[]> {
     const snapshot = await getCollectionRef(userId)
       .where('date', '==', date)
-      .orderBy('date', 'asc')
       .get();
 
     const items = snapshot.docs.map((docSnap) => {
@@ -112,7 +111,7 @@ export const nutritionService = {
       };
     });
 
-    // Optional: sort by time in memory
+    // Sort by time in memory
     return items.sort((a, b) => a.time.localeCompare(b.time));
   },
 

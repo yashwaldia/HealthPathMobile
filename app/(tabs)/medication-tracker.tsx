@@ -1,50 +1,57 @@
 // app/(tabs)/medication-tracker.tsx
+// ✅ REDESIGNED: Compact calendar + date popup + smart import button below calendar
+// Last Updated: December 18, 2025
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
   ActivityIndicator,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../context/AuthContext';
-import { Colors } from '../../constants/colors';
-import {
-  getAllMedications,
-  deleteMedication,
-  logDose,
-  getDoseHistory,
-} from '../../services/medicationService';
-import { Medication, DoseLog } from '../../types/medication';
-
-// UI components
-import CustomToast from '../../components/ui/CustomToast';
+import CircularProgress from '../../components/medication/CircularProgress';
+import DoseHistorySection from '../../components/medication/DoseHistorySection';
+import MedicationCalendar from '../../components/medication/MedicationCalendar';
+import MergeConflictModal from '../../components/medication/MergeConflictModal';
+import SmartImportModal from '../../components/medication/SmartImportModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import CustomToast from '../../components/ui/CustomToast';
+import { Colors } from '../../constants/colors';
+import { useAuth } from '../../context/AuthContext';
+import { deleteMedication, getAllMedications, getDoseHistory, logDose } from '../../services/medicationService';
+import { smartImportMedications } from '../../services/smartImportService';
+import { DoseLog, Medication } from '../../types/medication';
+import { getDailySummaryToast, getMotivationalToast } from '../../utils/motivationalMessages';
 
-// Frequency map to calculate expected daily doses
+
+// Frequency map
 const FREQUENCY_MAP: Record<string, number> = {
   'Once a day': 1,
   'Twice a day': 2,
   'Thrice a day': 3,
   'Four times a day': 4,
-  'As needed': 0,
-  Custom: 0,
   'Every 4 hours': 6,
   'Every 6 hours': 4,
   'Every 8 hours': 3,
   'Every 12 hours': 2,
-  Weekly: 0,
+  'As needed': 1,
+  'Weekly': 0.14,
+  'Custom': 1,
 };
+
 
 export default function MedicationTrackerScreen() {
   const router = useRouter();
   const { user } = useAuth();
+
 
   // State
   const [medications, setMedications] = useState<Medication[]>([]);
@@ -52,50 +59,59 @@ export default function MedicationTrackerScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
-
-  // Store dose history for each medication locally
   const [dosesMap, setDosesMap] = useState<{ [key: string]: DoseLog[] }>({});
 
-  // Toast state
+
+  // Modals
+  const [showSmartImport, setShowSmartImport] = useState(false);
+  const [showMergeConflict, setShowMergeConflict] = useState(false);
+  const [currentConflict, setCurrentConflict] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+
+
+  // ✅ NEW: Date popup state
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [datePopupVisible, setDatePopupVisible] = useState(false);
+
+
+  // Toast
   const [toast, setToast] = useState<{
     visible: boolean;
     message: string;
     type: 'success' | 'error' | 'info' | 'warning';
   }>({ visible: false, message: '', type: 'info' });
 
-  // Delete confirm dialog
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning') => {
     setToast({ visible: true, message, type });
   };
 
-  /**
-   * Load medications and their dose history
-   */
+
   const loadMedications = useCallback(async () => {
     if (!user?.uid) return;
 
+
     try {
       setLoading(true);
-
       const allMeds = await getAllMedications(user.uid);
       setMedications(allMeds);
       setActiveMedications(allMeds.filter((med) => med.isActive));
 
+
       const dosesPromises = allMeds.map(async (med) => {
-        if (!med.isActive) return { medicationId: med.medicationId, doses: [] };
-        const history = await getDoseHistory(user.uid!, med.medicationId, 100);
+        if (!med.isActive) return { medicationId: med.medicationId, doses: [] as DoseLog[] };
+        const history = await getDoseHistory(user.uid!, med.medicationId, 30);
         return { medicationId: med.medicationId, doses: history };
       });
 
-      const dosesResults = await Promise.all(dosesPromises);
 
+      const dosesResults = await Promise.all(dosesPromises);
       const newDosesMap: { [key: string]: DoseLog[] } = {};
       dosesResults.forEach((result) => {
-        newDosesMap[result.medicationId] = result.doses;
+        if (result) {
+          newDosesMap[result.medicationId] = result.doses;
+        }
       });
-
       setDosesMap(newDosesMap);
     } catch (error) {
       console.error('Error loading medications:', error);
@@ -105,9 +121,7 @@ export default function MedicationTrackerScreen() {
     }
   }, [user]);
 
-  /**
-   * Refresh medications
-   */
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadMedications();
@@ -115,43 +129,38 @@ export default function MedicationTrackerScreen() {
   }, [loadMedications]);
 
 
-
-  /**
-   * Load medications on mount
-   */
   useEffect(() => {
     loadMedications();
   }, [loadMedications]);
 
-  /**
-   * Handle delete medication (open confirm dialog)
-   */
+
   const handleDeleteMedication = (medicationId: string, name: string) => {
     setDeleteTarget({ id: medicationId, name });
   };
 
+
   const confirmDeleteMedication = async () => {
     if (!user?.uid || !deleteTarget) return;
+
 
     try {
       await deleteMedication(user.uid, deleteTarget.id);
       await loadMedications();
-      showToast(`Medication "${deleteTarget.name}" deleted`, 'success');
+      showToast(`"${deleteTarget.name}" deleted`, 'success');
     } catch (error) {
-      console.error('Delete medication error:', error);
+      console.error('Delete error:', error);
       showToast('Failed to delete medication', 'error');
     } finally {
       setDeleteTarget(null);
     }
   };
 
-  /**
-   * Handle mark dose as taken
-   */
+
   const handleMarkDoseTaken = async (medication: Medication) => {
     try {
       if (!user?.uid) return;
       const now = new Date();
+
 
       await logDose(user.uid, medication.medicationId, {
         scheduledTime: now.toISOString(),
@@ -160,7 +169,8 @@ export default function MedicationTrackerScreen() {
         skipped: false,
       });
 
-      showToast(`Dose of ${medication.name} marked as taken`, 'success');
+
+      showToast(`${medication.name} dose taken! ✅`, 'success');
       await loadMedications();
     } catch (error) {
       console.error('Log dose error:', error);
@@ -168,22 +178,20 @@ export default function MedicationTrackerScreen() {
     }
   };
 
-  /**
-   * Calculate adherence and status for a single medication
-   */
+
   const getMedicationStatus = (medication: Medication) => {
     const doses = dosesMap[medication.medicationId] || [];
     const { startDate, durationDays, frequency } = medication;
-
     const start = new Date(startDate);
     const duration = durationDays ? parseInt(durationDays.toString(), 10) : 0;
+
 
     if (isNaN(start.getTime()) || (durationDays && isNaN(duration))) {
       return { adherence: 0, dosesTakenToday: 0, expectedDoses: 0, isDue: false, isActive: false };
     }
 
-    const today = new Date();
 
+    const today = new Date();
     let isActiveDateRange = true;
     if (duration > 0) {
       const end = new Date(start);
@@ -191,39 +199,33 @@ export default function MedicationTrackerScreen() {
       isActiveDateRange = today >= start && today < end;
     }
 
+
     const todayStr = today.toDateString();
     const dosesTakenToday = doses.filter((d) => {
-      const dDate = d.takenTime ? new Date(d.takenTime) : new Date(d.createdAt);
+      const dDate = d.takenTime ? new Date(d.takenTime) : new Date(d.createdAt || '');
       return dDate.toDateString() === todayStr;
     }).length;
 
-    if (frequency === 'As needed' || frequency === 'Custom' || frequency === 'Weekly') {
-      return {
-        adherence: 100,
-        dosesTakenToday,
-        expectedDoses: 0,
-        isDue: true,
-        isActive: isActiveDateRange,
-      };
-    }
 
     const expectedDosesPerDay = FREQUENCY_MAP[frequency] || 1;
-
     const daysSinceStart = Math.max(
       0,
-      Math.floor((today.getTime() - start.getTime()) / (1000 * 3600 * 24))
+      Math.floor(
+        (new Date(today.toDateString()).getTime() - new Date(start.toDateString()).getTime()) /
+          (1000 * 3600 * 24)
+      )
     );
     const totalExpectedDosesSoFar =
       Math.min(daysSinceStart + 1, duration || 9999) * expectedDosesPerDay;
-
     const totalTaken = doses.length;
+
 
     const adherence =
       totalExpectedDosesSoFar > 0
         ? Math.min(100, Math.round((totalTaken / totalExpectedDosesSoFar) * 100))
         : 100;
-
     const isDueNow = isActiveDateRange && dosesTakenToday < expectedDosesPerDay;
+
 
     return {
       adherence,
@@ -234,53 +236,133 @@ export default function MedicationTrackerScreen() {
     };
   };
 
-  /**
-   * Render medication card
-   */
-  const renderMedicationCard = (medication: Medication) => {
-    const { adherence, dosesTakenToday, expectedDoses, isDue } = getMedicationStatus(medication);
 
-    const adherenceColor =
-      adherence >= 80 ? Colors.light.success : adherence >= 60 ? '#FFA500' : Colors.light.error;
-    const isAsNeeded = medication.frequency === 'As needed' || medication.frequency === 'Custom';
+  const handleSmartImport = async (extractedMeds: any[]) => {
+    if (!user?.uid) return;
+
+
+    try {
+      const results = await smartImportMedications(user.uid, extractedMeds);
+      const toastMsg = getMotivationalToast(
+        'dose_taken',
+        undefined,
+        undefined,
+        results.addedCount + results.mergedCount
+      );
+      showToast(toastMsg.message, 'success');
+      await loadMedications();
+      setShowSmartImport(false);
+    } catch (error: any) {
+      console.error('Smart import error:', error);
+      if (error.conflict) {
+        setCurrentConflict(error.conflict);
+        setShowMergeConflict(true);
+      } else {
+        showToast('Import failed: ' + (error.message || 'Unknown error'), 'error');
+      }
+    }
+  };
+
+
+  // ✅ NEW: Handle date press - show popup with medications
+  const handleDatePress = (date: Date) => {
+    setSelectedDate(date);
+    setDatePopupVisible(true);
+  };
+
+
+  // ✅ NEW: Get medications for selected date
+  const getMedicationsForDate = (date: Date): Medication[] => {
+    return medications.filter(med => {
+      const start = new Date(med.startDate);
+      const duration = med.durationDays ? parseInt(med.durationDays.toString(), 10) : 0;
+      
+      if (isNaN(start.getTime()) || isNaN(duration) || duration <= 0) {
+        return false;
+      }
+
+
+      const end = new Date(start);
+      end.setDate(start.getDate() + duration);
+
+
+      const dayOnly = new Date(date);
+      dayOnly.setHours(0, 0, 0, 0);
+      const startOnly = new Date(start);
+      startOnly.setHours(0, 0, 0, 0);
+      const endOnly = new Date(end);
+      endOnly.setHours(0, 0, 0, 0);
+
+
+      return dayOnly >= startOnly && dayOnly < endOnly;
+    });
+  };
+
+
+  const renderMedicationCard = (medication: Medication) => {
+    const status = getMedicationStatus(medication);
+    const doses = dosesMap[medication.medicationId] || [];
+    const isAsNeeded =
+      medication.frequency === 'As needed' || medication.frequency === 'Custom';
+
 
     return (
       <View key={medication.medicationId} style={styles.medicationCard}>
-        {/* Header */}
         <View style={styles.cardHeader}>
-          <View style={styles.medicationInfo}>
-            <View style={[styles.iconContainer, { backgroundColor: Colors.light.cardBackground }]}>
-              <Ionicons name="medkit" size={24} color={Colors.light.primary} />
-            </View>
-            <View style={styles.medicationText}>
-              <Text style={styles.medicationName}>{medication.name}</Text>
-              <Text style={styles.medicationStrength}>
-                {medication.strength} • {medication.dosageForm}
+          <View style={styles.progressSection}>
+            <CircularProgress
+              percentage={status.adherence}
+              size={60}
+              strokeWidth={6}
+              showPercentage={false}
+              label="Adherence"
+            />
+            <View style={styles.progressText}>
+              <Text style={styles.adherenceText}>{status.adherence}%</Text>
+              <Text style={styles.statusText}>
+                {status.isDue
+                  ? '📅 Due Now'
+                  : status.isActive
+                  ? '✅ On Track'
+                  : '⏸️ Completed'}
               </Text>
             </View>
           </View>
+
+
+          <View style={styles.medicationInfo}>
+            <Text style={styles.medicationName}>{medication.name}</Text>
+            <Text style={styles.medicationStrength}>
+              {medication.strength} • {medication.dosageForm}
+            </Text>
+            <Text style={styles.frequencyText}>{medication.frequency}</Text>
+          </View>
+
+
           <TouchableOpacity
-            onPress={() => handleDeleteMedication(medication.medicationId, medication.name)}
             style={styles.deleteButton}
+            onPress={() =>
+              handleDeleteMedication(medication.medicationId, medication.name)
+            }
           >
             <Ionicons name="trash-outline" size={20} color={Colors.light.error} />
           </TouchableOpacity>
         </View>
 
-        {/* Details */}
-        <View style={styles.cardDetails}>
-          <View style={styles.detailRow}>
-            <Ionicons name="time-outline" size={16} color={Colors.light.textSecondary} />
-            <Text style={styles.detailText}>{medication.frequency}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="restaurant-outline" size={16} color={Colors.light.textSecondary} />
+
+        <View style={styles.detailsRow}>
+          <View style={styles.detailItem}>
+            <Ionicons
+              name="restaurant-outline"
+              size={16}
+              color={Colors.light.textSecondary}
+            />
             <Text style={styles.detailText}>{medication.mealRelation}</Text>
           </View>
           {medication.purpose && (
-            <View style={styles.detailRow}>
+            <View style={styles.detailItem}>
               <Ionicons
-                name="information-circle-outline"
+                name="help-circle-outline"
                 size={16}
                 color={Colors.light.textSecondary}
               />
@@ -289,97 +371,94 @@ export default function MedicationTrackerScreen() {
           )}
         </View>
 
-        {/* Adherence Bar */}
-        <View style={styles.adherenceContainer}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={styles.adherenceLabel}>Adherence</Text>
-            <Text style={[styles.adherencePercentage, { color: adherenceColor }]}>
-              {adherence}%
-            </Text>
-          </View>
-          <View style={styles.adherenceBarBackground}>
-            <View
-              style={[
-                styles.adherenceBarFill,
-                { width: `${adherence}%`, backgroundColor: adherenceColor },
-              ]}
-            />
-          </View>
-        </View>
 
-        {/* Actions */}
-        <View style={styles.cardActions}>
+        <DoseHistorySection doseHistory={doses.slice(0, 5)} />
+
+
+        <View style={styles.actionRow}>
           <TouchableOpacity
             style={[
-              styles.actionButton,
-              styles.takeButton,
-              !isDue && !isAsNeeded && styles.disabledButton,
+              styles.primaryButton,
+              !status.isDue && !isAsNeeded && styles.primaryButtonDisabled,
             ]}
             onPress={() => handleMarkDoseTaken(medication)}
-            disabled={!isDue && !isAsNeeded}
+            disabled={!status.isDue && !isAsNeeded}
           >
             <Ionicons
-              name={isDue || isAsNeeded ? 'checkmark-circle' : 'checkmark-done-circle'}
+              name={
+                status.isDue || isAsNeeded
+                  ? 'checkmark-circle'
+                  : 'checkmark-done-circle'
+              }
               size={20}
-              color={!isDue && !isAsNeeded ? Colors.light.textSecondary : '#FFFFFF'}
+              color="white"
             />
-            <Text
-              style={[
-                styles.takeButtonText,
-                !isDue && !isAsNeeded && { color: Colors.light.textSecondary },
-              ]}
-            >
+            <Text style={styles.primaryButtonText}>
               {isAsNeeded
-                ? `Take Now (${dosesTakenToday})`
-                : isDue
-                ? `Take Now (${dosesTakenToday}/${expectedDoses})`
-                : `All Done (${dosesTakenToday}/${expectedDoses})`}
+                ? `Take Now (${status.dosesTakenToday})`
+                : status.isDue
+                ? `Take Now (${status.dosesTakenToday}/${status.expectedDoses})`
+                : `All Done!`}
             </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => {
-              showToast('Edit medication will be available soon', 'info');
-            }}
-          >
-            <Ionicons name="create-outline" size={20} color={Colors.light.primary} />
-            <Text style={styles.editButtonText}>Edit</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
   };
 
-  /**
-   * Render empty state
-   */
+
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="medkit-outline" size={80} color={Colors.light.border} />
-      <Text style={styles.emptyStateTitle}>No Medications Yet</Text>
-      <Text style={styles.emptyStateText}>
-        Add your first medication to start tracking your doses and adherence.
+      <Ionicons
+        name="medkit-outline"
+        size={80}
+        color={Colors.light.textSecondary}
+      />
+      <Text style={styles.emptyStateTitle}>No Medications</Text>
+      <Text style={styles.emptyStateSubtitle}>
+        Start tracking your medications
       </Text>
+      <TouchableOpacity
+        style={styles.addButtonEmpty}
+        onPress={() => router.push('/add-medication')}
+      >
+        <Ionicons name="add-circle" size={24} color="white" />
+        <Text style={styles.addButtonEmptyText}>Add First Medication</Text>
+      </TouchableOpacity>
     </View>
   );
 
+
   const displayedMedications = showInactive ? medications : activeMedications;
 
-  const overallAdherence = useMemo(() => {
-    const activeMeds = medications.filter((m) => m.isActive);
-    if (activeMeds.length === 0) return 0;
 
-    const sumAdherence = activeMeds.reduce((sum, med) => {
-      return sum + getMedicationStatus(med).adherence;
+  const dailySummary = useMemo(() => {
+    const totalExpected = activeMedications.reduce((sum, med) => {
+      return sum + (FREQUENCY_MAP[med.frequency] || 1);
     }, 0);
+    const totalTaken = Object.values(dosesMap).reduce((sum, doses) => {
+      return (
+        sum +
+        doses.filter((d) => {
+          const dDate = new Date(d.takenTime || d.createdAt || '');
+          return dDate.toDateString() === new Date().toDateString();
+        }).length
+      );
+    }, 0);
+    return getDailySummaryToast(
+      totalExpected,
+      totalTaken,
+      activeMedications.length
+    );
+  }, [activeMedications, dosesMap]);
 
-    return Math.round(sumAdherence / activeMeds.length);
-  }, [medications, dosesMap]);
+
+  // ✅ NEW: Date popup content
+  const selectedDateMeds = selectedDate ? getMedicationsForDate(selectedDate) : [];
+
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Toast */}
       <CustomToast
         visible={toast.visible}
         message={toast.message}
@@ -387,15 +466,11 @@ export default function MedicationTrackerScreen() {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      {/* Delete Confirm Dialog */}
+
       <ConfirmDialog
         visible={!!deleteTarget}
         title="Delete Medication"
-        message={
-          deleteTarget
-            ? `Are you sure you want to delete "${deleteTarget.name}"? This cannot be undone.`
-            : ''
-        }
+        message={`Are you sure you want to delete "${deleteTarget?.name}"? This cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
         type="danger"
@@ -403,57 +478,103 @@ export default function MedicationTrackerScreen() {
         onCancel={() => setDeleteTarget(null)}
       />
 
-      {/* Header */}
+
+      <MergeConflictModal
+        visible={showMergeConflict}
+        conflict={currentConflict}
+        onClose={() => {
+          setShowMergeConflict(false);
+          setCurrentConflict(null);
+        }}
+        onResolve={async () => {
+          setShowMergeConflict(false);
+          await loadMedications();
+          showToast('Conflict resolved!', 'success');
+        }}
+      />
+
+
+      <SmartImportModal
+        visible={showSmartImport}
+        onClose={() => setShowSmartImport(false)}
+        onSaveAll={handleSmartImport}
+      />
+
+
+      {/* ✅ NEW: Date Popup Modal */}
+      <Modal
+        visible={datePopupVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDatePopupVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setDatePopupVisible(false)}
+        >
+          <View style={styles.datePopup}>
+            <View style={styles.datePopupHeader}>
+              <Text style={styles.datePopupTitle}>
+                {selectedDate?.toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </Text>
+              <TouchableOpacity onPress={() => setDatePopupVisible(false)}>
+                <Ionicons name="close-circle" size={28} color={Colors.light.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+
+            {selectedDateMeds.length === 0 ? (
+              <View style={styles.noMedsContainer}>
+                <Ionicons name="bandage-outline" size={48} color={Colors.light.textSecondary} />
+                <Text style={styles.noMedsText}>No medications scheduled</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.datePopupScroll}>
+                {selectedDateMeds.map((med, index) => (
+                  <View key={med.medicationId} style={styles.popupMedCard}>
+                    <View style={styles.popupMedIcon}>
+                      <Ionicons name="medical" size={24} color={Colors.light.primary} />
+                    </View>
+                    <View style={styles.popupMedInfo}>
+                      <Text style={styles.popupMedName}>{med.name}</Text>
+                      <Text style={styles.popupMedDetails}>
+                        {med.strength} • {med.frequency}
+                      </Text>
+                      <Text style={styles.popupMedMeal}>{med.mealRelation}</Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+
+      {/* ✅ UPDATED: Header with back button */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.push('/(tabs)')}
+        >
           <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Medication Tracker</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      {/* Stats Bar */}
-      <View style={styles.statsBar}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{activeMedications.length}</Text>
-          <Text style={styles.statLabel}>Active</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{medications.length}</Text>
-          <Text style={styles.statLabel}>Total</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text
-            style={[
-              styles.statValue,
-              { color: overallAdherence >= 80 ? Colors.light.success : Colors.light.primary },
-            ]}
-          >
-            {overallAdherence}%
-          </Text>
-          <Text style={styles.statLabel}>Adherence</Text>
-        </View>
-      </View>
-
-      {/* Filter Toggle */}
-      <View style={styles.filterContainer}>
         <TouchableOpacity
-          style={[styles.filterButton, !showInactive && styles.filterButtonActive]}
-          onPress={() => setShowInactive(false)}
+          style={styles.headerButton}
+          onPress={() => router.push('/add-medication')}
         >
-          <Text style={[styles.filterText, !showInactive && styles.filterTextActive]}>Active</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, showInactive && styles.filterButtonActive]}
-          onPress={() => setShowInactive(true)}
-        >
-          <Text style={[styles.filterText, showInactive && styles.filterTextActive]}>All</Text>
+          <Ionicons name="add" size={28} color={Colors.light.text} />
         </TouchableOpacity>
       </View>
 
-      {/* Medications List */}
+
+      {/* ✅ FIXED: Everything moved inside ScrollView */}
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.light.primary} />
@@ -462,80 +583,226 @@ export default function MedicationTrackerScreen() {
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
           showsVerticalScrollIndicator={false}
         >
-          {displayedMedications.length === 0 ? renderEmptyState() : displayedMedications.map(renderMedicationCard)}
+          {/* ✅ UPDATED: Compact Calendar */}
+          <View style={styles.calendarSection}>
+            <MedicationCalendar 
+              medications={medications}
+              onDatePress={handleDatePress}
+            />
+          </View>
+
+
+          {/* ✅ NEW: Smart Import Button (below calendar) */}
+          <View style={styles.smartImportContainer}>
+            <TouchableOpacity
+              style={styles.smartImportButton}
+              onPress={() => setShowSmartImport(true)}
+            >
+              <Ionicons name="sparkles" size={20} color="white" />
+              <Text style={styles.smartImportButtonText}>
+                Smart Import Medications
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+
+          {/* Filter Toggle */}
+          <View style={styles.filterContainer}>
+            <TouchableOpacity
+              style={[styles.filterButton, !showInactive && styles.filterButtonActive]}
+              onPress={() => setShowInactive(false)}
+            >
+              <Text
+                style={[
+                  styles.filterText,
+                  !showInactive && styles.filterTextActive,
+                ]}
+              >
+                Active
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterButton, showInactive && styles.filterButtonActive]}
+              onPress={() => setShowInactive(true)}
+            >
+              <Text
+                style={[
+                  styles.filterText,
+                  showInactive && styles.filterTextActive,
+                ]}
+              >
+                All
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+
+          {/* Daily Summary */}
+          {activeMedications.length > 0 && (
+            <View style={styles.dailySummary}>
+              <Text style={styles.dailySummaryText}>{dailySummary.message}</Text>
+            </View>
+          )}
+
+
+          {/* Medications List */}
+          {displayedMedications.length === 0
+            ? renderEmptyState()
+            : displayedMedications.map(renderMedicationCard)}
         </ScrollView>
       )}
-
-      {/* Add Button */}
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => {
-          showToast('Add medication will be available soon', 'info');
-        }}
-      >
-        <Ionicons name="add" size={28} color="#FFFFFF" />
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
   },
+  // ✅ UPDATED: Header with back button
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 12,
     backgroundColor: Colors.light.cardBackground,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
   },
   backButton: {
+    padding: 8,
     width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: Colors.light.text,
+    flex: 1,
+    textAlign: 'center',
   },
-  statsBar: {
+  headerButton: {
+    padding: 4,
+    width: 40,
+    alignItems: 'flex-end',
+  },
+  // ✅ UPDATED: Smaller calendar
+  calendarSection: {
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  // ✅ NEW: Smart import button container
+  smartImportContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  smartImportButton: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  smartImportButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  // ✅ NEW: Date popup modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  datePopup: {
     backgroundColor: Colors.light.cardBackground,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    justifyContent: 'space-around',
-    marginTop: 1,
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '70%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  datePopupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
   },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
+  datePopupTitle: {
+    fontSize: 18,
     fontWeight: '700',
-    color: Colors.light.primary,
+    color: Colors.light.text,
+    flex: 1,
   },
-  statLabel: {
-    fontSize: 12,
+  datePopupScroll: {
+    maxHeight: 400,
+  },
+  noMedsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  noMedsText: {
+    fontSize: 16,
     color: Colors.light.textSecondary,
-    marginTop: 4,
+    marginTop: 12,
   },
-  statDivider: {
-    width: 1,
-    height: '80%',
-    backgroundColor: Colors.light.border,
-    alignSelf: 'center',
+  popupMedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+    gap: 12,
+  },
+  popupMedIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.light.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  popupMedInfo: {
+    flex: 1,
+  },
+  popupMedName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 4,
+  },
+  popupMedDetails: {
+    fontSize: 14,
+    color: Colors.light.primary,
+    marginBottom: 2,
+  },
+  popupMedMeal: {
+    fontSize: 13,
+    color: Colors.light.textSecondary,
   },
   filterContainer: {
     flexDirection: 'row',
@@ -565,12 +832,25 @@ const styles = StyleSheet.create({
   filterTextActive: {
     color: '#FFFFFF',
   },
+  dailySummary: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  dailySummaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#059669',
+    textAlign: 'center',
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
@@ -579,43 +859,53 @@ const styles = StyleSheet.create({
   },
   medicationCard: {
     backgroundColor: Colors.light.cardBackground,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-    shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 },
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    gap: 16,
+    marginBottom: 16,
   },
-  medicationInfo: {
-    flexDirection: 'row',
+  progressSection: {
     alignItems: 'center',
-    flex: 1,
+    gap: 4,
   },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  progressText: {
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
   },
-  medicationText: {
-    flex: 1,
-  },
-  medicationName: {
+  adherenceText: {
     fontSize: 16,
     fontWeight: '700',
     color: Colors.light.text,
   },
+  statusText: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+  },
+  medicationInfo: {
+    flex: 1,
+  },
+  medicationName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.light.text,
+    marginBottom: 2,
+  },
   medicationStrength: {
+    fontSize: 14,
+    color: Colors.light.primary,
+    fontWeight: '600',
+  },
+  frequencyText: {
     fontSize: 14,
     color: Colors.light.textSecondary,
     marginTop: 2,
@@ -623,123 +913,74 @@ const styles = StyleSheet.create({
   deleteButton: {
     padding: 8,
   },
-  cardDetails: {
-    gap: 8,
-    marginBottom: 12,
+  detailsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 16,
   },
-  detailRow: {
+  detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    paddingVertical: 4,
   },
   detailText: {
     fontSize: 14,
     color: Colors.light.textSecondary,
   },
-  adherenceContainer: {
-    marginTop: 12,
-    marginBottom: 12,
-  },
-  adherenceLabel: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    marginBottom: 6,
-  },
-  adherenceBarBackground: {
-    height: 8,
-    backgroundColor: Colors.light.border,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 4,
-  },
-  adherenceBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  adherencePercentage: {
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'right',
-  },
-  cardActions: {
+  actionRow: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
   },
-  actionButton: {
+  primaryButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 6,
-  },
-  takeButton: {
+    paddingVertical: 14,
+    borderRadius: 12,
     backgroundColor: Colors.light.primary,
+    gap: 8,
   },
-  disabledButton: {
-    backgroundColor: '#D1D5DB',
+  primaryButtonDisabled: {
+    backgroundColor: Colors.light.border,
   },
-  takeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  editButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: Colors.light.background,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    gap: 6,
-  },
-  editButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.primary,
+  primaryButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: 'white',
   },
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
-    paddingVertical: 60,
   },
   emptyStateTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
     color: Colors.light.text,
     marginTop: 16,
+    marginBottom: 8,
   },
-  emptyStateText: {
-    fontSize: 14,
+  emptyStateSubtitle: {
+    fontSize: 16,
     color: Colors.light.textSecondary,
     textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
+    marginBottom: 32,
   },
-  addButton: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.light.primary,
+  addButtonEmpty: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 8,
+    gap: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 12,
+  },
+  addButtonEmptyText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: 'white',
   },
 });

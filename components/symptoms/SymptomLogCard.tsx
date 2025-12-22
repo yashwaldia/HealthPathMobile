@@ -1,16 +1,17 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../../constants/colors';
-import { SymptomLog } from '../../types/symptom';
 import { SYMPTOM_CATEGORIES } from '../../constants/symptomData';
+import { SymptomLog } from '../../types/symptom';
 
 interface SymptomLogCardProps {
   log: SymptomLog;
   onDelete: (symptomId: string) => void;
+  onViewAnalysis?: (log: SymptomLog) => void;
 }
 
-export default function SymptomLogCard({ log, onDelete }: SymptomLogCardProps) {
+export default function SymptomLogCard({ log, onDelete, onViewAnalysis }: SymptomLogCardProps) {
   const logDate = log.timestamp?.toDate
     ? log.timestamp.toDate().toLocaleDateString()
     : new Date(log.date).toLocaleDateString();
@@ -39,9 +40,24 @@ export default function SymptomLogCard({ log, onDelete }: SymptomLogCardProps) {
             <Text style={styles.logDate}>{logDate}</Text>
           </View>
         </View>
-        <TouchableOpacity onPress={() => onDelete(log.symptomId)} style={styles.deleteButton}>
-          <Ionicons name="trash-outline" size={20} color={Colors.light.error} />
-        </TouchableOpacity>
+        
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          {/* View AI Analysis Button (only if AI analysis exists) */}
+          {hasAIAnalysis && onViewAnalysis && (
+            <TouchableOpacity 
+              onPress={() => onViewAnalysis(log)} 
+              style={styles.viewButton}
+            >
+              <Ionicons name="eye-outline" size={20} color={Colors.light.primary} />
+            </TouchableOpacity>
+          )}
+          
+          {/* Delete Button */}
+          <TouchableOpacity onPress={() => onDelete(log.symptomId)} style={styles.deleteButton}>
+            <Ionicons name="trash-outline" size={20} color={Colors.light.error} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.symptomsContainer}>
@@ -84,10 +100,14 @@ export default function SymptomLogCard({ log, onDelete }: SymptomLogCardProps) {
 
       {hasAIAnalysis && (
         <View style={styles.aiSummaryContainer}>
-          <Text style={styles.aiSummaryLabel}>AI Analysis:</Text>
+          <View style={styles.aiSummaryHeader}>
+            <Text style={styles.aiSummaryLabel}>AI Analysis Available</Text>
+            <Ionicons name="checkmark-circle" size={16} color={Colors.light.primary} />
+          </View>
           <Text style={styles.aiSummaryText} numberOfLines={2}>
             {log.aiAnalysis?.summary}
           </Text>
+          <Text style={styles.viewMoreText}>Tap the eye icon above to view full analysis</Text>
         </View>
       )}
     </View>
@@ -137,6 +157,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.light.textSecondary,
     marginTop: 2,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viewButton: {
+    padding: 8,
+    backgroundColor: `${Colors.light.primary}10`,
+    borderRadius: 8,
   },
   deleteButton: {
     padding: 8,
@@ -203,16 +233,30 @@ const styles = StyleSheet.create({
     backgroundColor: `${Colors.light.primary}05`,
     padding: 12,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${Colors.light.primary}20`,
+  },
+  aiSummaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   aiSummaryLabel: {
     fontSize: 12,
     fontWeight: '700',
     color: Colors.light.primary,
-    marginBottom: 4,
   },
   aiSummaryText: {
     fontSize: 13,
     color: Colors.light.text,
     lineHeight: 18,
+    marginBottom: 6,
+  },
+  viewMoreText: {
+    fontSize: 11,
+    color: Colors.light.primary,
+    fontWeight: '600',
+    fontStyle: 'italic',
   },
 });

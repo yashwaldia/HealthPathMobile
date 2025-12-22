@@ -1,6 +1,6 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { SymptomAIAnalysis } from '../../services/symptomService';
 
@@ -8,7 +8,7 @@ interface AIAnalysisModalProps {
   visible: boolean;
   analysis: SymptomAIAnalysis | null;
   onClose: () => void;
-  onSave: () => void;
+  onSave?: () => void;
   saving: boolean;
 }
 
@@ -41,7 +41,10 @@ export default function AIAnalysisModal({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.contentContainer}>
+          <ScrollView 
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
             {/* Urgency Badge */}
             <View style={[styles.urgencyBadge, { backgroundColor: `${urgency.color}15` }]}>
               <Ionicons name={urgency.icon as any} size={24} color={urgency.color} />
@@ -85,20 +88,23 @@ export default function AIAnalysisModal({
             </View>
           </ScrollView>
 
-          <TouchableOpacity
-            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-            onPress={onSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <Text style={styles.saveButtonText}>Saving...</Text>
-            ) : (
-              <>
-                <Ionicons name="save" size={20} color="#FFFFFF" />
-                <Text style={styles.saveButtonText}>Save Analysis</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {/* Only show save button if onSave is provided (new analysis) */}
+          {onSave && (
+            <TouchableOpacity
+              style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+              onPress={onSave}
+              disabled={saving}
+            >
+              {saving ? (
+                <Text style={styles.saveButtonText}>Saving...</Text>
+              ) : (
+                <>
+                  <Ionicons name="save" size={20} color="#FFFFFF" />
+                  <Text style={styles.saveButtonText}>Save Analysis</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>
@@ -116,7 +122,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '90%',
-    paddingBottom: 32,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -132,8 +137,9 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     flex: 1,
   },
-  contentContainer: {
+  scrollContent: {
     padding: 20,
+    paddingBottom: 100,
   },
   urgencyBadge: {
     flexDirection: 'row',
@@ -199,6 +205,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.primary,
     marginHorizontal: 20,
     marginTop: 12,
+    marginBottom: 32,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

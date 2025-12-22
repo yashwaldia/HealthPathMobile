@@ -1,15 +1,21 @@
 // services/medicationService.ts
+// ✅ ENHANCED: Added batch save and merge helpers for Smart Import feature
+// Last Updated: December 17, 2025
+export { resolveConflictsAndSave, smartImportMedications } from './smartImportService';
+
 import firestore from '@react-native-firebase/firestore';
-import { 
+import {
+  DoseLog,
+  ExtractedMedication,
   Medication,
-  DoseLog 
+  MergeConflict,
 } from '../types/medication';
 
 // ✅ Import notification service
 import {
-  scheduleMedicationReminder,
   cancelMedicationReminder,
   scheduleAllMedicationReminders,
+  scheduleMedicationReminder,
 } from './notificationService';
 
 /**
@@ -24,6 +30,79 @@ const cleanData = (data: any) => {
     }
   });
   return cleaned;
+};
+
+/**
+ * Helper: Convert duration string to number of days
+ * e.g., "7 days" -> 7, "2 weeks" -> 14, "1 month" -> 30
+ */
+export const parseDurationToDays = (duration?: string): number | undefined => {
+  if (!duration) return undefined;
+  
+  const durationLower = duration.toLowerCase().trim();
+  const match = durationLower.match(/(\d+)\s*(day|week|month|year)/);
+  
+  if (!match) return undefined;
+  
+  const value = parseInt(match[1]);
+  const unit = match[2];
+  
+  switch (unit) {
+    case 'day':
+      return value;
+    case 'week':
+      return value * 7;
+    case 'month':
+      return value * 30;
+    case 'year':
+      return value * 365;
+    default:
+      return undefined;
+  }
+};
+
+/**
+ * Helper: Convert ExtractedMedication to Medication format
+ */
+export const convertExtractedToMedication = (
+  extracted: ExtractedMedication,
+  userId: string,
+  medicationId: string
+): Medication => {
+  const now = new Date();
+  const startDate = extracted.startDate || now.toISOString().split('T')[0];
+  const durationDays = extracted.durationDays || parseDurationToDays(extracted.duration);
+  
+  // Calculate end date if duration is provided
+  let endDate: string | undefined;
+  if (durationDays) {
+    const end = new Date(startDate);
+    end.setDate(end.getDate() + durationDays);
+    endDate = end.toISOString().split('T')[0];
+  }
+  
+  return {
+    medicationId,
+    userId,
+    name: extracted.name,
+    strength: extracted.strength || '',
+    dosageForm: (extracted.dosageForm as any) || 'Tablet',
+    frequency: (extracted.frequency as any) || 'As needed',
+    customFrequency: extracted.customFrequency,
+    mealRelation: (extracted.mealRelation as any) || 'Any time',
+    startDate,
+    durationDays,
+    endDate,
+    prescribedBy: extracted.prescribedBy,
+    purpose: extracted.purpose,
+    instructions: extracted.instructions,
+    genericName: extracted.genericName,
+    classification: extracted.classification,
+    reminderEnabled: false, // User can enable later
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  };
 };
 
 /**
@@ -74,6 +153,163 @@ export const addMedication = async (
     console.error('Error adding medication:', error);
     throw error;
   }
+};
+
+/**
+ * ✅ NEW: Batch add medications (for Smart Import feature)
+ * Adds multiple medications at once with transaction support
+ */
+export const batchAddMedications = async (
+  userId: string,
+  extractedMedications: ExtractedMedication[]
+): Promise<string[]> => {
+  try {
+    console.log(`📦 Batch adding ${extractedMedications.length} medications...`);
+    
+    const batch = firestore().batch();
+    const medicationIds: string[] = [];
+    const medicationsToSchedule: Medication[] = [];
+
+    for (const extracted of extractedMedications) {
+      const newMedRef = firestore().collection(`users/${userId}/medications`).doc();
+      const medicationId = newMedRef.id;
+      medicationIds.push(medicationId);
+
+      const medication = convertExtractedToMedication(extracted, userId, medicationId);
+      
+      const cleanedMedication = cleanData({
+        ...medication,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+      batch.set(newMedRef, cleanedMedication);
+      
+      // Track for notification scheduling
+      if (medication.isActive && medication.frequency !== 'As needed') {
+        medicationsToSchedule.push(medication);
+      }
+    }
+
+    // Commit batch write
+    await batch.commit();
+    console.log(`✅ ${extractedMedications.length} medications saved to Firestore`);
+
+    // Schedule notifications for active medications
+    if (medicationsToSchedule.length > 0) {
+      console.log(`📅 Scheduling reminders for ${medicationsToSchedule.length} medications...`);
+      try {
+        await Promise.all(
+          medicationsToSchedule.map(med => 
+            scheduleMedicationReminder(med, userId).catch(err => {
+              console.warn(`⚠️ Failed to schedule reminder for ${med.name}:`, err);
+            })
+          )
+        );
+        console.log('✅ All reminders scheduled');
+      } catch (notificationError) {
+        console.warn('⚠️ Some notifications failed to schedule:', notificationError);
+      }
+    }
+
+    return medicationIds;
+  } catch (error) {
+    console.error('Error batch adding medications:', error);
+    throw error;
+  }
+};
+
+/**
+ * ✅ NEW: Merge medications (update existing with new prescription details)
+ * Used when user chooses to merge in conflict resolution
+ */
+export const mergeMedication = async (
+  userId: string,
+  existingMedicationId: string,
+  newMedicationData: ExtractedMedication,
+  keepDetails: 'existing' | 'new'
+): Promise<void> => {
+  try {
+    console.log(`🔀 Merging medication: ${existingMedicationId}`);
+    
+    const existingMed = await getMedication(userId, existingMedicationId);
+    if (!existingMed) {
+      throw new Error('Existing medication not found');
+    }
+
+    // Determine which details to keep
+    const updates: Partial<Medication> = {
+      // Always update schedule from new prescription
+      frequency: (newMedicationData.frequency as any) || existingMed.frequency,
+      mealRelation: (newMedicationData.mealRelation as any) || existingMed.mealRelation,
+      startDate: newMedicationData.startDate || new Date().toISOString().split('T')[0],
+      durationDays: newMedicationData.durationDays || parseDurationToDays(newMedicationData.duration),
+      
+      // Keep or update medication details based on user choice
+      name: keepDetails === 'new' ? newMedicationData.name : existingMed.name,
+      strength: keepDetails === 'new' ? (newMedicationData.strength || existingMed.strength) : existingMed.strength,
+      dosageForm: keepDetails === 'new' ? ((newMedicationData.dosageForm as any) || existingMed.dosageForm) : existingMed.dosageForm,
+      
+      // Update other fields from new prescription
+      prescribedBy: newMedicationData.prescribedBy || existingMed.prescribedBy,
+      instructions: newMedicationData.instructions || existingMed.instructions,
+      purpose: newMedicationData.purpose || existingMed.purpose,
+      
+      // Ensure medication is active
+      isActive: true,
+    };
+
+    // Calculate end date
+    if (updates.durationDays && updates.startDate) {
+      const end = new Date(updates.startDate);
+      end.setDate(end.getDate() + updates.durationDays);
+      updates.endDate = end.toISOString().split('T')[0];
+    }
+
+    // Add merge note to instructions/notes
+    const mergeNote = `\nMerged with ${newMedicationData.name} on ${new Date().toLocaleDateString()}`;
+    updates.instructions = (updates.instructions || '') + mergeNote;
+
+    await updateMedication(userId, existingMedicationId, updates);
+    console.log('✅ Medication merged successfully');
+  } catch (error) {
+    console.error('Error merging medication:', error);
+    throw error;
+  }
+};
+
+/**
+ * ✅ NEW: Detect potential duplicate medications
+ * Returns medications that might conflict with new ones
+ */
+export const detectPotentialDuplicates = (
+  existingMedications: Medication[],
+  newMedications: ExtractedMedication[]
+): MergeConflict[] => {
+  const conflicts: MergeConflict[] = [];
+  
+  for (const newMed of newMedications) {
+    // Skip if no classification data
+    if (!newMed.classification || !newMed.genericName) continue;
+    
+    // Find existing medications with same classification
+    const matchingExisting = existingMedications.filter(existing => 
+      existing.isActive &&
+      existing.classification === newMed.classification &&
+      existing.genericName !== newMed.genericName
+    );
+    
+    // Add conflicts
+    for (const existingMed of matchingExisting) {
+      conflicts.push({
+        existingMed,
+        newMed,
+      });
+    }
+  }
+  
+  console.log(`🔍 Detected ${conflicts.length} potential conflicts`);
+  return conflicts;
 };
 
 /**
@@ -154,7 +390,6 @@ export const getMedication = async (
     throw error;
   }
 };
-
 
 /**
  * Update medication
