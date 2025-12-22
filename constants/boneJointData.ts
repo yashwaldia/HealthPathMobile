@@ -2,7 +2,7 @@
 // Data for Bone & Joint Wellness Module
 // Last Updated: December 13, 2025
 
-import { DailyTask, PersonalizedSuggestions, WarningSSign } from '../types/wellness';
+import { DailyTask, PersonalizedSuggestions, WarningSign } from '../types/wellness';
 
 // ============================================================================
 // CONCERNS & ACTIVITY LEVELS
@@ -242,7 +242,7 @@ export const BONE_JOINT_TESTS = [
 // WARNING SIGNS
 // ============================================================================
 
-export const BONE_JOINT_WARNING_SIGNS: WarningSSign[] = [
+export const BONE_JOINT_WARNING_SIGNS: WarningSign[] = [
   {
     signId: 'bj-warning-1',
     symptom: 'Sudden severe joint pain',

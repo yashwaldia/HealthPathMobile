@@ -2,7 +2,7 @@
 // Liver & Kidney Care Module Data
 // Last Updated: December 13, 2025 - Enhanced with comprehensive organ health data
 
-import { DailyTask, PersonalizedSuggestions, WarningSSign } from '../types/wellness';
+import { DailyTask, PersonalizedSuggestions, WarningSign } from '../types/wellness';
 
 // ============================================================================
 // HEALTH CONCERNS
@@ -530,7 +530,7 @@ export const LIVER_KIDNEY_LAB_TESTS = [
 // WARNING SIGNS
 // ============================================================================
 
-export const LIVER_KIDNEY_WARNING_SIGNS: WarningSSign[] = [
+export const LIVER_KIDNEY_WARNING_SIGNS: WarningSign[] = [
   {
     signId: 'lk-warning-1',
     symptom: 'Dark urine or pale stools',

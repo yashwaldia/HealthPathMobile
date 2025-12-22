@@ -2,7 +2,7 @@
 // Data for Skin & Hair Care Wellness Module
 // Last Updated: December 13, 2025 - Enhanced with comprehensive health indicators
 
-import { DailyTask, PersonalizedSuggestions, WarningSSign } from '../types/wellness';
+import { DailyTask, PersonalizedSuggestions, WarningSign } from '../types/wellness';
 
 // ============================================================================
 // SKIN TYPES & CONDITIONS
@@ -569,7 +569,7 @@ export const SKIN_HAIR_CHECKUPS = [
 // WARNING SIGNS (ENHANCED)
 // ============================================================================
 
-export const SKIN_HAIR_WARNING_SIGNS: WarningSSign[] = [
+export const SKIN_HAIR_WARNING_SIGNS: WarningSign[] = [
   {
     signId: 'sh-warning-1',
     symptom: 'Sudden severe acne outbreak or cystic acne',

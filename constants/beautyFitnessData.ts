@@ -2,7 +2,7 @@
 // Data for Beauty & Fitness Wellness Module
 // Last Updated: December 11, 2025
 
-import { DailyTask, WarningSSign, PersonalizedSuggestions } from '../types/wellness';
+import { DailyTask, WarningSign, PersonalizedSuggestions } from '../types/wellness';
 
 // ============================================================================
 // GOALS & FITNESS LEVELS
@@ -272,7 +272,7 @@ export const BEAUTY_FITNESS_ASSESSMENTS = [
 // WARNING SIGNS
 // ============================================================================
 
-export const BEAUTY_FITNESS_WARNING_SIGNS: WarningSSign[] = [
+export const BEAUTY_FITNESS_WARNING_SIGNS: WarningSign[] = [
   {
     signId: 'bf-warning-1',
     symptom: 'Chest pain during exercise',

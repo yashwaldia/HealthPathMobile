@@ -2,7 +2,7 @@
 // Data for Gut Health Wellness Module
 // Last Updated: December 13, 2025 – Enhanced condition-based static suggestions
 
-import { DailyTask, PersonalizedSuggestions, WarningSSign } from '../types/wellness';
+import { DailyTask, PersonalizedSuggestions, WarningSign } from '../types/wellness';
 
 // Normalize suggestions so all arrays are always present
 const normalizeSuggestions = (s: PersonalizedSuggestions): Required<PersonalizedSuggestions> => ({
@@ -193,7 +193,7 @@ export const GUT_HEALTH_TESTS = [
 // WARNING SIGNS
 // ============================================================================
 
-export const GUT_HEALTH_WARNING_SIGNS: WarningSSign[] = [
+export const GUT_HEALTH_WARNING_SIGNS: WarningSign[] = [
   {
     signId: 'gh-warning-1',
     symptom: 'Severe abdominal pain',

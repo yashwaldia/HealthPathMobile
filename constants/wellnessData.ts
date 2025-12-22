@@ -2,7 +2,7 @@
 // Wellness Module Configuration Data
 // Last Updated: December 10, 2025
 
-import { ModuleCardData, WellnessModuleType, WarningSSign } from '../types/wellness';
+import { ModuleCardData, WellnessModuleType, WarningSign } from '../types/wellness';
 
 // ============================================================================
 // MODULE CARD CONFIGURATION (for Wellness Hub screen)
@@ -102,7 +102,7 @@ export const PROGRAM_DURATIONS: Record<WellnessModuleType, number> = {
 // COMMON WARNING SIGNS (Shared across modules)
 // ============================================================================
 
-export const COMMON_WARNING_SIGNS: WarningSSign[] = [
+export const COMMON_WARNING_SIGNS: WarningSign[] = [
   {
     signId: 'severe-pain',
     symptom: 'Severe or persistent pain',

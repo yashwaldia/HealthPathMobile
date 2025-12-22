@@ -2,7 +2,7 @@
 // Data for Teeth & Oral Care Wellness Module
 // Last Updated: December 13, 2025 - Enhanced with comprehensive dental data
 
-import { DailyTask, WarningSSign, PersonalizedSuggestions } from '../types/wellness';
+import { DailyTask, WarningSign, PersonalizedSuggestions } from '../types/wellness';
 
 // ============================================================================
 // CONCERNS & SMOKING STATUS
@@ -238,7 +238,7 @@ export const TEETH_ORAL_CHECKUPS = [
 // WARNING SIGNS
 // ============================================================================
 
-export const TEETH_ORAL_WARNING_SIGNS: WarningSSign[] = [
+export const TEETH_ORAL_WARNING_SIGNS: WarningSign[] = [
   {
     signId: 'to-warning-1',
     symptom: 'Severe toothache or abscess',

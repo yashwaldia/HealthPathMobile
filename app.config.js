@@ -76,11 +76,12 @@ module.exports = {
       [
         "@react-native-firebase/auth",
         {
-          // This ensures proper Android configuration
           "android_task_executor_maximum_pool_size": 10,
           "android_task_executor_keep_alive_seconds": 3
         }
       ]
+      // ✅ NOTE: react-native-view-shot and expo-linear-gradient 
+      // work automatically - no plugin entries needed!
     ],
     experiments: {
       typedRoutes: true,

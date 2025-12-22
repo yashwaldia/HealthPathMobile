@@ -6,7 +6,7 @@ import {
   PregnancyMilestone,
   TrimesterData,
   PersonalizedSuggestions,
-  WarningSSign,
+  WarningSign,
   MedicalReminder,
   DailyTask,
 } from '../types/wellness';
@@ -424,7 +424,7 @@ export const MEDICAL_REMINDERS_TEMPLATE: MedicalReminder[] = [
 // WARNING SIGNS (Mother Care Specific)
 // ============================================================================
 
-export const MOTHER_CARE_WARNING_SIGNS: WarningSSign[] = [
+export const MOTHER_CARE_WARNING_SIGNS: WarningSign[] = [
   {
     signId: 'mc-warning-1',
     symptom: 'Severe abdominal pain',
