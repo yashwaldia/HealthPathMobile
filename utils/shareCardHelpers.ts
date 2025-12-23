@@ -4,9 +4,8 @@
  * Utility functions for formatting, validation, and data transformation
  */
 
-import type { VitalStatus } from '@/types/vitals';
-import type { ShareCardType, CardAvailability } from '@/types/shareCard';
 import { CONTENT_LIMITS } from '@/constants/shareCardConfig';
+import type { CardAvailability, ShareCardType } from '@/types/shareCard';
 
 // ============================================================================
 // DATE & TIME FORMATTING

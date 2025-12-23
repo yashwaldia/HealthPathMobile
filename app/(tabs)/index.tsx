@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { profileService } from '../../services/profileService';
-import { vitalsService, getVitalStatus } from '../../services/vitalsService';
+import { getVitalStatus, vitalsService } from '../../services/vitalsService';
 import { UserProfile } from '../../types/profile';
 import { VitalRecord } from '../../types/vitals';
 
@@ -195,6 +195,7 @@ export default function HomeScreen() {
     { id: 12, icon: 'people-outline', label: 'Wellness', route: '/(tabs)/wellness', active: true },
     { id: 13, icon: 'time-outline', label: 'History', route: '/(tabs)/history', active: true },
     { id: 14, icon: 'barbell-outline', label: 'FitCalc', route: 'fitcalc', active: true },
+    { id: 15, icon: 'share-social-outline', label: 'Share Card', route: '/(tabs)/share-card', active: true },
     { id: 16, icon: 'library-outline', label: 'Health Library', route: '/(tabs)/learning', active: true },
     { id: 17, icon: 'settings-outline', label: 'Settings', route: '/(tabs)/profile', active: true },
   ];
@@ -232,7 +233,7 @@ export default function HomeScreen() {
         >
           {/* Header Section */}
           <View style={styles.header}>
-            <Text style={styles.appName}>HealthPath</Text>
+            <Text style={styles.appName}>PI HEALTH</Text>
             
             <View style={styles.headerRight}>
               <NotificationBell 

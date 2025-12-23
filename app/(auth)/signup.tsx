@@ -239,7 +239,7 @@ export default function SignUpScreen() {
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join HealthPath and start your wellness journey!</Text>
+            <Text style={styles.subtitle}>Join PI HEALTH and start your wellness journey!</Text>
           </View>
 
           {/* Form Container */}

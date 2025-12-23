@@ -4,9 +4,9 @@
  * Reusable header for all share cards with logo and app name
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
 import { Colors } from '@/constants/colors';
+import React from 'react';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 // ============================================================================
 // TYPES

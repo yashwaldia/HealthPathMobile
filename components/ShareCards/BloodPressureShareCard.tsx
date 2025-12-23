@@ -4,14 +4,14 @@
  * Displays blood pressure with status and averages
  */
 
-import React, { forwardRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import ShareCardWrapper from './ShareCardWrapper';
-import ShareCardHeader from './ShareCardHeader';
-import ShareCardFooter from './ShareCardFooter';
-import type { BloodPressureCardData } from '@/types/shareCard';
 import { Colors } from '@/constants/colors';
+import type { BloodPressureCardData } from '@/types/shareCard';
+import { Ionicons } from '@expo/vector-icons';
+import React, { forwardRef } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import ShareCardFooter from './ShareCardFooter';
+import ShareCardHeader from './ShareCardHeader';
+import ShareCardWrapper from './ShareCardWrapper';
 
 // ============================================================================
 // TYPES

@@ -4,7 +4,7 @@
  * Defines metadata, dimensions, and templates for all card types
  */
 
-import type { ShareCardTemplate, ShareCardType, CardDimensions, CardLayout } from '@/types/shareCard';
+import type { CardDimensions, CardLayout, ShareCardTemplate, ShareCardType } from '@/types/shareCard';
 import { Colors } from './colors';
 
 // ============================================================================
@@ -150,6 +150,17 @@ export const SHARE_CARD_TEMPLATES: Record<ShareCardType, ShareCardTemplate> = {
     enabled: true,
     order: 9,
   },
+  'motivational': {
+  type: 'motivational',
+  name: 'Daily Motivation',
+  description: 'Share inspirational health quotes',
+  icon: 'sparkles-outline',
+  requiredData: [], // No data required
+  category: 'wellness',
+  enabled: true,
+  order: 10,
+  },
+
 };
 
 // ============================================================================

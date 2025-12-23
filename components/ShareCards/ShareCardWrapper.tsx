@@ -1,14 +1,15 @@
 // components/ShareCards/ShareCardWrapper.tsx
+
 /**
  * ShareCardWrapper Component
  * Base wrapper for all share card types with gradient background
  */
 
-import React, { forwardRef } from 'react';
-import { View, StyleSheet, Dimensions, Platform } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { CARD_DIMENSIONS } from '@/constants/shareCardConfig';
 import { Colors } from '@/constants/colors';
+import { CARD_DIMENSIONS } from '@/constants/shareCardConfig';
+import { LinearGradient } from 'expo-linear-gradient';
+import React from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 
 // ============================================================================
 // TYPES
@@ -17,7 +18,7 @@ import { Colors } from '@/constants/colors';
 interface ShareCardWrapperProps {
   children: React.ReactNode;
   backgroundColor?: string;
-  gradientColors?: string[];
+  gradientColors?: readonly [string, string, ...string[]];
   testID?: string;
 }
 
@@ -29,33 +30,38 @@ interface ShareCardWrapperProps {
  * Base wrapper component for share cards
  * Provides consistent sizing, gradient background, and styling
  */
-const ShareCardWrapper = forwardRef<View, ShareCardWrapperProps>(
-  ({ children, backgroundColor, gradientColors, testID }, ref) => {
-    const defaultGradient = [
-      Colors.light.primary,
-      Colors.light.upload.categories.vitals,
-    ];
+const ShareCardWrapper: React.FC<ShareCardWrapperProps> = ({ 
+  children, 
+  backgroundColor, 
+  gradientColors, 
+  testID 
+}) => {
+  const defaultGradient = [
+    Colors.light.primary,
+    Colors.light.upload.categories.vitals,
+  ] as const;
 
-    const useGradient = gradientColors || defaultGradient;
+  const useGradient = gradientColors || defaultGradient;
 
-    return (
-      <View ref={ref} style={styles.container} testID={testID}>
-        {/* Gradient Background */}
-        <LinearGradient
-          colors={useGradient}
-          style={StyleSheet.absoluteFill}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
+  return (
+    <View
+      style={styles.container}
+      testID={testID}
+      collapsable={false}
+    >
+      {/* Gradient Background */}
+      <LinearGradient
+        colors={useGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
 
-        {/* Content Container */}
-        <View style={[styles.content, backgroundColor && { backgroundColor }]}>
-          {children}
-        </View>
-      </View>
-    );
-  }
-);
+      {/* Content Container */}
+      <View style={styles.content}>{children}</View>
+    </View>
+  );
+};
 
 ShareCardWrapper.displayName = 'ShareCardWrapper';
 

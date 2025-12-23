@@ -10,16 +10,12 @@
  * - fitcalc.ts
  */
 
-import type { VitalRecord, VitalStatus } from './vitals';
-import type { UserProfile } from './profile';
-import type { WellnessModuleType, ChildCareProfile, MotherCareProfile } from './wellness';
-import type { 
-  BmiResult, 
-  HrZonesResult, 
-  Vo2maxResult,
-  TdeeResult,
-  MacrosResult 
+import type {
+  BmiResult,
+  HrZonesResult
 } from './fitcalc';
+import type { VitalStatus } from './vitals';
+import type { WellnessModuleType } from './wellness';
 
 // ============================================================================
 // CARD TYPE ENUM
@@ -37,7 +33,9 @@ export type ShareCardType =
   | 'wellness-progress'    // Wellness module progress
   | 'mother-care'          // Pregnancy tracking card
   | 'child-growth'         // Child development card
-  | 'fitness-calculator';  // FitCalc result card
+  | 'fitness-calculator'  // FitCalc result card
+  | 'motivational'; // ✨ ADD THIS LINE
+
 
 // ============================================================================
 // CARD DATA INTERFACES

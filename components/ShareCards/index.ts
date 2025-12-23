@@ -20,3 +20,4 @@ export { default as VitalsSummaryCard } from './VitalsSummaryCard';
 export { default as WeeklyReportCard } from './WeeklyReportCard';
 export { default as WellnessProgressCard } from './WellnessProgressCard';
 
+export { default as MotivationalCard } from './MotivationalCard';

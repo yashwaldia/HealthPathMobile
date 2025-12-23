@@ -208,7 +208,7 @@ export const createTestNotification = async (
 ): Promise<void> => {
   try {
     await createNotification(userId, {
-      title: 'Welcome to HealthPath',
+      title: 'Welcome to PI HEALTH',
       body: 'This is a test notification to verify the system.',
       type: 'general',
     });

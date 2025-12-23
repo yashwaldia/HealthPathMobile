@@ -5,11 +5,11 @@ import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { BarChart, PieChart } from 'react-native-chart-kit';
 import { Colors } from '../../constants/colors';
 import {
-    ActivityInputs, ActivityResult, BmiInputs, BmiResult, BmrResult,
-    BodyFatInputs, BodyFatResult, HrZonesResult, IdealWeightInputs,
-    IdealWeightResult, MacrosResult, OneRmResult, ProteinInputs,
-    ProteinResult, RatiosResult, RunningResult, TdeeInputs,
-    TdeeResult, Vo2maxResult, WaterResult,
+  ActivityInputs, ActivityResult, BmiInputs, BmiResult, BmrResult,
+  BodyFatInputs, BodyFatResult, HrZonesResult, IdealWeightInputs,
+  IdealWeightResult, MacrosResult, OneRmResult, ProteinInputs,
+  ProteinResult, RatiosResult, RunningResult, TdeeInputs,
+  TdeeResult, Vo2maxResult, WaterResult,
 } from '../../types/fitcalc';
 
 type ChartProps =

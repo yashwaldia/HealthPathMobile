@@ -1,92 +1,80 @@
 // app/(tabs)/share-card.tsx
+
 /**
- * Share Card Screen
- * Main UI for selecting and sharing health cards
+ * Share Card Screen - Motivational Cards
+ * Using React Native Skia for reliable screenshots on RN 0.81
+ * Auto-generates card on mount for instant experience
  */
 
-import React, { useState, useEffect } from 'react';
+import { Colors } from '@/constants/colors';
+import motivationalCardService from '@/services/motivationalCardService';
+import type { MotivationalCardData } from '@/types/motivationalCard';
+import { Ionicons } from '@expo/vector-icons';
+import { makeImageFromView } from '@shopify/react-native-skia';
+import { useRouter } from 'expo-router';
+import * as FileSystem from 'expo-file-system/legacy';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useShareCard } from '@/hooks/useShareCard';
-import { Colors } from '@/constants/colors';
-import type { ShareCardType, ShareCardData } from '@/types/shareCard';
-import { getEnabledCardTemplates } from '@/constants/shareCardConfig';
-import shareCardService from '@/services/shareCardService';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Share from 'react-native-share';
 
-// Import all card components
-import BMIShareCard from '@/components/ShareCards/BMIShareCard';
-import HeartRateShareCard from '@/components/ShareCards/HeartRateShareCard';
-import BloodPressureShareCard from '@/components/ShareCards/BloodPressureShareCard';
-import VitalsSummaryCard from '@/components/ShareCards/VitalsSummaryCard';
-import WeeklyReportCard from '@/components/ShareCards/WeeklyReportCard';
-import WellnessProgressCard from '@/components/ShareCards/WellnessProgressCard';
-import MotherCareCard from '@/components/ShareCards/MotherCareCard';
-import ChildGrowthCard from '@/components/ShareCards/ChildGrowthCard';
-import FitnessCalculatorCard from '@/components/ShareCards/FitnessCalculatorCard';
+// Import motivational card component
+import MotivationalCard from '@/components/ShareCards/MotivationalCard';
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 export default function ShareCardScreen() {
-  const [selectedCardType, setSelectedCardType] = useState<ShareCardType | null>(null);
-  const [cardData, setCardData] = useState<ShareCardData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const [cardData, setCardData] = useState<MotivationalCardData | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // Start with loading
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
-  const { viewRef, captureAndShare, isCapturing, isSharing } = useShareCard();
+  const cardViewRef = useRef<View>(null);
 
   // ============================================================================
-  // FETCH CARD DATA
+  // GENERATE MOTIVATIONAL CARD
   // ============================================================================
 
-  const generateCardData = async (type: ShareCardType) => {
+  const generateMotivationalCard = async () => {
     setIsLoading(true);
-    setError(null);
 
     try {
-      let data: ShareCardData | null = null;
+      const result = await motivationalCardService.generateMotivationalCardData({
+        theme: 'light',
+        includeUserName: false,
+        includeTimeGreeting: true,
+      });
 
-      switch (type) {
-        case 'bmi':
-          data = await shareCardService.generateBMICardData();
-          break;
-        case 'heart-rate':
-          data = await shareCardService.generateHeartRateCardData();
-          break;
-        case 'blood-pressure':
-          data = await shareCardService.generateBloodPressureCardData();
-          break;
-        // Add other cases as needed
-        default:
-          throw new Error('Card type not yet implemented');
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Failed to generate motivational card');
       }
 
-      if (!data) {
-        throw new Error('Failed to generate card data. Please check your health data.');
-      }
-
-      setCardData(data);
-      setSelectedCardType(type);
+      setCardData(result.data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate card';
-      setError(errorMessage);
       Alert.alert('Error', errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Auto-generate card on mount
+  useEffect(() => {
+    generateMotivationalCard();
+  }, []);
+
   // ============================================================================
-  // SHARE HANDLER
+  // SHARE HANDLER - Using React Native Skia
   // ============================================================================
 
   const handleShare = async () => {
@@ -95,41 +83,81 @@ export default function ShareCardScreen() {
       return;
     }
 
-    const result = await captureAndShare(selectedCardType || undefined);
-
-    if (result.success && result.shared) {
-      Alert.alert('Success', 'Card shared successfully!');
+    if (!cardViewRef.current) {
+      Alert.alert('Error', 'Card view not ready');
+      return;
     }
-  };
 
-  // ============================================================================
-  // RENDER CARD COMPONENT
-  // ============================================================================
+    setIsCapturing(true);
+    setIsSharing(true);
 
-  const renderCard = () => {
-    if (!cardData) return null;
+    try {
+      console.log('🎯 Starting capture process with Skia...');
 
-    switch (cardData.cardType) {
-      case 'bmi':
-        return <BMIShareCard ref={viewRef} data={cardData} />;
-      case 'heart-rate':
-        return <HeartRateShareCard ref={viewRef} data={cardData} />;
-      case 'blood-pressure':
-        return <BloodPressureShareCard ref={viewRef} data={cardData} />;
-      case 'vitals-summary':
-        return <VitalsSummaryCard ref={viewRef} data={cardData} />;
-      case 'weekly-report':
-        return <WeeklyReportCard ref={viewRef} data={cardData} />;
-      case 'wellness-progress':
-        return <WellnessProgressCard ref={viewRef} data={cardData} />;
-      case 'mother-care':
-        return <MotherCareCard ref={viewRef} data={cardData} />;
-      case 'child-growth':
-        return <ChildGrowthCard ref={viewRef} data={cardData} />;
-      case 'fitness-calculator':
-        return <FitnessCalculatorCard ref={viewRef} data={cardData} />;
-      default:
-        return null;
+      // Wait for layout to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Capture using Skia's makeImageFromView - WORKS WITH RN 0.81!
+      const snapshot = await makeImageFromView(cardViewRef);
+
+      if (!snapshot) {
+        throw new Error('Failed to capture card');
+      }
+
+      console.log('✅ Skia snapshot created');
+
+      // Encode to base64
+      const base64 = snapshot.encodeToBase64();
+      
+      if (!base64) {
+        throw new Error('Failed to encode image');
+      }
+
+      console.log('✅ Image encoded to base64');
+
+      // Save to temp file using legacy FileSystem API
+      const tempPath = `${FileSystem.cacheDirectory}motivational-card-${Date.now()}.png`;
+      
+      await FileSystem.writeAsStringAsync(tempPath, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      console.log('✅ Image saved to:', tempPath);
+
+      // Share the captured image
+      const shareOptions = {
+        title: 'PI HEALTH - Motivational Card',
+        message: 'Track your health journey with PI HEALTH! 🏥✨',
+        url: tempPath,
+        type: 'image/png',
+        subject: 'My Health Journey',
+        failOnCancel: false,
+      };
+
+      const shareResult = await Share.open(shareOptions);
+
+      console.log('✅ Share result:', shareResult);
+
+      if (shareResult && shareResult.success !== false) {
+        Alert.alert('Success', 'Motivational card shared successfully! 🎉');
+      }
+
+      // Clean up temp file
+      try {
+        await FileSystem.deleteAsync(tempPath, { idempotent: true });
+      } catch (cleanupError) {
+        console.log('⚠️ Failed to cleanup temp file:', cleanupError);
+      }
+    } catch (error: any) {
+      if (error?.message === 'User did not share' || error?.message?.includes('cancel')) {
+        console.log('ℹ️ User cancelled share');
+      } else {
+        console.error('❌ Error:', error);
+        Alert.alert('Share Failed', error.message || 'Failed to share card');
+      }
+    } finally {
+      setIsCapturing(false);
+      setIsSharing(false);
     }
   };
 
@@ -137,102 +165,74 @@ export default function ShareCardScreen() {
   // RENDER
   // ============================================================================
 
-  const cardTemplates = getEnabledCardTemplates();
-
   return (
-    <View style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header - Consistent with other screens */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Share Health Card</Text>
-        <Text style={styles.headerSubtitle}>Select a card type to share your health progress</Text>
+        <TouchableOpacity onPress={() => router.push('/(tabs)')} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Share Card</Text>
+        <View style={styles.placeholderButton} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Card Type Selector */}
-        {!selectedCardType && (
-          <View style={styles.cardGrid}>
-            {cardTemplates.map((template) => (
-              <TouchableOpacity
-                key={template.type}
-                style={styles.cardOption}
-                onPress={() => generateCardData(template.type)}
-                disabled={isLoading}
-              >
-                <View style={styles.cardOptionIcon}>
-                  <Ionicons name={template.icon as any} size={32} color={Colors.light.primary} />
-                </View>
-                <Text style={styles.cardOptionName}>{template.name}</Text>
-                <Text style={styles.cardOptionDescription}>{template.description}</Text>
-              </TouchableOpacity>
-            ))}
+      {/* Loading State */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.light.primary} />
+          <Text style={styles.loadingText}>Generating your motivational card...</Text>
+        </View>
+      ) : (
+        /* Card Preview - Full Screen */
+        <View style={styles.mainContainer}>
+          {/* Beautiful Heading Section */}
+          <View style={styles.headingSection}>
+            <Text style={styles.headingSubtitle}>
+              Share this motivational card with your friends and inspire their health journey ✨
+            </Text>
           </View>
-        )}
 
-        {/* Loading State */}
-        {isLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.light.primary} />
-            <Text style={styles.loadingText}>Generating card...</Text>
-          </View>
-        )}
-
-        {/* Error State */}
-        {error && (
-          <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={48} color={Colors.light.error} />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={() => setError(null)}
-            >
-              <Text style={styles.retryButtonText}>Try Again</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Card Preview */}
-        {cardData && !isLoading && !error && (
-          <View style={styles.previewContainer}>
-            <Text style={styles.previewTitle}>Preview</Text>
-            <View style={styles.cardPreview}>{renderCard()}</View>
-
-            {/* Action Buttons */}
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => {
-                  setSelectedCardType(null);
-                  setCardData(null);
-                }}
-              >
-                <Ionicons name="arrow-back" size={20} color={Colors.light.primary} />
-                <Text style={styles.secondaryButtonText}>Change Card</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={handleShare}
-                disabled={isCapturing || isSharing}
-              >
-                {isCapturing || isSharing ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Ionicons name="share-social" size={20} color="#FFFFFF" />
-                    <Text style={styles.primaryButtonText}>Share Card</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+          {/* Card Display - Centered */}
+          <View style={styles.cardContainer}>
+            <View ref={cardViewRef} collapsable={false} style={styles.captureWrapper}>
+              <MotivationalCard data={cardData!} />
             </View>
           </View>
-        )}
-      </ScrollView>
-    </View>
+
+          {/* Action Buttons - Fixed at bottom */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.regenerateButton}
+              onPress={generateMotivationalCard}
+              disabled={isCapturing || isSharing}
+            >
+              <Ionicons name="refresh" size={20} color={Colors.light.primary} />
+              <Text style={styles.regenerateButtonText}>New Quote</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.shareButton}
+              onPress={handleShare}
+              disabled={isCapturing || isSharing}
+            >
+              {isCapturing || isSharing ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="share-social" size={20} color="#FFFFFF" />
+                  <Text style={styles.shareButtonText}>Share Card</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </SafeAreaView>
   );
 }
 
 // ============================================================================
-// STYLES
+// STYLES - Optimized for full-screen card display
 // ============================================================================
 
 const styles = StyleSheet.create({
@@ -240,134 +240,122 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background,
   },
+  // Header - Consistent pattern
   header: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.light.cardBackground,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
   },
+  backButton: {
+    padding: 4,
+    width: 40,
+  },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: Colors.light.textSecondary,
-  },
-  content: {
     flex: 1,
-  },
-  cardGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 16,
-    gap: 12,
-  },
-  cardOption: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  cardOptionIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.light.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardOptionName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.text,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  cardOptionDescription: {
-    fontSize: 11,
-    color: Colors.light.textSecondary,
     textAlign: 'center',
   },
+  placeholderButton: {
+    width: 40, // Balance back button for centered title
+  },
+
+  // Loading State
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 14,
     color: Colors.light.textSecondary,
   },
-  errorContainer: {
+
+  // Main Container - Full screen layout
+  mainContainer: {
+    flex: 1,
+    paddingVertical: 20,
+  },
+
+  // Beautiful Heading Section
+  headingSection: {
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    marginTop: 15,
+    marginBottom: 0,
+  },
+  iconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: `${Colors.light.primary}15`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  headingTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 8,
+  },
+  headingSubtitle: {
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 10,
+  },
+
+  // Card Container - Centered with flex
+  cardContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 40,
+    paddingHorizontal: 20,
   },
-  errorText: {
-    marginTop: 16,
-    fontSize: 14,
-    color: Colors.light.error,
-    textAlign: 'center',
+  captureWrapper: {
+    backgroundColor: 'transparent',
   },
-  retryButton: {
-    marginTop: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: Colors.light.primary,
-    borderRadius: 12,
-  },
-  retryButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  previewContainer: {
-    padding: 20,
-  },
-  previewTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 16,
-  },
-  cardPreview: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
+
+  // Action Buttons - Fixed at bottom
   actionButtons: {
     flexDirection: 'row',
     gap: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: 16,
   },
-  secondaryButton: {
+  regenerateButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.light.cardBackground,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.light.primary,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  secondaryButtonText: {
+  regenerateButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: Colors.light.primary,
   },
-  primaryButton: {
+  shareButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -376,8 +364,13 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     backgroundColor: Colors.light.primary,
     borderRadius: 12,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  primaryButtonText: {
+  shareButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',

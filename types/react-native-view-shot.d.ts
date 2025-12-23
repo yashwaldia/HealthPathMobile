@@ -1,7 +1,7 @@
 // types/react-native-view-shot.d.ts
 declare module 'react-native-view-shot' {
   import { Component, RefObject } from 'react';
-  import { View, ViewProps } from 'react-native';
+  import { ViewProps } from 'react-native';
 
   export interface CaptureOptions {
     format?: 'png' | 'jpg' | 'jpeg' | 'webm' | 'raw';

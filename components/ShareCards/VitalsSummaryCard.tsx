@@ -4,15 +4,15 @@
  * Displays comprehensive overview of all vitals
  */
 
-import React, { forwardRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import ShareCardWrapper from './ShareCardWrapper';
-import ShareCardHeader from './ShareCardHeader';
-import ShareCardFooter from './ShareCardFooter';
+import { Colors } from '@/constants/colors';
 import type { VitalsSummaryCardData } from '@/types/shareCard';
 import type { VitalStatus } from '@/types/vitals';
-import { Colors } from '@/constants/colors';
+import { Ionicons } from '@expo/vector-icons';
+import React, { forwardRef } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import ShareCardFooter from './ShareCardFooter';
+import ShareCardHeader from './ShareCardHeader';
+import ShareCardWrapper from './ShareCardWrapper';
 
 // ============================================================================
 // TYPES

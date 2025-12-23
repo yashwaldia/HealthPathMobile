@@ -4,10 +4,10 @@
  * Reusable footer with Google Play badge and download CTA
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
+import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 // ============================================================================
 // TYPES
@@ -29,12 +29,7 @@ export default function ShareCardFooter({
   return (
     <View style={[styles.container, { backgroundColor }]}>
       {/* Motivational Message */}
-      {motivationalText && (
-        <View style={styles.messageContainer}>
-          <Ionicons name="sparkles" size={14} color="#FFFFFF" />
-          <Text style={styles.motivationalText}>{motivationalText}</Text>
-        </View>
-      )}
+
 
       {/* Google Play Badge */}
       <View style={styles.downloadContainer}>
@@ -63,7 +58,7 @@ export default function ShareCardFooter({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     alignItems: 'center',
     gap: 12,
   },

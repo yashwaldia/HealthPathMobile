@@ -22,7 +22,7 @@ export default function WelcomeScreen() {
         {/* Illustration */}
         <View style={styles.illustrationContainer}>
           <Image
-            source={require('../../assets/images/welcomecard.jpeg')}
+            source={require('../../assets/images/welcomecard.png')}
             style={styles.illustration}
             resizeMode="contain"
           />
@@ -30,7 +30,7 @@ export default function WelcomeScreen() {
 
         {/* Title Section */}
         <View style={styles.titleContainer}>
-          <Text style={styles.title}>HealthPath</Text>
+          <Text style={styles.title}>PI HEALTH</Text>
           <Text style={styles.subtitle}>Your AI-Powered Health Companion</Text>
           <Text style={styles.description}>
             Track your health metrics, analyze lab reports, and get personalized insights powered by AI

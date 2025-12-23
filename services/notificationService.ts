@@ -3,7 +3,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { Medication } from '../types/medication';
-import { getActiveMedications } from './medicationService';
+import { getActiveMedications, getAllMedications } from './medicationService';  // ✅ ADDED: getAllMedications
 import { createReminderNotification } from './appNotificationService';
 
 // ============================================
@@ -44,7 +44,50 @@ export interface ScheduledNotification {
 }
 
 // ============================================
-// ✅ NOTIFICATION LISTENER SETUP (BACKUP ONLY)
+// ✅ NEW: CLEANUP COMPLETED MEDICATIONS
+// ============================================
+
+/**
+ * Cancel reminders for completed medications (!isActive || expired endDate)
+ * CRITICAL FIX: Runs on app init to cleanup stale notifications
+ */
+export const cancelCompletedMedications = async (userId: string): Promise<void> => {
+  try {
+    console.log('🧹 Checking for completed medications to cleanup...');
+    
+    // Get ALL medications (not just active ones)
+    const allMedications = await getAllMedications(userId);
+    const now = new Date();
+    
+    // Find completed medications: !isActive OR endDate passed
+    const completedMedIds: string[] = [];
+    for (const med of allMedications) {
+      const isInactive = !med.isActive;
+      const isExpired = med.endDate && now > new Date(med.endDate);
+      
+      if (isInactive || isExpired) {
+        completedMedIds.push(med.medicationId);
+        console.log(`✅ Found completed med: ${med.name} (${isInactive ? 'inactive' : 'expired'})`);
+      }
+    }
+    
+    // Cancel reminders for all completed meds
+    for (const medId of completedMedIds) {
+      try {
+        await cancelMedicationReminder(medId);
+      } catch (error) {
+        console.warn(`⚠️ Failed to cancel reminders for ${medId}:`, error);
+      }
+    }
+    
+    console.log(`✅ Cleaned up ${completedMedIds.length} completed medications`);
+  } catch (error) {
+    console.error('❌ Error cancelling completed medications:', error);
+  }
+};
+
+// ============================================
+// NOTIFICATION LISTENER SETUP (BACKUP ONLY)
 // ============================================
 
 /**
@@ -430,6 +473,15 @@ export const snoozeMedicationReminder = async (
   userId: string
 ): Promise<string> => {
   try {
+    // ✅ NEW: Check if medication is still valid before snoozing
+    const now = new Date();
+    const endDate = medication.endDate ? new Date(medication.endDate) : null;
+    
+    if (!medication.isActive || (endDate && now > endDate)) {
+      console.log(`⏭️ Cannot snooze completed medication: ${medication.name}`);
+      throw new Error('Medication is no longer active');
+    }
+
     const snoozeMinutes = 15;
     const snoozeDate = new Date(Date.now() + snoozeMinutes * 60 * 1000);
 
@@ -502,7 +554,7 @@ export const sendTestNotification = async (): Promise<void> => {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '🧪 Test Notification',
-        body: 'This is a test notification from HealthPath!',
+        body: 'This is a test notification from PI HEALTH!',
         data: { type: 'test' },
       },
       trigger: {
@@ -517,9 +569,12 @@ export const sendTestNotification = async (): Promise<void> => {
 };
 
 // ============================================
-// INITIALIZATION
+// INITIALIZATION (UPDATED)
 // ============================================
 
+/**
+ * ✅ CRITICAL FIX: Now cancels completed meds FIRST, then schedules active ones
+ */
 export const initializeNotificationService = async (
   userId: string
 ): Promise<void> => {
@@ -533,6 +588,11 @@ export const initializeNotificationService = async (
     }
 
     await setupNotificationCategories();
+    
+    // ✅ NEW STEP 1: Cancel completed medications first
+    await cancelCompletedMedications(userId);
+    
+    // ✅ STEP 2: Schedule active medications
     await scheduleAllMedicationReminders(userId);
 
     console.log('✅ Notification service initialized successfully');

@@ -14,7 +14,11 @@ import {
   handleNotificationResponse,
   setupNotificationCategories,
 } from '../services/notificationService';
-import { logDose } from '../services/medicationService';
+import { 
+  logDose, 
+  getMedication, 
+  deactivateMedication 
+} from '../services/medicationService';  // ✅ ADDED: getMedication, deactivateMedication
 import { profileService } from '../services/profileService';
 import { Colors } from '../constants/colors';
 
@@ -98,6 +102,51 @@ function NotificationInitializer() {
     return () => subscription.remove();
   }, [user?.uid]);
 
+  // ✅ UPDATED: Enhanced "Take Now" handler with auto-completion + navigation
+  const handleTakeNow = async (medicationId: string) => {
+    if (!user?.uid) return;
+
+    try {
+      console.log('✅ Logging dose as taken for:', medicationId);
+      
+      // 1. Log the dose
+      await logDose(user.uid, medicationId, {
+        scheduledTime: new Date().toISOString(),
+        taken: true,
+        skipped: false,
+        notes: 'Taken via notification',
+      });
+      console.log('✅ Dose logged successfully');
+
+      // 2. ✅ NEW: Check if medication course is complete
+      const medication = await getMedication(user.uid, medicationId);
+      if (medication) {
+        const now = new Date();
+        const endDate = medication.endDate ? new Date(medication.endDate) : null;
+        
+        // If endDate passed OR no more duration, deactivate medication
+        if (!medication.isActive || (endDate && now > endDate)) {
+          console.log(`🎉 Auto-completing medication: ${medication.name}`);
+          await deactivateMedication(user.uid, medicationId);
+          console.log('✅ Medication automatically deactivated');
+        }
+      }
+
+      // 3. ✅ NEW: Navigate to medication screen
+      console.log('📱 Navigating to medication screen');
+      router.push('/(tabs)/medication-tracker');
+      
+    } catch (error) {
+      console.error('❌ Failed to handle Take Now:', error);
+    }
+  };
+
+  // ✅ UPDATED: Snooze handler (just logs for now)
+  const handleSnooze = async (medicationId: string) => {
+    console.log('⏰ Snoozing medication:', medicationId);
+    // Snooze logic handled in notificationService.ts
+  };
+
   // Listen for LOCAL in-app notification actions (medication, snooze, etc.)
   useEffect(() => {
     setupNotificationCategories().catch(error => {
@@ -106,28 +155,11 @@ function NotificationInitializer() {
 
     const localSubscription = Notifications.addNotificationResponseReceivedListener(response => {
       if (!user?.uid) return;
-      handleNotificationResponse(
-        response,
-        async (medicationId: string) => {
-          try {
-            console.log('✅ Logging dose as taken for:', medicationId);
-            await logDose(user.uid, medicationId, {
-              scheduledTime: new Date().toISOString(),
-              taken: true,
-              skipped: false,
-              notes: 'Taken via notification',
-            });
-            console.log('✅ Dose logged successfully');
-          } catch (error) {
-            console.error('❌ Failed to log dose:', error);
-          }
-        },
-        async (medicationId: string) => {
-          console.log('⏰ Snoozing medication:', medicationId);
-          // Snooze handled in notificationService.ts
-        }
-      );
+      
+      // ✅ UPDATED: Use enhanced handlers with navigation
+      handleNotificationResponse(response, handleTakeNow, handleSnooze);
     });
+    
     return () => localSubscription.remove();
   }, [user?.uid]);
 
@@ -138,12 +170,16 @@ function NotificationInitializer() {
       if (!data) return;
 
       // --- Weekly AI Report Push Handling ---
-      // If notification has type: 'weekly-report', direct to /history
       if (data.type === 'weekly-report') {
         router.push('/(tabs)/history');
       }
 
-      // Add navigation for other notification types here if needed in the future!
+      // ✅ NEW: Medication reminders → medication screen
+      if (data.type === 'medication-reminder' || data.type === 'medication-reminder-snooze') {
+        router.push('/(tabs)/medication-tracker');
+      }
+
+      // Add navigation for other notification types here if needed!
     });
     return () => subscription.remove();
   }, [user]);

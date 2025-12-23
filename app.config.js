@@ -11,7 +11,7 @@ module.exports = {
     splash: {
       image: "./assets/images/android-icon-512.png",
       resizeMode: "contain",
-      backgroundColor: "#fa8a61"
+      backgroundColor: "#FFF5F0"
     },
     // ios: {
     //   supportsTablet: true,
@@ -25,8 +25,8 @@ module.exports = {
     // },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/images/android-icon-512.png",
-        backgroundColor: "#fa8a61"
+        foregroundImage: "./assets/images/ic_launcher.png",
+        backgroundColor: "#FFF5F0"
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
@@ -44,7 +44,7 @@ module.exports = {
     },
     web: {
       output: "static",
-      favicon: "./assets/images/android-icon-48.png"
+      favicon: "./assets/images/android-icon-512.png"
     },
     plugins: [
       "expo-router",
@@ -54,7 +54,7 @@ module.exports = {
           image: "./assets/images/android-icon-512.png",
           imageWidth: 250,
           resizeMode: "contain",
-          backgroundColor: "#fa8a61"
+          backgroundColor: "#FFF5F0"
         }
       ],
       [
@@ -67,7 +67,7 @@ module.exports = {
       [
         "expo-notifications",
         {
-          color: "#fa8a61"
+          color: "#FFF5F0"
         }
       ],
       "expo-font",
