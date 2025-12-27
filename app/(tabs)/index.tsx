@@ -3,17 +3,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import {
-  Alert,
-  Dimensions,
-  Image,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, AppState, Dimensions, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
@@ -25,8 +15,15 @@ import { VitalRecord } from '../../types/vitals';
 // --- Notification Imports ---
 import { NotificationBell, NotificationModal } from '../../components/Notification/NotificationCenter';
 import { clearAllNotifications, getNotifications, markAsRead } from '../../services/appNotificationService';
-// ✅ REMOVED: setupNotificationListeners import (no longer needed)
-// ----------------------------
+
+// ✅ NEW: Sleep Timer Imports
+import {
+  calculateElapsedTime,
+  getSleepTimerStatus,
+  initializeSleepTimerService,
+  updateSleepTimerNotification
+} from '../../services/sleepTimerService';
+import { SleepTimerState } from '../../types/sleepTimer';
 
 const { width } = Dimensions.get('window');
 
@@ -44,6 +41,11 @@ export default function HomeScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isClearing, setIsClearing] = useState(false);
 
+  // ✅ NEW: Sleep Timer State
+  const [sleepTimerActive, setSleepTimerActive] = useState(false);
+  const [sleepTimerStart, setSleepTimerStart] = useState<number | null>(null);
+  const [sleepTimerElapsed, setSleepTimerElapsed] = useState('0h 0m');
+
   // Set greeting based on time
   useEffect(() => {
     const hour = new Date().getHours();
@@ -52,22 +54,71 @@ export default function HomeScreen() {
     else setGreeting('Good Evening');
   }, []);
 
-  // Load user profile, vitals & Notifications
+  // Load user data on mount
   useEffect(() => {
     if (user?.uid) {
       loadProfile();
       loadVitals();
       loadNotifications();
+      checkSleepTimer(); // ✅ NEW: Check sleep timer status
     }
   }, [user]);
 
-  // ✅ REMOVED: Notification listener setup
-  // We now save notifications directly when scheduling them, not when receiving
-  // This eliminates the issue of notifications not being saved when app is closed
+  // ✅ NEW: Initialize Sleep Timer Service
+  useEffect(() => {
+    initializeSleepTimerService();
+  }, []);
+
+  // ✅ NEW: Update sleep timer notification when app comes to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (nextAppState === 'active' && sleepTimerActive) {
+        console.log('🔄 App became active, updating sleep timer notification...');
+        await updateSleepTimerNotification();
+        await checkSleepTimer(); // Refresh timer status
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [sleepTimerActive]);
+
+  // ✅ NEW: Update elapsed time every minute when timer is active
+  useEffect(() => {
+    if (!sleepTimerActive || !sleepTimerStart) return;
+
+    const interval = setInterval(() => {
+      const elapsed = calculateElapsedTime(sleepTimerStart);
+      setSleepTimerElapsed(elapsed.formatted);
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, [sleepTimerActive, sleepTimerStart]);
+
+  // ✅ NEW: Check Sleep Timer Status
+  const checkSleepTimer = async () => {
+    try {
+      const status: SleepTimerState | null = await getSleepTimerStatus();
+      
+      if (status?.isRunning) {
+        setSleepTimerActive(true);
+        setSleepTimerStart(status.startTime);
+        const elapsed = calculateElapsedTime(status.startTime);
+        setSleepTimerElapsed(elapsed.formatted);
+        console.log(`✅ Sleep timer is active: ${elapsed.formatted}`);
+      } else {
+        setSleepTimerActive(false);
+        setSleepTimerStart(null);
+        setSleepTimerElapsed('0h 0m');
+      }
+    } catch (error) {
+      console.error('❌ Error checking sleep timer status:', error);
+    }
+  };
 
   const loadProfile = async () => {
     if (!user?.uid) return;
-    
     try {
       const userProfile = await profileService.getProfile(user.uid);
       setProfile(userProfile);
@@ -78,7 +129,6 @@ export default function HomeScreen() {
 
   const loadVitals = async () => {
     if (!user?.uid) return;
-    
     try {
       const vitals = await vitalsService.getLatestVitals(user.uid);
       setLatestVitals(vitals);
@@ -106,6 +156,7 @@ export default function HomeScreen() {
         loadProfile(),
         loadVitals(),
         loadNotifications(),
+        checkSleepTimer(), // ✅ NEW: Also refresh sleep timer status
       ]);
     } catch (error) {
       console.error('Error refreshing data:', error);
@@ -116,7 +167,6 @@ export default function HomeScreen() {
 
   const handleMarkRead = async (id: string) => {
     if (!user?.uid) return;
-    
     try {
       await markAsRead(user.uid, id);
       const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n);
@@ -126,10 +176,9 @@ export default function HomeScreen() {
       console.error('Error marking notification as read:', error);
     }
   };
-  
+
   const handleClearAll = async () => {
     if (!user?.uid || isClearing) return;
-    
     try {
       setIsClearing(true);
       console.log('🗑️ Clearing all notifications...');
@@ -145,11 +194,15 @@ export default function HomeScreen() {
     }
   };
 
+  // ✅ NEW: Navigate to FitCalc Sleep Timer
+  const handleSleepTimerPress = () => {
+    router.push('/(tabs)/fitcalc'); // Navigate to FitCalc with sleep timer
+  };
+
   // --- Helper Functions ---
   const calculateBMI = (): number | null => {
     const weight = latestVitals.weightKg || parseFloat(profile?.profile?.weight || '0');
     const heightCm = latestVitals.heightCm || parseFloat(profile?.profile?.height || '0');
-    
     if (weight > 0 && heightCm > 0) {
       const heightM = heightCm / 100;
       return parseFloat((weight / (heightM * heightM)).toFixed(1));
@@ -159,34 +212,28 @@ export default function HomeScreen() {
 
   const getStatusColor = (status: 'normal' | 'alert' | 'critical'): string => {
     switch (status) {
-      case 'normal': return '#34C759'; // Green
-      case 'alert': return '#FF9500'; // Orange
-      case 'critical': return '#FF3B30'; // Red
+      case 'normal': return '#34C759';
+      case 'alert': return '#FF9500';
+      case 'critical': return '#FF3B30';
       default: return Colors.light.primary;
     }
   };
 
   // --- Health Stats Data ---
   const bmi = calculateBMI();
-  
   const heartRateValue = latestVitals.heartRate || null;
   const heartRateStatus = heartRateValue ? getVitalStatus('heartRate', heartRateValue) : 'normal';
-  
   const bpSystolic = latestVitals.bloodPressureSystolic;
   const bpDiastolic = latestVitals.bloodPressureDiastolic;
   const bpStatus = (bpSystolic && bpDiastolic) ? getVitalStatus('bloodPressure', bpSystolic, bpDiastolic) : 'normal';
-  
   const bloodSugarValue = latestVitals.bloodSugarFasting || null;
   const bloodSugarStatus = bloodSugarValue ? getVitalStatus('bloodSugar', bloodSugarValue) : 'normal';
-  
   const weightValue = latestVitals.weightKg || parseFloat(profile?.profile?.weight || '0') || null;
 
-  // Updated: all buttons active, including AI Report enabled
   const actionButtons = [
     { id: 1, icon: 'fitness-outline', label: 'Vitals', route: '/(tabs)/vitals', active: true },
     { id: 2, icon: 'cloud-upload-outline', label: 'Upload', route: '/smart-upload', active: true },
     { id: 3, icon: 'heart-outline', label: 'Symptoms', route: '/(tabs)/symptoms', active: true },
-    // { id: 4, icon: 'flask-outline', label: 'Lab Tests', route: 'interpreter', active: true },
     { id: 5, icon: 'bar-chart-outline', label: 'Reports', route: '/(tabs)/reports', active: true },
     { id: 6, icon: 'scan-outline', label: 'Radiology', route: '/(tabs)/radiology-analyzer', active: true },
     { id: 7, icon: 'sparkles-outline', label: 'AI Report', route: '/(tabs)/ai-report', active: true },
@@ -218,8 +265,8 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
-        <ScrollView 
-          style={styles.scrollView} 
+        <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -234,13 +281,21 @@ export default function HomeScreen() {
           {/* Header Section */}
           <View style={styles.header}>
             <Text style={styles.appName}>PI HEALTH</Text>
-            
+
             <View style={styles.headerRight}>
-              <NotificationBell 
-                onPress={() => setNotifVisible(true)} 
-                unreadCount={unreadCount} 
+              {/* ✅ NEW: Sleep Timer Indicator */}
+              {sleepTimerActive && (
+                <TouchableOpacity onPress={handleSleepTimerPress} style={styles.sleepTimerBadge} activeOpacity={0.7}>
+                  <Ionicons name="moon" size={18} color="#FFF" />
+                  <Text style={styles.sleepTimerText}>{sleepTimerElapsed}</Text>
+                </TouchableOpacity>
+              )}
+
+              <NotificationBell
+                onPress={() => setNotifVisible(true)}
+                unreadCount={unreadCount}
               />
-              
+
               <TouchableOpacity onPress={handleProfilePress} style={styles.profileButton}>
                 {profile?.photoURL ? (
                   <Image source={{ uri: profile.photoURL }} style={styles.profileImage} />
@@ -266,27 +321,15 @@ export default function HomeScreen() {
           <View style={styles.statsContainer}>
             {/* Heart Rate Card */}
             <View style={styles.statCard}>
-              <Ionicons 
-                name="pulse" 
-                size={24} 
-                color={getStatusColor(heartRateStatus)} 
-                style={styles.statIcon} 
-              />
+              <Ionicons name="pulse" size={24} color={getStatusColor(heartRateStatus)} style={styles.statIcon} />
               <Text style={styles.statLabel}>Heart Rate</Text>
-              <Text style={styles.statValue}>
-                {heartRateValue || '--'}
-              </Text>
+              <Text style={styles.statValue}>{heartRateValue || '--'}</Text>
               <Text style={styles.statUnit}>bpm</Text>
             </View>
 
             {/* Blood Pressure Card */}
             <View style={styles.statCard}>
-              <Ionicons 
-                name="heart-circle" 
-                size={24} 
-                color={getStatusColor(bpStatus)} 
-                style={styles.statIcon} 
-              />
+              <Ionicons name="heart-circle" size={24} color={getStatusColor(bpStatus)} style={styles.statIcon} />
               <Text style={styles.statLabel}>BP</Text>
               <Text style={styles.statValue}>
                 {(bpSystolic && bpDiastolic) ? `${bpSystolic}/${bpDiastolic}` : '--/--'}
@@ -296,27 +339,15 @@ export default function HomeScreen() {
 
             {/* Blood Sugar Card */}
             <View style={styles.statCard}>
-              <Ionicons 
-                name="water" 
-                size={24} 
-                color={getStatusColor(bloodSugarStatus)} 
-                style={styles.statIcon} 
-              />
+              <Ionicons name="water" size={24} color={getStatusColor(bloodSugarStatus)} style={styles.statIcon} />
               <Text style={styles.statLabel}>Sugar</Text>
-              <Text style={styles.statValue}>
-                {bloodSugarValue || '--'}
-              </Text>
+              <Text style={styles.statValue}>{bloodSugarValue || '--'}</Text>
               <Text style={styles.statUnit}>mg/dL</Text>
             </View>
 
             {/* Weight/BMI Card */}
             <View style={styles.statCard}>
-              <Ionicons 
-                name="fitness" 
-                size={24} 
-                color={Colors.light.primary} 
-                style={styles.statIcon} 
-              />
+              <Ionicons name="fitness" size={24} color={Colors.light.primary} style={styles.statIcon} />
               <Text style={styles.statLabel}>{bmi ? 'BMI' : 'Weight'}</Text>
               <Text style={styles.statValue}>
                 {bmi ? bmi : (weightValue ? weightValue.toFixed(1) : '--')}
@@ -335,15 +366,9 @@ export default function HomeScreen() {
                 activeOpacity={0.7}
               >
                 <View style={styles.iconContainer}>
-                  <Ionicons 
-                    name={button.icon as any} 
-                    size={24} 
-                    color={Colors.light.primary} 
-                  />
+                  <Ionicons name={button.icon as any} size={24} color={Colors.light.primary} />
                 </View>
-                <Text style={styles.actionLabel}>
-                  {button.label}
-                </Text>
+                <Text style={styles.actionLabel}>{button.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -363,20 +388,10 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 100,
-  },
+  safeArea: { flex: 1, backgroundColor: Colors.light.background },
+  container: { flex: 1, backgroundColor: Colors.light.background },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingBottom: 100 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -385,38 +400,12 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 8,
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  appName: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginTop: 10,
-    color: Colors.light.text,
-  },
-  greetingContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  greeting: {
-    fontSize: 26,
-    fontWeight: '700',
-    marginTop: 5,
-    color: Colors.light.text,
-  },
-  profileButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
-  profileImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 25,
-  },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  appName: { fontSize: 22, fontWeight: '700', marginTop: 10, color: Colors.light.text },
+  greetingContainer: { paddingHorizontal: 20, paddingBottom: 16 },
+  greeting: { fontSize: 26, fontWeight: '700', marginTop: 5, color: Colors.light.text },
+  profileButton: { width: 50, height: 50, borderRadius: 25, overflow: 'hidden' },
+  profileImage: { width: '100%', height: '100%', borderRadius: 25 },
   profilePlaceholder: {
     width: '100%',
     height: '100%',
@@ -424,17 +413,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  profileInitial: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  statsContainer: {
+  profileInitial: { fontSize: 22, fontWeight: '700', color: '#FFFFFF' },
+  
+  // ✅ NEW: Sleep Timer Badge Styles
+  sleepTimerBadge: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginTop: 10,
-    gap: 8,
+    alignItems: 'center',
+    backgroundColor: '#6B46C1',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
   },
+  sleepTimerText: { fontSize: 11, fontWeight: '700', color: '#FFF' },
+  
+  statsContainer: { flexDirection: 'row', paddingHorizontal: 16, marginTop: 10, gap: 8 },
   statCard: {
     flex: 1,
     backgroundColor: Colors.light.cardBackground,
@@ -450,9 +443,7 @@ const styles = StyleSheet.create({
     minHeight: 100,
     justifyContent: 'center',
   },
-  statIcon: {
-    marginBottom: 6,
-  },
+  statIcon: { marginBottom: 6 },
   statLabel: {
     fontSize: 10,
     color: Colors.light.textSecondary,
@@ -468,19 +459,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 2,
   },
-  statUnit: {
-    fontSize: 10,
-    color: Colors.light.textSecondary,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  actionsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    marginTop: 20,
-    gap: 12,
-  },
+  statUnit: { fontSize: 10, color: Colors.light.textSecondary, fontWeight: '600', textAlign: 'center' },
+  actionsContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, marginTop: 20, gap: 12 },
   actionButton: {
     width: (width - 32 - 36) / 4,
     aspectRatio: 0.9,
@@ -505,11 +485,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 6,
   },
-  actionLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.light.text,
-    textAlign: 'center',
-    lineHeight: 12,
-  },
+  actionLabel: { fontSize: 10, fontWeight: '600', color: Colors.light.text, textAlign: 'center', lineHeight: 12 },
 });

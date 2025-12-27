@@ -20,7 +20,7 @@ export type FitCalcConfigEntry = {
 // ============================================================================
 
 export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
-  // ========== FITNESS CATEGORY ==========
+  // ========== FITNESS CATEGORY ========== (UNCHANGED)
   
   bmi: {
     title: 'BMI',
@@ -193,7 +193,7 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     ],
   },
   
-  // ========== HEART CATEGORY ==========
+  // ========== HEART CATEGORY ========== (UNCHANGED)
   
   hrzones: {
     title: 'HR Zones',
@@ -227,7 +227,7 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     ],
   },
   
-  // ========== DAILY HEALTH CATEGORY ==========
+  // ========== DAILY HEALTH CATEGORY ========== (UNCHANGED)
   
   water: {
     title: 'Water',
@@ -348,6 +348,191 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
       { key: 'hip', label: 'Hip (cm)', type: 'number', keyboardType: 'numeric' },
     ],
   },
+
+  // ========== BIOHACKING CATEGORY ========== ✅ COMPLETELY SIMPLIFIED
+  
+  hrv: {
+    title: 'Heart Health Score',
+    description: 'Check your heart health based on how you feel.',
+    category: 'biohacking',
+    icon: 'heart-circle-outline',
+    fields: [
+      { 
+        key: 'age', 
+        label: 'Your age', 
+        type: 'number', 
+        keyboardType: 'numeric' 
+      },
+      {
+        key: 'energyLevel',
+        label: 'Energy level today',
+        type: 'slider',
+        min: 1,
+        max: 10,
+        step: 1,
+        helperText: 'Low energy (1) to High energy (10)',
+      },
+      {
+        key: 'stressLevel',
+        label: 'Stress level today',
+        type: 'slider',
+        min: 1,
+        max: 10,
+        step: 1,
+        helperText: 'Relaxed (1) to Very stressed (10)',
+      },
+      {
+        key: 'exerciseFrequency',
+        label: 'How often do you exercise?',
+        type: 'chips',
+        options: [
+          { value: 'rarely', label: 'Rarely' },
+          { value: 'sometimes', label: '1-2 times/week' },
+          { value: 'often', label: '3-4 times/week' },
+          { value: 'daily', label: 'Daily' },
+        ],
+      },
+    ],
+  },
+  
+  recovery: {
+    title: 'Recovery Score',
+    description: 'How well your body has recovered from yesterday.',
+    category: 'biohacking',
+    icon: 'refresh-outline',
+    fields: [
+      {
+        key: 'sleepHours',
+        label: 'Hours of sleep last night',
+        type: 'number',
+        keyboardType: 'numeric',
+        helperText: 'e.g., 7.5',
+      },
+      {
+        key: 'sleepQualityRating',
+        label: 'Sleep quality',
+        type: 'slider',
+        min: 1,
+        max: 10,
+        step: 1,
+        helperText: 'Poor (1) to Excellent (10)',
+      },
+      {
+        key: 'morningFeeling',
+        label: 'How do you feel this morning?',
+        type: 'slider',
+        min: 1,
+        max: 10,
+        step: 1,
+        helperText: 'Exhausted (1) to Energized (10)',
+      },
+      {
+        key: 'muscleSoreness',
+        label: 'Muscle soreness',
+        type: 'chips',
+        options: [
+          { value: 'none', label: 'None' },
+          { value: 'light', label: 'Light' },
+          { value: 'moderate', label: 'Moderate' },
+          { value: 'severe', label: 'Severe' },
+        ],
+      },
+    ],
+  },
+  
+  sleepquality: {
+    title: 'Sleep Quality',
+    description: 'Analyze your sleep quality and get recommendations.',
+    category: 'biohacking',
+    icon: 'moon-outline',
+    fields: [
+      {
+        key: 'duration',
+        label: 'Total sleep time (hours)',
+        type: 'number',
+        keyboardType: 'numeric',
+        helperText: 'e.g., 7.5',
+      },
+      {
+        key: 'sleepQualityRating',
+        label: 'How well did you sleep?',
+        type: 'slider',
+        min: 1,
+        max: 10,
+        step: 1,
+        helperText: 'Terrible (1) to Perfect (10)',
+      },
+      {
+        key: 'wakeUps',
+        label: 'Times you woke up',
+        type: 'chips',
+        options: [
+          { value: 'none', label: 'None' },
+          { value: 'once', label: 'Once' },
+          { value: 'few', label: '2-3 times' },
+          { value: 'many', label: 'Many times' },
+        ],
+      },
+      {
+        key: 'morningMood',
+        label: 'Morning mood',
+        type: 'slider',
+        min: 1,
+        max: 10,
+        step: 1,
+        helperText: 'Groggy (1) to Refreshed (10)',
+      },
+    ],
+  },
+  
+  stress: {
+    title: 'Stress Level',
+    description: 'Check your current stress level and get tips.',
+    category: 'biohacking',
+    icon: 'alert-circle-outline',
+    fields: [
+      {
+        key: 'stressRating',
+        label: 'How stressed do you feel?',
+        type: 'slider',
+        min: 1,
+        max: 10,
+        step: 1,
+        helperText: 'Calm (1) to Overwhelmed (10)',
+      },
+      {
+        key: 'sleepQualityLast',
+        label: 'Sleep quality last night',
+        type: 'slider',
+        min: 1,
+        max: 10,
+        step: 1,
+        helperText: 'Poor (1) to Excellent (10)',
+      },
+      {
+        key: 'workload',
+        label: 'Current workload',
+        type: 'chips',
+        options: [
+          { value: 'light', label: 'Light' },
+          { value: 'normal', label: 'Normal' },
+          { value: 'heavy', label: 'Heavy' },
+          { value: 'overwhelming', label: 'Overwhelming' },
+        ],
+      },
+      {
+        key: 'physicalActivity',
+        label: 'Physical activity today',
+        type: 'chips',
+        options: [
+          { value: 'none', label: 'None' },
+          { value: 'light', label: 'Light walk' },
+          { value: 'moderate', label: 'Moderate' },
+          { value: 'intense', label: 'Intense' },
+        ],
+      },
+    ],
+  },
 };
 
 // ============================================================================
@@ -413,6 +598,12 @@ export const CATEGORIES = [
     label: 'Daily Health',
     icon: 'fitness-outline',
     calculators: getCalculatorsByCategory('dailyhealth'),
+  },
+  {
+    id: 'biohacking' as CategoryId,
+    label: 'Biohacking',
+    icon: 'flash-outline',
+    calculators: getCalculatorsByCategory('biohacking'),
   },
 ] as const;
 

@@ -1,6 +1,7 @@
 // components/fitcalc/FitCalcCard.tsx
 
 import { Ionicons } from '@expo/vector-icons';
+import Slider from '@react-native-community/slider';
 import React, { memo, useCallback } from 'react';
 import {
   ScrollView,
@@ -30,6 +31,15 @@ export type FitCalcField =
       label: string;
       type: 'chips';
       options: { value: string; label: string }[];
+    }
+  | {
+      key: string;
+      label: string;
+      type: 'slider';
+      min: number;
+      max: number;
+      step: number;
+      helperText?: string;
     };
 
 type Props = {
@@ -49,6 +59,7 @@ type Props = {
     line2?: string;
     line3?: string;
   };
+  sleepTimerSection?: React.ReactNode; // ✅ NEW: Optional sleep timer UI
 };
 
 // ============================================================================
@@ -122,6 +133,53 @@ const InputField = memo(
 
 InputField.displayName = 'InputField';
 
+const SliderField = memo(
+  ({
+    field,
+    value,
+    onChange,
+  }: {
+    field: Extract<FitCalcField, { type: 'slider' }>;
+    value: string;
+    onChange: (key: string, val: string) => void;
+  }) => {
+    const numericValue = parseFloat(value) || field.min;
+
+    return (
+      <View style={styles.field}>
+        <View style={styles.sliderHeader}>
+          <Text style={styles.label}>{field.label}</Text>
+          <View style={styles.sliderValueBadge}>
+            <Text style={styles.sliderValueText}>{numericValue}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.sliderContainer}>
+          <Text style={styles.sliderMinMax}>{field.min}</Text>
+          <Slider
+            style={styles.slider}
+            value={numericValue}
+            onValueChange={(val) => onChange(field.key, val.toFixed(0))}
+            minimumValue={field.min}
+            maximumValue={field.max}
+            step={field.step}
+            minimumTrackTintColor={Colors.light.primary}
+            maximumTrackTintColor={Colors.light.border}
+            thumbTintColor={Colors.light.primary}
+          />
+          <Text style={styles.sliderMinMax}>{field.max}</Text>
+        </View>
+        
+        {field.helperText && (
+          <Text style={styles.sliderHelperText}>{field.helperText}</Text>
+        )}
+      </View>
+    );
+  }
+);
+
+SliderField.displayName = 'SliderField';
+
 const HistoryCard = memo(
   ({
     entry,
@@ -177,6 +235,7 @@ export const FitCalcCard = memo(function FitCalcCard({
   onSave,
   onDeleteHistory,
   renderHistoryRow,
+  sleepTimerSection, // ✅ NEW: Accept sleep timer section
 }: Props) {
   const hasResult = !!resultNode;
 
@@ -194,6 +253,17 @@ export const FitCalcCard = memo(function FitCalcCard({
       if (field.type === 'chips') {
         return (
           <ChipField
+            key={field.key}
+            field={field}
+            value={value}
+            onChange={handleFieldChange}
+          />
+        );
+      }
+
+      if (field.type === 'slider') {
+        return (
+          <SliderField
             key={field.key}
             field={field}
             value={value}
@@ -220,6 +290,9 @@ export const FitCalcCard = memo(function FitCalcCard({
       <View style={styles.inputSection}>
         <Text style={styles.title}>{title}</Text>
         {description && <Text style={styles.description}>{description}</Text>}
+
+        {/* ✅ NEW: Render Sleep Timer Section (if provided) */}
+        {sleepTimerSection && sleepTimerSection}
 
         {/* Fields */}
         {fields.map(renderField)}
@@ -366,6 +439,51 @@ const styles = StyleSheet.create({
     color: Colors.light.primary,
     fontWeight: '700',
   },
+
+  // Slider styles
+  sliderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sliderValueBadge: {
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 40,
+    alignItems: 'center',
+  },
+  sliderValueText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  sliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  slider: {
+    flex: 1,
+    height: 40,
+  },
+  sliderMinMax: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+    width: 24,
+    textAlign: 'center',
+  },
+  sliderHelperText: {
+    fontSize: 10,
+    color: Colors.light.textSecondary,
+    marginTop: 4,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+
   button: {
     marginTop: 12,
     backgroundColor: Colors.light.primary,

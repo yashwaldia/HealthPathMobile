@@ -1,17 +1,10 @@
 // app/(tabs)/fitcalc.tsx
 
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient'; // ✅ ADD THIS
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, AppState, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'; // ✅ ADD AppState
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FitCalcCard } from '../../components/fitcalc/FitCalcCard';
 import { FitCalcChart } from '../../components/fitcalc/FitCalcChart';
@@ -19,85 +12,42 @@ import CustomToast from '../../components/ui/CustomToast';
 import { Colors } from '../../constants/colors';
 import { FITCALC_CONFIG } from '../../constants/fitcalcConfig';
 import { useAuth } from '../../context/AuthContext';
+import { deleteFitCalcHistoryEntry, FitCalcHistoryEntry, loadFitCalcHistory, saveFitCalcHistory } from '../../services/fitCalcService';
 import {
-  deleteFitCalcHistoryEntry,
-  FitCalcHistoryEntry,
-  loadFitCalcHistory,
-  saveFitCalcHistory,
-} from '../../services/fitCalcService';
-import {
-  ActivityInputs,
-  ActivityResult,
-  BmiInputs,
-  BmiResult,
-  BmrInputs,
-  BmrResult,
-  BodyFatInputs,
-  BodyFatResult,
-  FitCalcId,
-  FitCalcInputs,
-  FitCalcResults,
-  HrZonesInputs,
-  HrZonesResult,
-  IdealWeightInputs,
-  IdealWeightResult,
-  MacrosInputs,
-  MacrosResult,
-  OneRmInputs,
-  OneRmResult,
-  ProteinInputs,
-  ProteinResult,
-  RatiosInputs,
-  RatiosResult,
-  RunningInputs,
-  RunningResult,
-  TdeeInputs,
-  TdeeResult,
-  Vo2maxInputs,
-  Vo2maxResult,
-  WaterInputs,
-  WaterResult,
+  ActivityInputs, ActivityResult, BmiInputs, BmiResult, BmrInputs, BmrResult, BodyFatInputs, BodyFatResult,
+  FitCalcId, FitCalcInputs, FitCalcResults, HrvInputs, HrvResult, HrZonesInputs, HrZonesResult,
+  IdealWeightInputs, IdealWeightResult, MacrosInputs, MacrosResult, OneRmInputs, OneRmResult,
+  ProteinInputs, ProteinResult, RatiosInputs, RatiosResult, RecoveryInputs, RecoveryResult,
+  RunningInputs, RunningResult, SleepQualityInputs, SleepQualityResult, StressInputs, StressResult,
+  TdeeInputs, TdeeResult, Vo2maxInputs, Vo2maxResult, WaterInputs, WaterResult
 } from '../../types/fitcalc';
 
+// Sleep Timer Imports
+import {
+  calculateElapsedTime,
+  cancelSleepTimer,
+  formatSleepDuration, // ✅ ADD THIS
+  getSleepTimerStatus,
+  startSleepTimer,
+  stopSleepTimer,
+  updateSleepTimerNotification, // ✅ ADD THIS
+} from '../../services/sleepTimerService';
+import { SleepTimerState } from '../../types/sleepTimer';
+
 // ============================================================================
-// TYPES & CONSTANTS
+// CONSTANTS
 // ============================================================================
 
-type CategoryId = 'fitness' | 'heart' | 'dailyhealth';
+type CategoryId = 'fitness' | 'heart' | 'dailyhealth' | 'biohacking';
 
-type Category = {
-  id: CategoryId;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  calculators: FitCalcId[];
-};
-
-const CATEGORIES: Category[] = [
-  {
-    id: 'fitness',
-    label: 'Fitness',
-    icon: 'barbell-outline',
-    calculators: ['bmi', 'bmr', 'tdee', 'macros', 'onerm', 'bodyfat', 'idealweight'],
-  },
-  {
-    id: 'heart',
-    label: 'Heart',
-    icon: 'heart-outline',
-    calculators: ['hrzones', 'vo2max'],
-  },
-  {
-    id: 'dailyhealth',
-    label: 'Daily Health',
-    icon: 'fitness-outline',
-    calculators: ['water', 'protein', 'activity', 'running', 'ratios'],
-  },
+const CATEGORIES = [
+  { id: 'fitness' as CategoryId, label: 'Fitness', icon: 'barbell-outline' as const, calculators: ['bmi', 'bmr', 'tdee', 'macros', 'onerm', 'bodyfat', 'idealweight'] as FitCalcId[] },
+  { id: 'heart' as CategoryId, label: 'Heart', icon: 'heart-outline' as const, calculators: ['hrzones', 'vo2max'] as FitCalcId[] },
+  { id: 'dailyhealth' as CategoryId, label: 'Daily Health', icon: 'fitness-outline' as const, calculators: ['water', 'protein', 'activity', 'running', 'ratios'] as FitCalcId[] },
+  { id: 'biohacking' as CategoryId, label: 'Biohacking', icon: 'flash-outline' as const, calculators: ['sleepquality', 'recovery', 'hrv', 'stress'] as FitCalcId[] },
 ];
 
-// Macro presets
-const MACRO_PRESETS: Record<
-  NonNullable<MacrosInputs['preset']>,
-  { p: number; c: number; f: number; note: string; label: string }
-> = {
+const MACRO_PRESETS = {
   balanced: { p: 0.3, c: 0.4, f: 0.3, note: 'P 30% / C 40% / F 30%', label: 'Balanced' },
   keto: { p: 0.2, c: 0.05, f: 0.75, note: 'P 20% / C 5% / F 75%', label: 'Ketogenic' },
   highp: { p: 0.35, c: 0.35, f: 0.3, note: 'P 35% / C 35% / F 30%', label: 'High Protein' },
@@ -108,396 +58,353 @@ const MACRO_PRESETS: Record<
 // COMPUTATION FUNCTIONS
 // ============================================================================
 
-// ✅ 1. BMI Calculator
 function computeBmi(inputs: BmiInputs): BmiResult | null {
   const height = parseFloat(inputs.height || '') / 100;
   const weight = parseFloat(inputs.weight || '');
-  
   if (!height || !weight || height <= 0 || weight <= 0) return null;
   
   const bmi = weight / (height * height);
-  let category: BmiResult['category'];
-  let hint: string;
-  let categoryClass: BmiResult['categoryClass'];
-
-  if (bmi < 18.5) {
-    category = 'Underweight';
-    hint = 'Consider consulting a healthcare provider about healthy weight gain.';
-    categoryClass = 'category-underweight';
-  } else if (bmi < 25) {
-    category = 'Normal weight';
-    hint = 'Maintain your healthy weight with balanced nutrition and activity.';
-    categoryClass = 'category-normal';
-  } else if (bmi < 30) {
-    category = 'Overweight';
-    hint = 'Consider gradual lifestyle changes in diet and activity.';
-    categoryClass = 'category-overweight';
-  } else {
-    category = 'Obese';
-    hint = 'Consult a healthcare provider for a personalized weight plan.';
-    categoryClass = 'category-obese';
-  }
-
-  return { value: bmi.toFixed(1), category, hint, categoryClass };
+  const categories = [
+    { max: 18.5, cat: 'Underweight', hint: 'Consider consulting a healthcare provider about healthy weight gain.', class: 'category-underweight' },
+    { max: 25, cat: 'Normal weight', hint: 'Maintain your healthy weight with balanced nutrition and activity.', class: 'category-normal' },
+    { max: 30, cat: 'Overweight', hint: 'Consider gradual lifestyle changes in diet and activity.', class: 'category-overweight' },
+    { max: Infinity, cat: 'Obese', hint: 'Consult a healthcare provider for a personalized weight plan.', class: 'category-obese' },
+  ];
+  
+  const result = categories.find(c => bmi < c.max)!;
+  return { value: bmi.toFixed(1), category: result.cat as any, hint: result.hint, categoryClass: result.class as any };
 }
 
-// ✅ 2. BMR Calculator
 function computeBmr(inputs: BmrInputs): BmrResult | null {
   const gender = inputs.gender ?? 'male';
   const age = parseFloat(inputs.age || '');
   const height = parseFloat(inputs.height || '');
   const weight = parseFloat(inputs.weight || '');
   const formula = inputs.formula ?? 'mifflin';
-
+  
   if (!age || !height || !weight || age <= 0 || height <= 0 || weight <= 0) return null;
-
+  
   let bmr: number;
   if (formula === 'mifflin') {
-    bmr = gender === 'male'
-      ? 10 * weight + 6.25 * height - 5 * age + 5
-      : 10 * weight + 6.25 * height - 5 * age - 161;
+    bmr = gender === 'male' ? 10 * weight + 6.25 * height - 5 * age + 5 : 10 * weight + 6.25 * height - 5 * age - 161;
   } else {
-    bmr = gender === 'male'
-      ? 88.362 + 13.397 * weight + 4.799 * height - 5.677 * age
-      : 447.593 + 9.247 * weight + 3.098 * height - 4.33 * age;
+    bmr = gender === 'male' ? 88.362 + 13.397 * weight + 4.799 * height - 5.677 * age : 447.593 + 9.247 * weight + 3.098 * height - 4.33 * age;
   }
-
+  
   return { value: Math.round(bmr) };
 }
 
-// ✅ 3. TDEE Calculator
 function computeTdee(inputs: TdeeInputs): TdeeResult | null {
   const bmr = parseFloat(inputs.bmr || '');
   const activity = parseFloat(inputs.activity || '1.55');
   const goal = inputs.goal ?? 'maintain';
-
+  
   if (!bmr || bmr <= 0) return null;
-
+  
   const tdee = Math.round(bmr * activity);
-  let target = tdee;
-
-  if (goal === 'lose') {
-    target = Math.round(tdee - 500);
-  } else if (goal === 'gain') {
-    target = Math.round(tdee + 500);
-  }
-
+  const adjustments = { maintain: 0, lose: -500, gain: 500 };
+  const target = Math.round(tdee + (adjustments[goal] || 0));
+  
   return { tdee, target };
 }
 
-// ✅ 4. Macros Calculator
 function computeMacros(inputs: MacrosInputs): MacrosResult | null {
   const calories = parseFloat(inputs.calories || '');
   if (!calories || calories <= 0) return null;
-
-  const presetKey: NonNullable<MacrosInputs['preset']> = inputs.preset ?? 'balanced';
+  
+  const presetKey = inputs.preset ?? 'balanced';
   const preset = MACRO_PRESETS[presetKey];
-
   const pK = calories * preset.p;
   const cK = calories * preset.c;
   const fK = calories * preset.f;
-
+  
   return {
-    protein: Math.round(pK / 4),
-    carbs: Math.round(cK / 4),
-    fat: Math.round(fK / 9),
+    protein: Math.round(pK / 4), carbs: Math.round(cK / 4), fat: Math.round(fK / 9),
     ratios: { protein: preset.p, carbs: preset.c, fat: preset.f },
-    kcal: {
-      protein: Math.round(pK),
-      carbs: Math.round(cK),
-      fat: Math.round(fK),
-      total: Math.round(calories),
-    },
+    kcal: { protein: Math.round(pK), carbs: Math.round(cK), fat: Math.round(fK), total: Math.round(calories) },
   };
 }
 
-// ✅ 5. One Rep Max Calculator
 function computeOneRm(inputs: OneRmInputs): OneRmResult | null {
   const weight = parseFloat(inputs.weight || '');
   const reps = parseFloat(inputs.reps || '');
   const formula = inputs.formula ?? 'epley';
-
-  if (!weight || !reps || weight <= 0 || reps <= 0 || reps > 10) return null;
-
-  let oneRm: number;
   
-  if (reps === 1) {
-    oneRm = weight;
-  } else {
-    switch (formula) {
-      case 'epley':
-        oneRm = weight * (1 + reps / 30);
-        break;
-      case 'brzycki':
-        oneRm = weight * (36 / (37 - reps));
-        break;
-      case 'lombardi':
-        oneRm = weight * Math.pow(reps, 0.10);
-        break;
-      default:
-        oneRm = weight * (1 + reps / 30);
-    }
-  }
-
-  return { value: Math.round(oneRm) };
+  if (!weight || !reps || weight <= 0 || reps <= 0 || reps > 10) return null;
+  
+  if (reps === 1) return { value: Math.round(weight) };
+  
+  const formulas = {
+    epley: weight * (1 + reps / 30),
+    brzycki: weight * (36 / (37 - reps)),
+    lombardi: weight * Math.pow(reps, 0.10)
+  };
+  
+  return { value: Math.round(formulas[formula] || formulas.epley) };
 }
 
-// ✅ 6. Body Fat Calculator
 function computeBodyFat(inputs: BodyFatInputs): BodyFatResult | null {
   const gender = inputs.gender ?? 'male';
   const height = parseFloat(inputs.height || '');
   const waist = parseFloat(inputs.waist || '');
   const neck = parseFloat(inputs.neck || '');
   const hip = parseFloat(inputs.hip || '');
-
-  if (!height || !waist || !neck || height <= 0 || waist <= 0 || neck <= 0) return null;
   
+  if (!height || !waist || !neck || height <= 0 || waist <= 0 || neck <= 0) return null;
   if (gender === 'female' && (!hip || hip <= 0)) return null;
-
-  let bodyFat: number;
-
-  if (gender === 'male') {
-    // US Navy formula for males
-    bodyFat = 495 / (1.0324 - 0.19077 * Math.log10(waist - neck) + 0.15456 * Math.log10(height)) - 450;
-  } else {
-    // US Navy formula for females
-    bodyFat = 495 / (1.29579 - 0.35004 * Math.log10(waist + hip - neck) + 0.22100 * Math.log10(height)) - 450;
-  }
-
+  
+  const bodyFat = gender === 'male'
+    ? 495 / (1.0324 - 0.19077 * Math.log10(waist - neck) + 0.15456 * Math.log10(height)) - 450
+    : 495 / (1.29579 - 0.35004 * Math.log10(waist + hip - neck) + 0.22100 * Math.log10(height)) - 450;
+  
   return { value: Math.max(bodyFat, 0).toFixed(1) };
 }
 
-// ✅ 7. Ideal Weight Calculator
 function computeIdealWeight(inputs: IdealWeightInputs): IdealWeightResult | null {
   const gender = inputs.gender ?? 'male';
   const height = parseFloat(inputs.height || '');
-
   if (!height || height <= 0) return null;
-
-  const heightInInches = height / 2.54;
   
-  // Devine Formula
-  let devine: number;
-  if (gender === 'male') {
-    devine = 50 + 2.3 * (heightInInches - 60);
-  } else {
-    devine = 45.5 + 2.3 * (heightInInches - 60);
-  }
-
-  // Robinson Formula
-  let robinson: number;
-  if (gender === 'male') {
-    robinson = 52 + 1.9 * (heightInInches - 60);
-  } else {
-    robinson = 49 + 1.7 * (heightInInches - 60);
-  }
-
-  // Miller Formula
-  let miller: number;
-  if (gender === 'male') {
-    miller = 56.2 + 1.41 * (heightInInches - 60);
-  } else {
-    miller = 53.1 + 1.36 * (heightInInches - 60);
-  }
-
+  const inches = height / 2.54;
+  const base = gender === 'male' ? [50, 52, 56.2] : [45.5, 49, 53.1];
+  const mult = gender === 'male' ? [2.3, 1.9, 1.41] : [2.3, 1.7, 1.36];
+  
   return {
-    devine: Math.round(devine * 10) / 10,
-    robinson: Math.round(robinson * 10) / 10,
-    miller: Math.round(miller * 10) / 10,
+    devine: Math.round((base[0] + mult[0] * (inches - 60)) * 10) / 10,
+    robinson: Math.round((base[1] + mult[1] * (inches - 60)) * 10) / 10,
+    miller: Math.round((base[2] + mult[2] * (inches - 60)) * 10) / 10,
   };
 }
 
-// ✅ 8. Heart Rate Zones Calculator
 function computeHrZones(inputs: HrZonesInputs): HrZonesResult | null {
   const age = parseFloat(inputs.age || '');
-  
   if (!age || age <= 0 || age > 120) return null;
-
-  // Calculate max heart rate (220 - age)
+  
   const maxHR = 220 - age;
-
+  const zones = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+  
   return {
     maxHR,
-    zone1: `${Math.round(maxHR * 0.5)}-${Math.round(maxHR * 0.6)} bpm`,
-    zone2: `${Math.round(maxHR * 0.6)}-${Math.round(maxHR * 0.7)} bpm`,
-    zone3: `${Math.round(maxHR * 0.7)}-${Math.round(maxHR * 0.8)} bpm`,
-    zone4: `${Math.round(maxHR * 0.8)}-${Math.round(maxHR * 0.9)} bpm`,
-    zone5: `${Math.round(maxHR * 0.9)}-${Math.round(maxHR)} bpm`,
+    zone1: `${Math.round(maxHR * zones[0])}-${Math.round(maxHR * zones[1])} bpm`,
+    zone2: `${Math.round(maxHR * zones[1])}-${Math.round(maxHR * zones[2])} bpm`,
+    zone3: `${Math.round(maxHR * zones[2])}-${Math.round(maxHR * zones[3])} bpm`,
+    zone4: `${Math.round(maxHR * zones[3])}-${Math.round(maxHR * zones[4])} bpm`,
+    zone5: `${Math.round(maxHR * zones[4])}-${Math.round(maxHR * zones[5])} bpm`,
   };
 }
 
-// ✅ 9. VO2 Max Calculator
 function computeVo2max(inputs: Vo2maxInputs): Vo2maxResult | null {
   const timeStr = inputs.time || '';
   if (!timeStr) return null;
-
-  // Parse time format (mm:ss or hh:mm:ss)
+  
   const parts = timeStr.split(':').map(p => parseFloat(p));
-  let totalMinutes: number;
-
-  if (parts.length === 2) {
-    // mm:ss format
-    totalMinutes = parts[0] + parts[1] / 60;
-  } else if (parts.length === 3) {
-    // hh:mm:ss format
-    totalMinutes = parts[0] * 60 + parts[1] + parts[2] / 60;
-  } else {
-    return null;
-  }
-
+  const totalMinutes = parts.length === 2 ? parts[0] + parts[1] / 60 : parts.length === 3 ? parts[0] * 60 + parts[1] + parts[2] / 60 : 0;
+  
   if (totalMinutes <= 0) return null;
-
-  // Cooper 1.5 mile run test formula
-  const vo2max = (483 / totalMinutes) + 3.5;
-
-  return { value: Math.max(vo2max, 0).toFixed(1) };
+  
+  return { value: Math.max((483 / totalMinutes) + 3.5, 0).toFixed(1) };
 }
 
-// ✅ 10. Water Intake Calculator
 function computeWater(inputs: WaterInputs): WaterResult | null {
   const weight = parseFloat(inputs.weight || '');
   const activity = inputs.activity ?? 'sedentary';
-
   if (!weight || weight <= 0) return null;
-
-  // Base water intake: 30-35ml per kg
-  let liters = (weight * 0.033);
-
-  // Adjust for activity level
-  const activityMultipliers = {
-    sedentary: 1.0,
-    lightly: 1.1,
-    moderately: 1.2,
-    very: 1.3,
-  };
-
-  liters *= activityMultipliers[activity];
-
-  return { value: liters.toFixed(1) };
+  
+  const multipliers = { sedentary: 1.0, lightly: 1.1, moderately: 1.2, very: 1.3 };
+  return { value: (weight * 0.033 * multipliers[activity]).toFixed(1) };
 }
 
-// ✅ 11. Protein Intake Calculator
 function computeProtein(inputs: ProteinInputs): ProteinResult | null {
   const weight = parseFloat(inputs.weight || '');
   const activity = inputs.activity ?? 'sedentary';
   const goal = inputs.goal ?? 'maintain';
-
   if (!weight || weight <= 0) return null;
-
-  // Base protein per kg based on activity
-  let proteinPerKg: number;
   
-  switch (activity) {
-    case 'sedentary':
-      proteinPerKg = 0.8;
-      break;
-    case 'lightly':
-      proteinPerKg = 1.0;
-      break;
-    case 'moderately':
-      proteinPerKg = 1.2;
-      break;
-    case 'very':
-      proteinPerKg = 1.4;
-      break;
-    case 'athlete':
-      proteinPerKg = 1.6;
-      break;
-    default:
-      proteinPerKg = 0.8;
-  }
-
-  // Adjust for goal
-  if (goal === 'lose') {
-    proteinPerKg *= 1.2; // Higher protein during weight loss
-  } else if (goal === 'gain') {
-    proteinPerKg *= 1.3; // Higher protein for muscle gain
-  }
-
-  const protein = weight * proteinPerKg;
-
-  return { value: Math.round(protein) };
+  const baseProtein = { sedentary: 0.8, lightly: 1.0, moderately: 1.2, very: 1.4, athlete: 1.6 }[activity] || 0.8;
+  const goalAdjust = { maintain: 1.0, lose: 1.2, gain: 1.3 }[goal] || 1.0;
+  
+  return { value: Math.round(weight * baseProtein * goalAdjust) };
 }
 
-// ✅ 12. Activity Calories Calculator
 function computeActivity(inputs: ActivityInputs): ActivityResult | null {
   const type = inputs.type ?? 'walking';
   const intensity = inputs.intensity ?? 'moderate';
   const duration = parseFloat(inputs.duration || '');
   const weight = parseFloat(inputs.weight || '');
-
+  
   if (!duration || !weight || duration <= 0 || weight <= 0) return null;
-
-  // MET values (Metabolic Equivalent of Task)
-  const metValues: Record<string, Record<string, number>> = {
+  
+  const metValues: any = {
     walking: { light: 3.0, moderate: 4.5, vigorous: 6.0 },
     running: { light: 8.0, moderate: 10.0, vigorous: 12.0 },
     cycling: { light: 6.0, moderate: 8.0, vigorous: 10.0 },
     swimming: { light: 5.0, moderate: 7.0, vigorous: 9.0 },
     weightlifting: { light: 3.0, moderate: 5.0, vigorous: 6.0 },
   };
-
-  const met = metValues[type]?.[intensity] || 5.0;
   
-  // Calories = MET × weight(kg) × duration(hours)
-  const calories = met * weight * (duration / 60);
-
-  return { value: Math.round(calories) };
+  const met = metValues[type]?.[intensity] || 5.0;
+  return { value: Math.round(met * weight * (duration / 60)) };
 }
 
-// ✅ 13. Running Pace Calculator
 function computeRunning(inputs: RunningInputs): RunningResult | null {
   const distance = parseFloat(inputs.distance || '');
   const timeStr = inputs.time || '';
-
   if (!distance || distance <= 0 || !timeStr) return null;
-
-  // Parse time format (hh:mm:ss)
+  
   const parts = timeStr.split(':').map(p => parseFloat(p));
-  let totalSeconds: number;
-
-  if (parts.length === 3) {
-    totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-  } else if (parts.length === 2) {
-    totalSeconds = parts[0] * 60 + parts[1];
-  } else {
-    return null;
-  }
-
+  const totalSeconds = parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts.length === 2 ? parts[0] * 60 + parts[1] : 0;
   if (totalSeconds <= 0) return null;
-
-  // Calculate pace (seconds per km)
+  
   const paceSeconds = totalSeconds / distance;
   const paceMinutes = Math.floor(paceSeconds / 60);
   const paceSecondsRemainder = Math.round(paceSeconds % 60);
-
-  // Calculate speed (km/h)
   const speed = (distance / totalSeconds) * 3600;
-
-  return {
-    pace: `${paceMinutes}:${paceSecondsRemainder.toString().padStart(2, '0')}`,
-    speed: speed.toFixed(1),
-  };
+  
+  return { pace: `${paceMinutes}:${paceSecondsRemainder.toString().padStart(2, '0')}`, speed: speed.toFixed(1) };
 }
 
-// ✅ 14. Body Ratios Calculator
 function computeRatios(inputs: RatiosInputs): RatiosResult | null {
   const height = parseFloat(inputs.height || '');
   const waist = parseFloat(inputs.waist || '');
   const hip = parseFloat(inputs.hip || '');
-
+  
   if (!height || !waist || !hip || height <= 0 || waist <= 0 || hip <= 0) return null;
+  
+  return { whtr: (waist / height).toFixed(2), whr: (waist / hip).toFixed(2) };
+}
 
-  // Waist-to-Height Ratio
-  const whtr = waist / height;
+// BIOHACKING CALCULATORS
 
-  // Waist-to-Hip Ratio
-  const whr = waist / hip;
+function computeHrv(inputs: HrvInputs): HrvResult | null {
+  const age = parseFloat(inputs.age || '');
+  const energyLevel = parseFloat(inputs.energyLevel || '');
+  const stressLevel = parseFloat(inputs.stressLevel || '');
+  const exerciseFrequency = inputs.exerciseFrequency;
+  
+  if (!age || age <= 0 || !energyLevel || !stressLevel || !exerciseFrequency) return null;
+  
+  const energyScore = (energyLevel / 10) * 40;
+  const stressScore = ((10 - stressLevel) / 10) * 35;
+  const exerciseScores: any = { rarely: 5, sometimes: 10, often: 13, daily: 15 };
+  const ageScore = age < 30 ? 10 : age < 40 ? 8 : age < 50 ? 6 : age < 60 ? 4 : 2;
+  
+  const score = Math.round(Math.min(energyScore + stressScore + (exerciseScores[exerciseFrequency] || 10) + ageScore, 100));
+  
+  const categories = [
+    { min: 80, cat: 'Excellent', rec: 'Your heart health is optimal! Keep up your great lifestyle habits.' },
+    { min: 60, cat: 'Good', rec: 'Solid heart health. Try to reduce stress and maintain regular exercise.' },
+    { min: 40, cat: 'Fair', rec: 'Focus on improving sleep, managing stress, and exercising 3-4 times per week.' },
+    { min: 0, cat: 'Needs Attention', rec: 'Prioritize stress management, get 7-9 hours of sleep, and start with light daily walks.' },
+  ];
+  
+  const result = categories.find(c => score >= c.min)!;
+  return { score, category: result.cat, recommendation: result.rec };
+}
 
-  return {
-    whtr: whtr.toFixed(2),
-    whr: whr.toFixed(2),
+function computeRecovery(inputs: RecoveryInputs): RecoveryResult | null {
+  const sleepHours = parseFloat(inputs.sleepHours || '');
+  const sleepQualityRating = parseFloat(inputs.sleepQualityRating || '');
+  const morningFeeling = parseFloat(inputs.morningFeeling || '');
+  const muscleSoreness = inputs.muscleSoreness;
+  
+  if (!sleepHours || sleepHours <= 0 || !sleepQualityRating || !morningFeeling || !muscleSoreness) return null;
+  
+  const sleepDurationScore = sleepHours >= 7 && sleepHours <= 9 ? 30 : sleepHours >= 6 && sleepHours < 7 ? 20 : sleepHours >= 5 ? 10 : 5;
+  const sleepQualityScore = (sleepQualityRating / 10) * 30;
+  const morningFeelingScore = (morningFeeling / 10) * 25;
+  const sorenessScores: any = { none: 15, light: 12, moderate: 8, severe: 3 };
+  
+  const score = Math.round(Math.min(sleepDurationScore + sleepQualityScore + morningFeelingScore + (sorenessScores[muscleSoreness] || 10), 100));
+  
+  const categories = [
+    { min: 80, cat: 'Fully Recovered', adv: 'Great! Your body is fully recovered. You can train at full intensity today.' },
+    { min: 60, cat: 'Good', adv: "You're well recovered. Normal training intensity is recommended." },
+    { min: 40, cat: 'Fair', adv: 'Moderate recovery. Consider lighter training or active recovery today.' },
+    { min: 0, cat: 'Poor', adv: 'Low recovery. Take a rest day or do very light activity only.' },
+  ];
+  
+  const result = categories.find(c => score >= c.min)!;
+  return { score, category: result.cat, advice: result.adv };
+}
+
+function computeSleepQuality(inputs: SleepQualityInputs): SleepQualityResult | null {
+  const duration = parseFloat(inputs.duration || '');
+  const sleepQualityRating = parseFloat(inputs.sleepQualityRating || '');
+  const wakeUps = inputs.wakeUps;
+  const morningMood = parseFloat(inputs.morningMood || '');
+  
+  if (!duration || duration <= 0 || !sleepQualityRating || !wakeUps || !morningMood) return null;
+  
+  let score = 0;
+  const improvements: string[] = [];
+  
+  if (duration >= 7 && duration <= 9) {
+    score += 30;
+  } else if (duration >= 6 && duration < 7) {
+    score += 20;
+    improvements.push('Aim for 7-9 hours of sleep');
+  } else {
+    score += 10;
+    improvements.push('Significantly increase sleep duration to 7-9 hours');
+  }
+  
+  score += (sleepQualityRating / 10) * 35;
+  if (sleepQualityRating < 7) improvements.push('Improve sleep quality: keep room cool, dark, and quiet');
+  
+  const wakeUpScores: any = { none: 20, once: 15, few: 8, many: 3 };
+  score += wakeUpScores[wakeUps] || 10;
+  if (wakeUps === 'few' || wakeUps === 'many') improvements.push('Reduce nighttime awakenings with better sleep hygiene');
+  
+  score += (morningMood / 10) * 15;
+  if (morningMood < 6) improvements.push('Establish a consistent sleep schedule to improve morning mood');
+  
+  score = Math.round(Math.min(score, 100));
+  
+  const quality = score >= 85 ? 'Excellent' : score >= 70 ? 'Good' : score >= 50 ? 'Fair' : 'Poor';
+  if (improvements.length === 0) improvements.push('Maintain your excellent sleep habits!');
+  
+  return { score, quality, improvements };
+}
+
+function computeStress(inputs: StressInputs): StressResult | null {
+  const stressRating = parseFloat(inputs.stressRating || '');
+  const sleepQualityLast = parseFloat(inputs.sleepQualityLast || '');
+  const workload = inputs.workload;
+  const physicalActivity = inputs.physicalActivity;
+  
+  if (!stressRating || !sleepQualityLast || !workload || !physicalActivity) return null;
+  
+  const stressScore = (stressRating / 10) * 40;
+  const sleepScore = ((10 - sleepQualityLast) / 10) * 30;
+  const workloadScores: any = { light: 2, normal: 8, heavy: 15, overwhelming: 20 };
+  const activityScores: any = { none: 10, light: 7, moderate: 4, intense: 2 };
+  
+  const stressLevel = Math.round(Math.min(stressScore + sleepScore + (workloadScores[workload] || 10) + (activityScores[physicalActivity] || 5), 100));
+  
+  const categories = [
+    { max: 30, cat: 'Low', tips: ['Your stress levels are well managed', 'Maintain your current lifestyle and recovery habits'] },
+    { max: 50, cat: 'Moderate', tips: ['Practice relaxation techniques like deep breathing', 'Ensure adequate sleep (7-9 hours)', 'Consider meditation or yoga'] },
+    { max: 70, cat: 'High', tips: ['Prioritize stress management immediately', 'Reduce workload if possible', 'Practice daily meditation or mindfulness', 'Get at least 30 minutes of physical activity daily'] },
+    { max: Infinity, cat: 'Very High', tips: ['Take immediate action to reduce stress', 'Consider taking time off work', 'Seek support from healthcare professionals', 'Focus on sleep optimization and rest days'] },
+  ];
+  
+  const result = categories.find(c => stressLevel < c.max)!;
+  return { level: stressLevel, category: result.cat, tips: result.tips };
+}
+
+// ============================================================================
+// COMPUTATION ROUTER
+// ============================================================================
+
+function computeForId(id: FitCalcId, inputs: FitCalcInputs): any | null {
+  const computations: Record<FitCalcId, (inputs: any) => any | null> = {
+    bmi: computeBmi, bmr: computeBmr, tdee: computeTdee, macros: computeMacros, onerm: computeOneRm,
+    bodyfat: computeBodyFat, idealweight: computeIdealWeight, hrzones: computeHrZones, vo2max: computeVo2max,
+    water: computeWater, protein: computeProtein, activity: computeActivity, running: computeRunning,
+    ratios: computeRatios, hrv: computeHrv, recovery: computeRecovery, sleepquality: computeSleepQuality, stress: computeStress
   };
+  
+  return computations[id]?.(inputs[id] || {}) || null;
 }
 
 // ============================================================================
@@ -507,8 +414,7 @@ function computeRatios(inputs: RatiosInputs): RatiosResult | null {
 export default function FitCalcScreen() {
   const { user } = useAuth();
   const router = useRouter();
-
-  // State
+  
   const [activeCategory, setActiveCategory] = useState<CategoryId>('fitness');
   const [activeCalculator, setActiveCalculator] = useState<FitCalcId>('bmi');
   const [inputs, setInputs] = useState<FitCalcInputs>({});
@@ -518,202 +424,228 @@ export default function FitCalcScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{
-    visible: boolean;
-    message: string;
-    type: 'success' | 'error' | 'info' | 'warning';
-  }>({ visible: false, message: '', type: 'info' });
-
-  // Memoized values
-  const activeConfig = useMemo(
-    () => FITCALC_CONFIG[activeCalculator],
-    [activeCalculator]
-  );
-
-  const calculatorsForCategory = useMemo(
-    () => CATEGORIES.find(cat => cat.id === activeCategory)?.calculators ?? [],
-    [activeCategory]
-  );
-
-  // Toast handler
-  const showToast = useCallback(
-    (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
-      setToast({ visible: true, message, type });
-    },
-    []
-  );
-
-  // Load history
-  const loadHistory = useCallback(
-    async (calcId: FitCalcId) => {
-      if (!user?.uid) return;
-      
-      try {
-        if (!refreshing) setLoading(true);
-        const entries = await loadFitCalcHistory(user.uid, calcId, 10);
-        setHistory(prev => ({ ...prev, [calcId]: entries }));
-      } catch (error) {
-        console.error('Failed to load history:', error);
-        showToast('Failed to load history', 'error');
-      } finally {
-        setLoading(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' | 'warning' });
+  
+  // Sleep Timer State
+  const [sleepTimerActive, setSleepTimerActive] = useState(false);
+  const [sleepTimerStart, setSleepTimerStart] = useState<number | null>(null);
+  const [sleepTimerElapsed, setSleepTimerElapsed] = useState('0h 0m');
+  
+  const activeConfig = useMemo(() => FITCALC_CONFIG[activeCalculator], [activeCalculator]);
+  const calculatorsForCategory = useMemo(() => CATEGORIES.find(cat => cat.id === activeCategory)?.calculators ?? [], [activeCategory]);
+  
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setToast({ visible: true, message, type });
+  }, []);
+  
+  // Check Sleep Timer Status
+  const checkSleepTimer = useCallback(async () => {
+    try {
+      const status: SleepTimerState | null = await getSleepTimerStatus();
+      if (status?.isRunning) {
+        setSleepTimerActive(true);
+        setSleepTimerStart(status.startTime);
+        const elapsed = calculateElapsedTime(status.startTime);
+        setSleepTimerElapsed(elapsed.formatted);
+      } else {
+        setSleepTimerActive(false);
+        setSleepTimerStart(null);
+        setSleepTimerElapsed('0h 0m');
       }
-    },
-    [user?.uid, refreshing, showToast]
-  );
-
-  // Auto-populate TDEE when switching to it
+    } catch (error) {
+      console.error('❌ Error checking sleep timer:', error);
+    }
+  }, []);
+  
+  // Start Sleep Timer
+  const handleStartSleepTimer = useCallback(async () => {
+    if (!user?.uid) {
+      showToast('Please sign in to use sleep timer', 'warning');
+      return;
+    }
+    try {
+      await startSleepTimer(user.uid);
+      await checkSleepTimer();
+      showToast('Sleep tracking started', 'success');
+    } catch (error) {
+      console.error('❌ Error starting sleep timer:', error);
+      showToast('Failed to start sleep timer', 'error');
+    }
+  }, [user?.uid, checkSleepTimer, showToast]);
+  
+  // Stop Sleep Timer
+  const handleStopSleepTimer = useCallback(async () => {
+    try {
+      const session = await stopSleepTimer();
+      if (session) {
+        setInputs(prev => ({
+          ...prev,
+          sleepquality: {
+            ...(prev.sleepquality || {}),
+            duration: session.durationHours.toString(),
+          }
+        }));
+        await checkSleepTimer();
+        showToast(`Sleep recorded: ${formatSleepDuration(session.duration)}`, 'success');
+      }
+    } catch (error: any) {
+      console.error('❌ Error stopping sleep timer:', error);
+      
+      // ✅ Better error messages
+      if (error?.message?.includes('permission-denied')) {
+        showToast('Permission error. Please check Firestore rules.', 'error');
+      } else {
+        showToast('Failed to stop timer', 'error');
+      }
+    }
+  }, [checkSleepTimer, showToast]);
+  
+  // Cancel Sleep Timer
+  const handleCancelSleepTimer = useCallback(async () => {
+    Alert.alert(
+      'Cancel Sleep Tracking',
+      'Your sleep data will not be saved. Continue?',
+      [
+        { text: 'Keep Running', style: 'cancel' },
+        {
+          text: 'Cancel Timer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancelSleepTimer();
+              await checkSleepTimer();
+              showToast('Sleep timer cancelled', 'info');
+            } catch (error) {
+              console.error('❌ Error cancelling timer:', error);
+              showToast('Failed to cancel timer', 'error');
+            }
+          },
+        },
+      ]
+    );
+  }, [checkSleepTimer, showToast]);
+  
+  const loadHistory = useCallback(async (calcId: FitCalcId) => {
+    if (!user?.uid) return;
+    try {
+      if (!refreshing) setLoading(true);
+      const entries = await loadFitCalcHistory(user.uid, calcId, 10);
+      setHistory(prev => ({ ...prev, [calcId]: entries }));
+    } catch (error) {
+      showToast('Failed to load history', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.uid, refreshing, showToast]);
+  
   useEffect(() => {
     loadHistory(activeCalculator);
+    checkSleepTimer();
     
-    // Auto-fill TDEE with latest BMR
     if (activeCalculator === 'tdee' && results.bmr && !inputs.tdee?.bmr) {
-      setInputs(prev => ({
-        ...prev,
-        tdee: {
-          ...(prev.tdee || {}),
-          bmr: results.bmr!.value.toString(),
-        },
-      }));
+      setInputs(prev => ({ ...prev, tdee: { ...(prev.tdee || {}), bmr: results.bmr!.value.toString() } }));
     }
-  }, [activeCalculator, loadHistory, results.bmr, inputs.tdee?.bmr]);
-
-  // Refresh handler
+  }, [activeCalculator, loadHistory, checkSleepTimer, results.bmr, inputs.tdee?.bmr]);
+  
+  // ✅ Update timer display every minute + update notification
+  useEffect(() => {
+    if (!sleepTimerActive || !sleepTimerStart) return;
+    
+    const updateTimer = async () => {
+      const elapsed = calculateElapsedTime(sleepTimerStart);
+      setSleepTimerElapsed(elapsed.formatted);
+      await updateSleepTimerNotification();
+    };
+    
+    updateTimer(); // Initial update
+    const interval = setInterval(updateTimer, 60000); // Every minute
+    
+    return () => clearInterval(interval);
+  }, [sleepTimerActive, sleepTimerStart]);
+  
+  // ✅ Update notification when app comes to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (nextAppState === 'active') {
+        await checkSleepTimer();
+        await updateSleepTimerNotification();
+      }
+    });
+    
+    return () => {
+      subscription.remove();
+    };
+  }, [checkSleepTimer]);
+  
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadHistory(activeCalculator);
+    await checkSleepTimer();
     setRefreshing(false);
-  }, [activeCalculator, loadHistory]);
-
-  // Input change handler
-  const handleInputChange = useCallback(
-    (calculatorId: FitCalcId, fieldKey: string, value: string) => {
-      setInputs(prev => ({
-        ...prev,
-        [calculatorId]: {
-          ...(prev[calculatorId] || {}),
-          [fieldKey]: value,
-        },
-      }));
-      setResultSaved(prev => ({ ...prev, [calculatorId]: false }));
-    },
-    []
-  );
-
-  // 🔧 FIX: Stable onChange handler for FitCalcCard
-  const handleFieldChange = useCallback(
-    (fieldKey: string, value: string) => {
-      handleInputChange(activeCalculator, fieldKey, value);
-    },
-    [activeCalculator, handleInputChange]
-  );
-
-  // ✅ FIXED: Computation router with ALL 14 calculators
-  const computeForId = useCallback((id: FitCalcId): any | null => {
-    if (id === 'bmi') return computeBmi((inputs.bmi || {}) as BmiInputs);
-    if (id === 'bmr') return computeBmr((inputs.bmr || {}) as BmrInputs);
-    if (id === 'tdee') return computeTdee((inputs.tdee || {}) as TdeeInputs);
-    if (id === 'macros') return computeMacros((inputs.macros || {}) as MacrosInputs);
-    if (id === 'onerm') return computeOneRm((inputs.onerm || {}) as OneRmInputs);
-    if (id === 'bodyfat') return computeBodyFat((inputs.bodyfat || {}) as BodyFatInputs);
-    if (id === 'idealweight') return computeIdealWeight((inputs.idealweight || {}) as IdealWeightInputs);
-    if (id === 'hrzones') return computeHrZones((inputs.hrzones || {}) as HrZonesInputs);
-    if (id === 'vo2max') return computeVo2max((inputs.vo2max || {}) as Vo2maxInputs);
-    if (id === 'water') return computeWater((inputs.water || {}) as WaterInputs);
-    if (id === 'protein') return computeProtein((inputs.protein || {}) as ProteinInputs);
-    if (id === 'activity') return computeActivity((inputs.activity || {}) as ActivityInputs);
-    if (id === 'running') return computeRunning((inputs.running || {}) as RunningInputs);
-    if (id === 'ratios') return computeRatios((inputs.ratios || {}) as RatiosInputs);
-    return null;
-  }, [inputs]);
-
-  // Calculate handler
+  }, [activeCalculator, loadHistory, checkSleepTimer]);
+  
+  const handleInputChange = useCallback((calculatorId: FitCalcId, fieldKey: string, value: string) => {
+    setInputs(prev => ({ ...prev, [calculatorId]: { ...(prev[calculatorId] || {}), [fieldKey]: value } }));
+    setResultSaved(prev => ({ ...prev, [calculatorId]: false }));
+  }, []);
+  
+  const handleFieldChange = useCallback((fieldKey: string, value: string) => {
+    handleInputChange(activeCalculator, fieldKey, value);
+  }, [activeCalculator, handleInputChange]);
+  
   const handleCalculate = useCallback(async () => {
-    const result = computeForId(activeCalculator);
+    const result = computeForId(activeCalculator, inputs);
     
     if (!result) {
       const messages: Record<FitCalcId, string> = {
-        bmi: 'Please enter height and weight',
-        bmr: 'Please fill age, height and weight',
-        macros: 'Please enter goal calories',
-        tdee: 'Please fill BMR and activity level',
-        onerm: 'Please enter weight and reps',
-        bodyfat: 'Please fill all measurements',
-        hrzones: 'Please enter your age',
-        vo2max: 'Please enter time for 1.5 mile run',
-        activity: 'Please fill all activity details',
-        ratios: 'Please enter height, waist and hip',
-        idealweight: 'Please select gender and enter height',
-        water: 'Please enter weight and activity level',
-        running: 'Please enter distance and time',
-        protein: 'Please fill weight, activity and goal',
+        bmi: 'Please enter height and weight', bmr: 'Please fill age, height and weight', macros: 'Please enter goal calories',
+        tdee: 'Please fill BMR and activity level', onerm: 'Please enter weight and reps', bodyfat: 'Please fill all measurements',
+        hrzones: 'Please enter your age', vo2max: 'Please enter time for 1.5 mile run', activity: 'Please fill all activity details',
+        ratios: 'Please enter height, waist and hip', idealweight: 'Please select gender and enter height', water: 'Please enter weight and activity level',
+        running: 'Please enter distance and time', protein: 'Please fill weight, activity and goal',
+        hrv: 'Please fill all fields', recovery: 'Please fill all fields', sleepquality: 'Please fill all fields', stress: 'Please fill all fields'
       };
       showToast(messages[activeCalculator] || 'Please complete required fields', 'warning');
       return;
     }
-
+    
     setResults(prev => ({ ...prev, [activeCalculator]: result }));
     setResultSaved(prev => ({ ...prev, [activeCalculator]: false }));
-
-    // Side effects - Auto-populate related calculators
+    
     if (activeCalculator === 'bmr') {
-      const bmrValue = (result as BmrResult).value.toString();
-      setInputs(prev => ({
-        ...prev,
-        tdee: { ...(prev.tdee || {}), bmr: bmrValue },
-      }));
+      setInputs(prev => ({ ...prev, tdee: { ...(prev.tdee || {}), bmr: (result as BmrResult).value.toString() } }));
     }
-
     if (activeCalculator === 'tdee') {
-      const targetCal = (result as TdeeResult).target.toString();
-      setInputs(prev => ({
-        ...prev,
-        macros: { ...(prev.macros || {}), calories: targetCal },
-      }));
+      setInputs(prev => ({ ...prev, macros: { ...(prev.macros || {}), calories: (result as TdeeResult).target.toString() } }));
     }
-  }, [activeCalculator, computeForId, showToast]);
-
-  // Save handler
+  }, [activeCalculator, inputs, showToast]);
+  
   const handleSave = useCallback(async () => {
     if (!user?.uid || !results[activeCalculator]) return;
-
     setSaving(true);
     try {
-      await saveFitCalcHistory(
-        user.uid,
-        activeCalculator,
-        inputs[activeCalculator] ?? {},
-        results[activeCalculator] ?? {}
-      );
+      await saveFitCalcHistory(user.uid, activeCalculator, inputs[activeCalculator] ?? {}, results[activeCalculator] ?? {});
       setResultSaved(prev => ({ ...prev, [activeCalculator]: true }));
       await loadHistory(activeCalculator);
       showToast('Saved successfully', 'success');
     } catch (error) {
-      console.error('Save failed:', error);
       showToast('Failed to save', 'error');
     } finally {
       setSaving(false);
     }
   }, [user?.uid, activeCalculator, inputs, results, loadHistory, showToast]);
-
-  // Delete history handler
-  const handleDeleteHistory = useCallback(
-    async (entryId: string) => {
-      if (!user?.uid) return;
-      
-      try {
-        await deleteFitCalcHistoryEntry(user.uid, entryId);
-        await loadHistory(activeCalculator);
-        showToast('Entry deleted', 'success');
-      } catch (error) {
-        console.error('Delete failed:', error);
-        showToast('Failed to delete entry', 'error');
-      }
-    },
-    [user?.uid, activeCalculator, loadHistory, showToast]
-  );
-
-  // Category selection handler
+  
+  const handleDeleteHistory = useCallback(async (entryId: string) => {
+    if (!user?.uid) return;
+    try {
+      await deleteFitCalcHistoryEntry(user.uid, entryId);
+      await loadHistory(activeCalculator);
+      showToast('Entry deleted', 'success');
+    } catch (error) {
+      showToast('Failed to delete entry', 'error');
+    }
+  }, [user?.uid, activeCalculator, loadHistory, showToast]);
+  
   const handleCategorySelect = useCallback((categoryId: CategoryId) => {
     setActiveCategory(categoryId);
     const category = CATEGORIES.find(cat => cat.id === categoryId);
@@ -721,51 +653,116 @@ export default function FitCalcScreen() {
       setActiveCalculator(category.calculators[0]);
     }
   }, []);
-
-  // Calculator selection handler
-  const handleCalculatorSelect = useCallback((calcId: FitCalcId) => {
-    setActiveCalculator(calcId);
-  }, []);
-
-  // ============================================================================
-  // RENDER HELPERS
-  // ============================================================================
-
-  // Render chart for current calculator
+  
+  const handleCalculatorSelect = useCallback((calcId: FitCalcId) => setActiveCalculator(calcId), []);
+  
   const renderChart = useCallback(() => {
     const r = results[activeCalculator];
     if (!r) return null;
-
-    // Build chart props based on calculator type
-    const chartProps: any = {
-      type: activeCalculator,
-      data: r,
-    };
-
-    // Add inputs for calculators that need them in their charts
-    if (activeCalculator === 'bmi' && inputs.bmi) {
-      chartProps.inputs = inputs.bmi;
-    } else if (activeCalculator === 'tdee' && inputs.tdee) {
-      chartProps.inputs = inputs.tdee;
-    } else if (activeCalculator === 'bodyfat' && inputs.bodyfat) {
-      chartProps.inputs = inputs.bodyfat;
-    } else if (activeCalculator === 'idealweight' && inputs.idealweight) {
-      chartProps.inputs = inputs.idealweight;
-    } else if (activeCalculator === 'activity' && inputs.activity) {
-      chartProps.inputs = inputs.activity;
-    } else if (activeCalculator === 'protein' && inputs.protein) {
-      chartProps.inputs = inputs.protein;
+    
+    const chartProps: any = { type: activeCalculator, data: r };
+    if (['bmi', 'tdee', 'bodyfat', 'idealweight', 'activity', 'protein'].includes(activeCalculator)) {
+      chartProps.inputs = inputs[activeCalculator];
     }
-
+    
     return <FitCalcChart {...chartProps} />;
   }, [activeCalculator, results, inputs]);
-
+  
+  // ✅ ENHANCED: Professional Sleep Timer UI
+  const renderSleepTimerSection = useCallback(() => {
+    if (activeCalculator !== 'sleepquality') return null;
+    
+    return (
+      <View style={sleepStyles.container}>
+        <LinearGradient
+          colors={sleepTimerActive ? ['#6B46C1', '#8B5CF6'] : ['#F3F4F6', '#E5E7EB']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={sleepStyles.card}
+        >
+          {!sleepTimerActive ? (
+            // Inactive State
+            <View style={sleepStyles.inactiveContent}>
+              <View style={sleepStyles.iconContainer}>
+                <View style={sleepStyles.iconCircle}>
+                  <Ionicons name="bed-outline" size={32} color="#6B7280" />
+                </View>
+              </View>
+              
+              <Text style={sleepStyles.title}>Sleep Tracker</Text>
+              <Text style={sleepStyles.subtitle}>
+                Track your sleep duration automatically
+              </Text>
+              
+              <TouchableOpacity 
+                style={sleepStyles.primaryButton} 
+                onPress={handleStartSleepTimer}
+                activeOpacity={0.85}
+              >
+                <LinearGradient
+                  colors={['#6B46C1', '#8B5CF6']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={sleepStyles.buttonGradient}
+                >
+                  <Text style={sleepStyles.primaryButtonText}>Start Tracking</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            // Active State
+            <View style={sleepStyles.activeContent}>
+              <View style={sleepStyles.statusBadge}>
+                <View style={sleepStyles.pulseDot} />
+                <Text style={sleepStyles.statusText}>TRACKING</Text>
+              </View>
+              
+              <View style={sleepStyles.timeDisplay}>
+                <Text style={sleepStyles.timeLabel}>Sleep Duration</Text>
+                <Text style={sleepStyles.timeValue}>{sleepTimerElapsed}</Text>
+              </View>
+              
+              <View style={sleepStyles.buttonRow}>
+                <TouchableOpacity 
+                  style={sleepStyles.stopButton} 
+                  onPress={handleStopSleepTimer}
+                  activeOpacity={0.85}
+                >
+                  <View style={sleepStyles.stopIcon} />
+                  <Text style={sleepStyles.stopButtonText}>Stop & Save</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={sleepStyles.cancelButton} 
+                  onPress={handleCancelSleepTimer}
+                  activeOpacity={0.85}
+                >
+                  <Text style={sleepStyles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </LinearGradient>
+      </View>
+    );
+  }, [activeCalculator, sleepTimerActive, sleepTimerElapsed, handleStartSleepTimer, handleStopSleepTimer, handleCancelSleepTimer]);
+  
   const renderResultNode = useCallback(() => {
     const r = results[activeCalculator] as any;
     if (!r) return null;
-
+    
+    // BMI with insights
     if (activeCalculator === 'bmi') {
       const bmi = r as BmiResult;
+      const bmiValue = parseFloat(bmi.value);
+      const insights = [
+        { max: 18.5, text: 'Your BMI suggests you may be underweight. Consider consulting a nutritionist to develop a healthy weight gain plan with nutrient-dense foods.' },
+        { max: 25, text: 'Great job! Your BMI is in the healthy range. Keep up your balanced diet and regular physical activity to maintain your health.' },
+        { max: 30, text: 'Your BMI is slightly elevated. Small lifestyle changes like adding 30 minutes of daily activity and reducing portion sizes can help.' },
+        { max: Infinity, text: 'Your BMI indicates obesity. Working with a healthcare provider can help you create a safe and effective weight management plan.' }
+      ];
+      const insight = insights.find(i => bmiValue < i.max)!;
+      
       return (
         <>
           <View style={styles.resultContainer}>
@@ -774,29 +771,19 @@ export default function FitCalcScreen() {
             <Text style={styles.resultCategory}>{bmi.category}</Text>
             <Text style={styles.resultHint}>{bmi.hint}</Text>
           </View>
-          
           {renderChart()}
-          
           <View style={styles.insightBox}>
             <View style={styles.insightHeader}>
               <Ionicons name="information-circle" size={18} color={Colors.light.primary} />
               <Text style={styles.insightTitle}>What this means for you</Text>
             </View>
-            <Text style={styles.insightText}>
-              {parseFloat(bmi.value) < 18.5 && 
-                'Your BMI suggests you may be underweight. Consider consulting a nutritionist to develop a healthy weight gain plan with nutrient-dense foods.'}
-              {parseFloat(bmi.value) >= 18.5 && parseFloat(bmi.value) < 25 && 
-                'Great job! Your BMI is in the healthy range. Keep up your balanced diet and regular physical activity to maintain your health.'}
-              {parseFloat(bmi.value) >= 25 && parseFloat(bmi.value) < 30 && 
-                'Your BMI is slightly elevated. Small lifestyle changes like adding 30 minutes of daily activity and reducing portion sizes can help.'}
-              {parseFloat(bmi.value) >= 30 && 
-                'Your BMI indicates obesity. Working with a healthcare provider can help you create a safe and effective weight management plan.'}
-            </Text>
+            <Text style={styles.insightText}>{insight.text}</Text>
           </View>
         </>
       );
     }
-
+    
+    // BMR
     if (activeCalculator === 'bmr') {
       const bmr = r as BmrResult;
       return (
@@ -804,68 +791,64 @@ export default function FitCalcScreen() {
           <View style={styles.resultContainer}>
             <Text style={styles.resultLabel}>Your BMR</Text>
             <Text style={styles.resultValue}>{bmr.value} kcal/day</Text>
-            <Text style={styles.resultHint}>
-              Calories your body burns each day at rest.
-            </Text>
+            <Text style={styles.resultHint}>Calories your body burns each day at rest.</Text>
           </View>
-          
           {renderChart()}
-          
           <View style={styles.insightBox}>
             <View style={styles.insightHeader}>
               <Ionicons name="information-circle" size={18} color={Colors.light.primary} />
               <Text style={styles.insightTitle}>What this means for you</Text>
             </View>
             <Text style={styles.insightText}>
-              Your body burns {bmr.value} calories daily just to maintain basic functions like breathing and circulation. 
-              To calculate your total daily needs, multiply this by your activity level in the TDEE calculator.
+              Your body burns {bmr.value} calories daily just to maintain basic functions like breathing and circulation. To calculate your total daily needs, multiply this by your activity level in the TDEE calculator.
             </Text>
           </View>
         </>
       );
     }
-
+    
+    // TDEE
     if (activeCalculator === 'tdee') {
       const tdee = r as TdeeResult;
+      const goalText = inputs.tdee?.goal === 'lose' ? 'lose weight' : inputs.tdee?.goal === 'gain' ? 'gain weight' : 'maintain your current weight';
       return (
         <>
           <View style={styles.resultContainer}>
             <Text style={styles.resultLabel}>Your TDEE</Text>
             <Text style={styles.resultValue}>{tdee.tdee} kcal/day</Text>
-            <Text style={styles.resultHint}>
-              Maintenance: {tdee.tdee} kcal • Goal: {tdee.target} kcal
-            </Text>
+            <Text style={styles.resultHint}>Maintenance: {tdee.tdee} kcal • Goal: {tdee.target} kcal</Text>
           </View>
-          
           {renderChart()}
-          
           <View style={styles.insightBox}>
             <View style={styles.insightHeader}>
               <Ionicons name="information-circle" size={18} color={Colors.light.primary} />
               <Text style={styles.insightTitle}>What this means for you</Text>
             </View>
             <Text style={styles.insightText}>
-              Your total daily energy expenditure is {tdee.tdee} calories. Based on your goal, 
-              you should consume {tdee.target} calories per day to {inputs.tdee?.goal === 'lose' ? 'lose weight' : inputs.tdee?.goal === 'gain' ? 'gain weight' : 'maintain your current weight'}.
+              Your total daily energy expenditure is {tdee.tdee} calories. Based on your goal, you should consume {tdee.target} calories per day to {goalText}.
             </Text>
           </View>
         </>
       );
     }
-
+    
+    // Macros
     if (activeCalculator === 'macros') {
       const m = r as MacrosResult;
       const presetKey = (inputs.macros?.preset ?? 'balanced') as keyof typeof MACRO_PRESETS;
       const preset = MACRO_PRESETS[presetKey];
+      const insights: any = {
+        balanced: 'This balanced split works well for general health and fitness. Aim to spread your protein across 3-4 meals for optimal muscle maintenance.',
+        keto: 'This ketogenic ratio pushes your body into fat-burning mode. Stay hydrated and watch for initial keto flu symptoms.',
+        highp: "Extra protein supports muscle growth and recovery. Ideal if you're strength training 3+ times per week.",
+        lowcarb: 'Lower carbs can help with fat loss while maintaining energy. Focus on quality fats like avocados and nuts.'
+      };
       
       return (
         <>
           <View style={styles.resultContainer}>
             <Text style={styles.resultLabel}>Your Macros</Text>
-            <Text style={styles.resultPreset}>
-              Preset: {preset.label} ({preset.note})
-            </Text>
-
+            <Text style={styles.resultPreset}>Preset: {preset.label} ({preset.note})</Text>
             <View style={styles.macroGrid}>
               <View style={styles.macroItem}>
                 <Text style={styles.macroAmount}>{m.protein}g</Text>
@@ -884,30 +867,19 @@ export default function FitCalcScreen() {
               </View>
             </View>
           </View>
-
           {renderChart()}
-
           <View style={styles.insightBox}>
             <View style={styles.insightHeader}>
               <Ionicons name="information-circle" size={18} color={Colors.light.primary} />
               <Text style={styles.insightTitle}>What this means for you</Text>
             </View>
-            <Text style={styles.insightText}>
-              {presetKey === 'balanced' && 
-                'This balanced split works well for general health and fitness. Aim to spread your protein across 3-4 meals for optimal muscle maintenance.'}
-              {presetKey === 'keto' && 
-                'This ketogenic ratio pushes your body into fat-burning mode. Stay hydrated and watch for initial keto flu symptoms.'}
-              {presetKey === 'highp' && 
-                'Extra protein supports muscle growth and recovery. Ideal if you\'re strength training 3+ times per week.'}
-              {presetKey === 'lowcarb' && 
-                'Lower carbs can help with fat loss while maintaining energy. Focus on quality fats like avocados and nuts.'}
-            </Text>
+            <Text style={styles.insightText}>{insights[presetKey]}</Text>
           </View>
         </>
       );
     }
-
-    // For other calculators, just show the chart
+    
+    // Default for other calculators
     return (
       <>
         <View style={styles.resultContainer}>
@@ -918,190 +890,82 @@ export default function FitCalcScreen() {
       </>
     );
   }, [activeCalculator, results, inputs, renderChart]);
-
+  
   const renderHistoryRow = useCallback((entry: FitCalcHistoryEntry) => {
-    const dateStr = entry.savedAt?.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }) ?? '';
-
-    if (activeCalculator === 'bmi') {
-      const bmiInputs = entry.inputs as BmiInputs;
-      const bmiResult = entry.result as BmiResult;
-      const height = bmiInputs?.height ?? '-';
-      const weight = bmiInputs?.weight ?? '-';
-      const value = bmiResult?.value ?? '-';
-      const category = bmiResult?.category ?? '-';
-      return {
-        line1: dateStr,
-        line2: `Height: ${height} cm, Weight: ${weight} kg`,
-        line3: `BMI: ${value} • ${category}`,
-      };
-    }
-
-    if (activeCalculator === 'bmr') {
-      const bmrInputs = entry.inputs as BmrInputs;
-      const bmrResult = entry.result as BmrResult;
-      const gender = bmrInputs?.gender ?? '-';
-      const age = bmrInputs?.age ?? '-';
-      const formula = bmrInputs?.formula ?? '-';
-      const value = bmrResult?.value ?? '-';
-      return {
-        line1: dateStr,
-        line2: `${gender}, Age: ${age}, ${formula}`,
-        line3: `BMR: ${value} kcal/day`,
-      };
-    }
-
-    if (activeCalculator === 'tdee') {
-      const tdeeInputs = entry.inputs as TdeeInputs;
-      const tdeeResult = entry.result as TdeeResult;
-      const bmr = tdeeInputs?.bmr ?? '-';
-      const activity = tdeeInputs?.activity ?? '-';
-      const tdee = tdeeResult?.tdee ?? '-';
-      const target = tdeeResult?.target ?? '-';
-      return {
-        line1: dateStr,
-        line2: `BMR: ${bmr}, Activity: ${activity}`,
-        line3: `TDEE: ${tdee} • Goal: ${target} kcal`,
-      };
-    }
-
-    if (activeCalculator === 'macros') {
-      const macrosInputs = entry.inputs as MacrosInputs;
-      const macrosResult = entry.result as MacrosResult;
-      const calories = macrosInputs?.calories ?? '-';
-      const presetKey = (macrosInputs?.preset ?? 'balanced') as keyof typeof MACRO_PRESETS;
-      const preset = MACRO_PRESETS[presetKey];
-      const protein = macrosResult?.protein ?? '-';
-      const carbs = macrosResult?.carbs ?? '-';
-      const fat = macrosResult?.fat ?? '-';
-      return {
-        line1: dateStr,
-        line2: `Goal: ${calories} kcal • Preset: ${preset?.label ?? presetKey}`,
-        line3: `P ${protein}g • C ${carbs}g • F ${fat}g`,
-      };
-    }
-
-    return {
-      line1: dateStr,
-      line2: JSON.stringify(entry.inputs ?? {}),
-      line3: JSON.stringify(entry.result ?? {}),
+    const dateStr = entry.savedAt?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) ?? '';
+    
+    const formatters: any = {
+      bmi: (e: any) => {
+        const i = e.inputs as BmiInputs;
+        const r = e.result as BmiResult;
+        return { line1: dateStr, line2: `Height: ${i?.height ?? '-'} cm, Weight: ${i?.weight ?? '-'} kg`, line3: `BMI: ${r?.value ?? '-'} • ${r?.category ?? '-'}` };
+      },
+      bmr: (e: any) => {
+        const i = e.inputs as BmrInputs;
+        const r = e.result as BmrResult;
+        return { line1: dateStr, line2: `${i?.gender ?? '-'}, Age: ${i?.age ?? '-'}, ${i?.formula ?? '-'}`, line3: `BMR: ${r?.value ?? '-'} kcal/day` };
+      },
+      tdee: (e: any) => {
+        const i = e.inputs as TdeeInputs;
+        const r = e.result as TdeeResult;
+        return { line1: dateStr, line2: `BMR: ${i?.bmr ?? '-'}, Activity: ${i?.activity ?? '-'}`, line3: `TDEE: ${r?.tdee ?? '-'} • Goal: ${r?.target ?? '-'} kcal` };
+      },
+      macros: (e: any) => {
+        const i = e.inputs as MacrosInputs;
+        const r = e.result as MacrosResult;
+        const preset = MACRO_PRESETS[(i?.preset ?? 'balanced') as keyof typeof MACRO_PRESETS];
+        return { line1: dateStr, line2: `Goal: ${i?.calories ?? '-'} kcal • Preset: ${preset?.label ?? '-'}`, line3: `P ${r?.protein ?? '-'}g • C ${r?.carbs ?? '-'}g • F ${r?.fat ?? '-'}g` };
+      }
     };
+    
+    return formatters[activeCalculator]?.(entry) || { line1: dateStr, line2: JSON.stringify(entry.inputs ?? {}), line3: JSON.stringify(entry.result ?? {}) };
   }, [activeCalculator]);
-
-  // ============================================================================
-  // RENDER
-  // ============================================================================
-
+  
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <CustomToast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-        onHide={() => setToast({ ...toast, visible: false })}
-      />
-
-      {/* Header */}
+      <CustomToast visible={toast.visible} message={toast.message} type={toast.type} onHide={() => setToast({ ...toast, visible: false })} />
+      
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="chevron-back" size={24} color={Colors.light.text} />
         </TouchableOpacity>
-        
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>FitCalc</Text>
         </View>
-        
         <View style={styles.headerRight}>
           {saving && <ActivityIndicator size="small" color={Colors.light.primary} />}
         </View>
       </View>
-
-      {/* Main Layout: Sidebar + Content */}
+      
       <View style={styles.mainLayout}>
-        {/* Left Category Sidebar */}
         <View style={styles.categorySidebar}>
           {CATEGORIES.map(category => {
             const isActive = category.id === activeCategory;
             return (
-              <TouchableOpacity
-                key={category.id}
-                style={[styles.categoryTab, isActive && styles.categoryTabActive]}
-                onPress={() => handleCategorySelect(category.id)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={category.icon}
-                  size={24}
-                  color={isActive ? Colors.light.primary : Colors.light.textSecondary}
-                />
-                <Text
-                  style={[
-                    styles.categoryLabel,
-                    isActive && styles.categoryLabelActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {category.label}
-                </Text>
+              <TouchableOpacity key={category.id} style={[styles.categoryTab, isActive && styles.categoryTabActive]} onPress={() => handleCategorySelect(category.id)} activeOpacity={0.7}>
+                <Ionicons name={category.icon} size={24} color={isActive ? Colors.light.primary : Colors.light.textSecondary} />
+                <Text style={[styles.categoryLabel, isActive && styles.categoryLabelActive]} numberOfLines={1}>{category.label}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
-
-        {/* Right Content Area */}
+        
         <View style={styles.contentArea}>
-          {/* Top Calculator Chips */}
-          <ScrollView
-            horizontal
-            style={styles.calculatorChipsScroll}
-            contentContainerStyle={styles.calculatorChipsContent}
-            showsHorizontalScrollIndicator={false}
-          >
+          <ScrollView horizontal style={styles.calculatorChipsScroll} contentContainerStyle={styles.calculatorChipsContent} showsHorizontalScrollIndicator={false}>
             {calculatorsForCategory.map(calcId => {
               const isActive = calcId === activeCalculator;
               const config = FITCALC_CONFIG[calcId];
               return (
-                <TouchableOpacity
-                  key={calcId}
-                  style={[styles.calculatorChip, isActive && styles.calculatorChipActive]}
-                  onPress={() => handleCalculatorSelect(calcId)}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.calculatorChipText,
-                      isActive && styles.calculatorChipTextActive,
-                    ]}
-                  >
-                    {config.title}
-                  </Text>
+                <TouchableOpacity key={calcId} style={[styles.calculatorChip, isActive && styles.calculatorChipActive]} onPress={() => handleCalculatorSelect(calcId)} activeOpacity={0.7}>
+                  <Text style={[styles.calculatorChipText, isActive && styles.calculatorChipTextActive]}>{config.title}</Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
-
-          {/* Calculator Content */}
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            showsVerticalScrollIndicator={false}
-          >
+          
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} showsVerticalScrollIndicator={false}>
             {loading ? (
-              <ActivityIndicator
-                size="large"
-                color={Colors.light.primary}
-                style={styles.loader}
-              />
+              <ActivityIndicator size="large" color={Colors.light.primary} style={styles.loader} />
             ) : (
               <FitCalcCard
                 title={activeConfig.title}
@@ -1116,6 +980,7 @@ export default function FitCalcScreen() {
                 onSave={handleSave}
                 onDeleteHistory={handleDeleteHistory}
                 renderHistoryRow={renderHistoryRow}
+                sleepTimerSection={renderSleepTimerSection()}
               />
             )}
           </ScrollView>
@@ -1130,198 +995,194 @@ export default function FitCalcScreen() {
 // ============================================================================
 
 const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.light.background },
+  header: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', backgroundColor: Colors.light.cardBackground, borderBottomWidth: 1, borderBottomColor: Colors.light.border },
+  backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: Colors.light.text },
+  headerRight: { width: 60, alignItems: 'flex-end', justifyContent: 'center' },
+  mainLayout: { flex: 1, flexDirection: 'row' },
+  categorySidebar: { width: 90, backgroundColor: Colors.light.cardBackground, borderRightWidth: 1, borderRightColor: Colors.light.border, paddingVertical: 12 },
+  categoryTab: { alignItems: 'center', paddingVertical: 16, paddingHorizontal: 8, marginBottom: 8 },
+  categoryTabActive: { backgroundColor: Colors.light.primary + '10', borderRightWidth: 3, borderRightColor: Colors.light.primary },
+  categoryLabel: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 6, textAlign: 'center', fontWeight: '500' },
+  categoryLabelActive: { color: Colors.light.primary, fontWeight: '700' },
+  contentArea: { flex: 1 },
+  calculatorChipsScroll: { maxHeight: 56, backgroundColor: Colors.light.cardBackground, borderBottomWidth: 1, borderBottomColor: Colors.light.border },
+  calculatorChipsContent: { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
+  calculatorChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.light.background, borderWidth: 1, borderColor: Colors.light.border },
+  calculatorChipActive: { backgroundColor: Colors.light.primary, borderColor: Colors.light.primary },
+  calculatorChipText: { fontSize: 13, color: Colors.light.text, fontWeight: '600' },
+  calculatorChipTextActive: { color: '#FFFFFF' },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 24 },
+  loader: { marginTop: 40 },
+  resultContainer: { marginTop: 0, backgroundColor: Colors.light.background, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: Colors.light.border },
+  resultLabel: { fontSize: 14, fontWeight: '600', color: Colors.light.textSecondary, marginBottom: 4 },
+  resultValue: { fontSize: 32, fontWeight: '700', color: Colors.light.primary, marginBottom: 4 },
+  resultCategory: { fontSize: 16, fontWeight: '600', color: Colors.light.text, marginBottom: 6 },
+  resultHint: { fontSize: 13, color: Colors.light.textSecondary, lineHeight: 18 },
+  resultPreset: { fontSize: 12, color: Colors.light.textSecondary, marginBottom: 12 },
+  macroGrid: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 12, marginBottom: 12 },
+  macroItem: { alignItems: 'center' },
+  macroAmount: { fontSize: 20, fontWeight: '700', color: Colors.light.primary },
+  macroLabel: { fontSize: 12, fontWeight: '600', color: Colors.light.text, marginTop: 2 },
+  macroKcal: { fontSize: 10, color: Colors.light.textSecondary, marginTop: 2 },
+  insightBox: { marginTop: 16, padding: 12, backgroundColor: Colors.light.primary + '08', borderRadius: 10, borderLeftWidth: 3, borderLeftColor: Colors.light.primary },
+  insightHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 6 },
+  insightTitle: { fontSize: 13, fontWeight: '700', color: Colors.light.primary },
+  insightText: { fontSize: 12, color: Colors.light.text, lineHeight: 18 },
+});
+
+// ✅ PROFESSIONAL SLEEP TIMER STYLES
+const sleepStyles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
+    marginBottom: 20,
   },
-  header: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  card: {
+    borderRadius: 20,
+    padding: 24,
+    overflow: 'hidden',
+  },
+  
+  // Inactive State
+  inactiveContent: {
     alignItems: 'center',
-    backgroundColor: Colors.light.cardBackground,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
   },
-  backButton: {
-    width: 40,
-    height: 40,
+  iconContainer: {
+    marginBottom: 16,
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
+  title: {
+    fontSize: 24,
     fontWeight: '700',
-    color: Colors.light.text,
-  },
-  headerRight: {
-    width: 60,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  mainLayout: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  categorySidebar: {
-    width: 90,
-    backgroundColor: Colors.light.cardBackground,
-    borderRightWidth: 1,
-    borderRightColor: Colors.light.border,
-    paddingVertical: 12,
-  },
-  categoryTab: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
+    color: '#1F2937',
     marginBottom: 8,
   },
-  categoryTabActive: {
-    backgroundColor: Colors.light.primary + '10',
-    borderRightWidth: 3,
-    borderRightColor: Colors.light.primary,
-  },
-  categoryLabel: {
-    fontSize: 11,
-    color: Colors.light.textSecondary,
-    marginTop: 6,
+  subtitle: {
+    fontSize: 15,
+    color: '#6B7280',
+    marginBottom: 24,
     textAlign: 'center',
-    fontWeight: '500',
   },
-  categoryLabelActive: {
-    color: Colors.light.primary,
+  primaryButton: {
+    width: '100%',
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#6B46C1',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  buttonGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 17,
     fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
-  contentArea: {
-    flex: 1,
+  
+  // Active State
+  activeContent: {
+    alignItems: 'center',
   },
-  calculatorChipsScroll: {
-    maxHeight: 56,
-    backgroundColor: Colors.light.cardBackground,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  calculatorChipsContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  calculatorChip: {
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: Colors.light.background,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+    marginBottom: 24,
   },
-  calculatorChipActive: {
-    backgroundColor: Colors.light.primary,
-    borderColor: Colors.light.primary,
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginRight: 8,
   },
-  calculatorChipText: {
-    fontSize: 13,
-    color: Colors.light.text,
-    fontWeight: '600',
-  },
-  calculatorChipTextActive: {
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: '#FFFFFF',
+    letterSpacing: 1.5,
   },
-  scroll: {
-    flex: 1,
+  timeDisplay: {
+    alignItems: 'center',
+    marginBottom: 32,
   },
-  scrollContent: {
-    paddingBottom: 24,
-  },
-  loader: {
-    marginTop: 40,
-  },
-  resultContainer: {
-    marginTop: 0,
-    backgroundColor: Colors.light.background,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  resultLabel: {
+  timeLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.light.textSecondary,
-    marginBottom: 4,
-  },
-  resultValue: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: Colors.light.primary,
-    marginBottom: 4,
-  },
-  resultCategory: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 6,
-  },
-  resultHint: {
-    fontSize: 13,
-    color: Colors.light.textSecondary,
-    lineHeight: 18,
-  },
-  resultPreset: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    marginBottom: 12,
-  },
-  macroGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 12,
-    marginBottom: 12,
-  },
-  macroItem: {
-    alignItems: 'center',
-  },
-  macroAmount: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.light.primary,
-  },
-  macroLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginTop: 2,
-  },
-  macroKcal: {
-    fontSize: 10,
-    color: Colors.light.textSecondary,
-    marginTop: 2,
-  },
-  insightBox: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: Colors.light.primary + '08',
-    borderRadius: 10,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.light.primary,
-  },
-  insightHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    color: 'rgba(255, 255, 255, 0.8)',
     marginBottom: 8,
-    gap: 6,
+    letterSpacing: 1,
   },
-  insightTitle: {
-    fontSize: 13,
+  timeValue: {
+    fontSize: 56,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 2,
+  },
+  buttonRow: {
+    width: '100%',
+    gap: 12,
+  },
+  stopButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    gap: 10,
+  },
+  stopIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    backgroundColor: '#6B46C1',
+  },
+  stopButtonText: {
+    fontSize: 17,
     fontWeight: '700',
-    color: Colors.light.primary,
+    color: '#6B46C1',
   },
-  insightText: {
-    fontSize: 12,
-    color: Colors.light.text,
-    lineHeight: 18,
+  cancelButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

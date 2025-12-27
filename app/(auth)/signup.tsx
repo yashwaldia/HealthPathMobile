@@ -1,7 +1,7 @@
 // app/(auth)/signup.tsx
 
-import { useRouter } from 'expo-router';
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,

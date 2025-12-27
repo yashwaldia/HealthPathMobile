@@ -1,16 +1,18 @@
 // components/fitcalc/FitCalcChart.tsx
 
+
 import React, { useMemo } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { BarChart, PieChart } from 'react-native-chart-kit';
 import { Colors } from '../../constants/colors';
 import {
   ActivityInputs, ActivityResult, BmiInputs, BmiResult, BmrResult,
-  BodyFatInputs, BodyFatResult, HrZonesResult, IdealWeightInputs,
+  BodyFatInputs, BodyFatResult, HrZonesResult, HrvResult, IdealWeightInputs,
   IdealWeightResult, MacrosResult, OneRmResult, ProteinInputs,
-  ProteinResult, RatiosResult, RunningResult, TdeeInputs,
-  TdeeResult, Vo2maxResult, WaterResult,
+  ProteinResult, RatiosResult, RecoveryResult, RunningResult, SleepQualityResult,
+  StressResult, TdeeInputs, TdeeResult, Vo2maxResult, WaterResult,
 } from '../../types/fitcalc';
+
 
 type ChartProps =
   | { type: 'bmi'; data: BmiResult; inputs?: BmiInputs }
@@ -26,9 +28,15 @@ type ChartProps =
   | { type: 'ratios'; data: RatiosResult }
   | { type: 'water'; data: WaterResult }
   | { type: 'running'; data: RunningResult }
-  | { type: 'protein'; data: ProteinResult; inputs?: ProteinInputs };
+  | { type: 'protein'; data: ProteinResult; inputs?: ProteinInputs }
+  | { type: 'hrv'; data: HrvResult }
+  | { type: 'recovery'; data: RecoveryResult }
+  | { type: 'sleepquality'; data: SleepQualityResult }
+  | { type: 'stress'; data: StressResult };
+
 
 type MarkingItem = { label: string; value: string };
+
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CHART_WIDTH = SCREEN_WIDTH - 105;
@@ -44,11 +52,13 @@ const CHART_CONFIG = {
   propsForLabels: { fontSize: 9, fontWeight: '600' as const },
 };
 
+
 const COLORS = {
   primary: '#4361EE', success: '#55EFC4', warning: '#FFEAA7',
   danger: '#FF7675', info: '#4CC9F0', purple: '#3A0CA3',
   orange: '#FAB1A0', green: '#00B894', lightBlue: '#74B9FF',
 };
+
 
 const MealMarkingGrid: React.FC<{ items: MarkingItem[] }> = ({ items }) => {
   const renderItem = (item: MarkingItem, idx: number) => (
@@ -57,6 +67,7 @@ const MealMarkingGrid: React.FC<{ items: MarkingItem[] }> = ({ items }) => {
       <Text style={s.markingValue}>{item.value}</Text>
     </View>
   );
+
 
   if (items.length === 1) return <View style={s.markingGrid}><View style={s.rowCenter}>{renderItem(items[0], 0)}</View></View>;
   if (items.length === 2) return <View style={s.markingGrid}><View style={s.row}>{items.map(renderItem)}</View></View>;
@@ -82,6 +93,7 @@ const MealMarkingGrid: React.FC<{ items: MarkingItem[] }> = ({ items }) => {
   return <View style={s.markingGrid}><View style={s.rowWrap}>{items.map(renderItem)}</View></View>;
 };
 
+
 export const FitCalcChart = React.memo<ChartProps>((props) => {
   const chartComponent = useMemo(() => {
     switch (props.type) {
@@ -99,13 +111,19 @@ export const FitCalcChart = React.memo<ChartProps>((props) => {
       case 'water': return <WaterChart data={props.data} />;
       case 'running': return <RunningChart data={props.data} />;
       case 'protein': return <ProteinChart data={props.data} inputs={props.inputs} />;
+      case 'hrv': return <HrvChart data={props.data} />;
+      case 'recovery': return <RecoveryChart data={props.data} />;
+      case 'sleepquality': return <SleepQualityChart data={props.data} />;
+      case 'stress': return <StressChart data={props.data} />;
       default: return null;
     }
   }, [props]);
   return <View style={s.container}>{chartComponent}</View>;
 });
 
+
 FitCalcChart.displayName = 'FitCalcChart';
+
 
 const BmiChart: React.FC<{ data: BmiResult }> = ({ data }) => {
   const bmi = parseFloat(data.value);
@@ -115,6 +133,7 @@ const BmiChart: React.FC<{ data: BmiResult }> = ({ data }) => {
     if (bmi < 30) return 50 + ((bmi - 25) / 5) * 25;
     return 75 + Math.min(((bmi - 30) / 10) * 25, 25);
   };
+
 
   return (
     <View style={s.bmiCon}>
@@ -137,6 +156,7 @@ const BmiChart: React.FC<{ data: BmiResult }> = ({ data }) => {
   );
 };
 
+
 const BmrChart: React.FC<{ data: BmrResult }> = () => (
   <View style={s.pieCon}>
     <Text style={s.title}>Energy Expenditure Breakdown</Text>
@@ -155,6 +175,7 @@ const BmrChart: React.FC<{ data: BmrResult }> = () => (
   </View>
 );
 
+
 const TdeeChart: React.FC<{ data: TdeeResult; inputs?: TdeeInputs }> = ({ data, inputs }) => {
   const mults = [1.2, 1.375, 1.55, 1.725, 1.9];
   const curr = parseFloat(inputs?.activity || '1.55');
@@ -165,6 +186,7 @@ const TdeeChart: React.FC<{ data: TdeeResult; inputs?: TdeeInputs }> = ({ data, 
       colors: mults.map(m => () => m === curr ? COLORS.primary : COLORS.info + '40'),
     }],
   };
+
 
   return (
     <View style={s.barCon}>
@@ -188,6 +210,7 @@ const TdeeChart: React.FC<{ data: TdeeResult; inputs?: TdeeInputs }> = ({ data, 
   );
 };
 
+
 const MacrosChart: React.FC<{ data: MacrosResult }> = ({ data }) => (
   <View style={s.pieCon}>
     <Text style={s.title}>Macro Distribution</Text>
@@ -210,10 +233,12 @@ const MacrosChart: React.FC<{ data: MacrosResult }> = ({ data }) => (
   </View>
 );
 
+
 const OneRmChart: React.FC<{ data: OneRmResult }> = ({ data }) => {
   const percs = [100, 90, 80, 70, 60];
   const reps = ['1 rep', '2-3 reps', '4-6 reps', '8-10 reps', '12-15 reps'];
   const colors = [COLORS.danger, COLORS.orange, COLORS.warning, COLORS.info, COLORS.success];
+
 
   return (
     <View style={s.oneRmCon}>
@@ -231,6 +256,7 @@ const OneRmChart: React.FC<{ data: OneRmResult }> = ({ data }) => {
     </View>
   );
 };
+
 
 const BodyFatChart: React.FC<{ data: BodyFatResult; inputs?: BodyFatInputs }> = ({ data, inputs }) => {
   const bf = parseFloat(data.value);
@@ -258,6 +284,7 @@ const BodyFatChart: React.FC<{ data: BodyFatResult; inputs?: BodyFatInputs }> = 
   const getPointerPosition = () => {
     return Math.min((bf / maxBf) * 100, 100);
   };
+
 
   return (
     <View style={s.bfCon}>
@@ -341,10 +368,12 @@ const BodyFatChart: React.FC<{ data: BodyFatResult; inputs?: BodyFatInputs }> = 
 };
 
 
+
 const IdealWeightChart: React.FC<{ data: IdealWeightResult }> = ({ data }) => {
   const weights = [data.devine, data.robinson, data.miller];
   const min = Math.min(...weights) - 5, max = Math.max(...weights) + 5, range = max - min;
   const getPos = (w: number) => ((w - min) / range) * 100;
+
 
   return (
     <View style={s.iwCon}>
@@ -377,6 +406,7 @@ const IdealWeightChart: React.FC<{ data: IdealWeightResult }> = ({ data }) => {
   );
 };
 
+
 const HrZonesChart: React.FC<{ data: HrZonesResult }> = ({ data }) => {
   const zones = [
     { name: 'Zone 1', value: data.zone1, color: COLORS.lightBlue, desc: 'Recovery' },
@@ -385,6 +415,7 @@ const HrZonesChart: React.FC<{ data: HrZonesResult }> = ({ data }) => {
     { name: 'Zone 4', value: data.zone4, color: COLORS.orange, desc: 'Threshold' },
     { name: 'Zone 5', value: data.zone5, color: COLORS.danger, desc: 'Max' },
   ];
+
 
   return (
     <View style={s.hrCon}>
@@ -410,6 +441,7 @@ const HrZonesChart: React.FC<{ data: HrZonesResult }> = ({ data }) => {
   );
 };
 
+
 const Vo2MaxChart: React.FC<{ data: Vo2maxResult }> = ({ data }) => {
   const vo2 = parseFloat(data.value);
   const levels = [
@@ -418,6 +450,7 @@ const Vo2MaxChart: React.FC<{ data: Vo2maxResult }> = ({ data }) => {
     { label: 'Excellent', max: 62, color: COLORS.success }, { label: 'Superior', max: 75, color: COLORS.primary },
   ];
   const curr = levels.find(l => vo2 <= l.max);
+
 
   return (
     <View style={s.vo2Con}>
@@ -443,6 +476,7 @@ const Vo2MaxChart: React.FC<{ data: Vo2maxResult }> = ({ data }) => {
   );
 };
 
+
 const ActivityChart: React.FC<{ data: ActivityResult; inputs?: ActivityInputs }> = ({ data, inputs }) => {
   const acts = ['walking', 'running', 'cycling', 'swimming', 'weightlifting'];
   const curr = inputs?.type || 'walking';
@@ -454,6 +488,7 @@ const ActivityChart: React.FC<{ data: ActivityResult; inputs?: ActivityInputs }>
       colors: acts.map(a => () => a === curr ? COLORS.primary : COLORS.info + '40'),
     }],
   };
+
 
   return (
     <View style={s.barCon}>
@@ -467,12 +502,14 @@ const ActivityChart: React.FC<{ data: ActivityResult; inputs?: ActivityInputs }>
   );
 };
 
+
 const RatiosChart: React.FC<{ data: RatiosResult }> = ({ data }) => {
   const whtr = parseFloat(data.whtr), whr = parseFloat(data.whr);
   const whtrS = whtr < 0.5 ? 'Healthy' : whtr < 0.6 ? 'Caution' : 'Risk';
   const whrS = whr < 0.85 ? 'Low Risk' : whr < 0.95 ? 'Moderate' : 'High Risk';
   const whtrC = whtr < 0.5 ? COLORS.success : whtr < 0.6 ? COLORS.warning : COLORS.danger;
   const whrC = whr < 0.85 ? COLORS.success : whr < 0.95 ? COLORS.warning : COLORS.danger;
+
 
   return (
     <View style={s.ratioCon}>
@@ -500,6 +537,7 @@ const RatiosChart: React.FC<{ data: RatiosResult }> = ({ data }) => {
   );
 };
 
+
 const WaterChart: React.FC<{ data: WaterResult }> = ({ data }) => {
   const liters = parseFloat(data.value), glasses = Math.ceil(liters * 4);
   const items: MarkingItem[] = [
@@ -507,6 +545,7 @@ const WaterChart: React.FC<{ data: WaterResult }> = ({ data }) => {
     { label: 'Afternoon', value: `${Math.ceil(glasses * 0.4)}🥛` },
     { label: 'Evening', value: `${Math.ceil(glasses * 0.3)}🥛` },
   ];
+
 
   return (
     <View style={s.waterCon}>
@@ -526,6 +565,7 @@ const WaterChart: React.FC<{ data: WaterResult }> = ({ data }) => {
   );
 };
 
+
 const RunningChart: React.FC<{ data: RunningResult }> = ({ data }) => {
   const speed = parseFloat(data.speed);
   const zones = [
@@ -535,6 +575,7 @@ const RunningChart: React.FC<{ data: RunningResult }> = ({ data }) => {
     { name: 'Interval', minSpeed: 15, maxSpeed: 20, color: COLORS.danger },
   ];
   const curr = zones.find(z => speed >= z.minSpeed && speed < z.maxSpeed);
+
 
   return (
     <View style={s.runCon}>
@@ -571,12 +612,14 @@ const RunningChart: React.FC<{ data: RunningResult }> = ({ data }) => {
   );
 };
 
+
 const ProteinChart: React.FC<{ data: ProteinResult; inputs?: ProteinInputs }> = ({ data, inputs }) => {
   const base = 50;
   const goal = inputs?.goal === 'gain' ? 20 : inputs?.goal === 'lose' ? 10 : 0;
   const act = data.value - base - goal;
   const perMeal = Math.round(data.value / 4);
   const items: MarkingItem[] = Array.from({ length: 4 }).map((_, i) => ({ label: `Meal ${i + 1}`, value: `~${perMeal}g` }));
+
 
   return (
     <View style={s.protCon}>
@@ -608,6 +651,206 @@ const ProteinChart: React.FC<{ data: ProteinResult; inputs?: ProteinInputs }> = 
   );
 };
 
+
+// ============================================================================
+// BIOHACKING CHARTS
+// ============================================================================
+
+
+const HrvChart: React.FC<{ data: HrvResult }> = ({ data }) => {
+  const score = data.score;
+  const getColor = () => {
+    if (score >= 80) return COLORS.success;
+    if (score >= 60) return COLORS.info;
+    if (score >= 40) return COLORS.warning;
+    return COLORS.danger;
+  };
+
+  return (
+    <View style={s.bioHrvCon}>
+      <Text style={s.title}>HRV Recovery Score</Text>
+      
+      {/* Circular gauge */}
+      <View style={s.bioGaugeCon}>
+        <View style={[s.bioGaugeCircle, { borderColor: getColor() }]}>
+          <Text style={[s.bioGaugeScore, { color: getColor() }]}>{score}</Text>
+          <Text style={s.bioGaugeLabel}>/ 100</Text>
+        </View>
+      </View>
+
+      {/* Category badge */}
+      <View style={[s.bioCategoryBadge, { backgroundColor: getColor() + '20', borderColor: getColor() }]}>
+        <Text style={[s.bioCategoryText, { color: getColor() }]}>{data.category}</Text>
+      </View>
+
+      {/* Recommendation */}
+      <View style={s.bioRecommendBox}>
+        <Text style={s.bioRecommendTitle}>💡 Recommendation</Text>
+        <Text style={s.bioRecommendText}>{data.recommendation}</Text>
+      </View>
+    </View>
+  );
+};
+
+
+const RecoveryChart: React.FC<{ data: RecoveryResult }> = ({ data }) => {
+  const score = data.score;
+  const getColor = () => {
+    if (score >= 80) return COLORS.success;
+    if (score >= 60) return COLORS.info;
+    if (score >= 40) return COLORS.warning;
+    return COLORS.danger;
+  };
+
+  // Recovery components breakdown
+  const components = [
+    { label: 'HRV', value: 40, color: COLORS.primary },
+    { label: 'Sleep', value: 35, color: COLORS.info },
+    { label: 'Resting HR', value: 25, color: COLORS.purple },
+  ];
+
+  return (
+    <View style={s.bioRecoveryCon}>
+      <Text style={s.title}>Recovery Analysis</Text>
+      
+      {/* Main score with radial progress */}
+      <View style={s.bioRadialCon}>
+        <View style={[s.bioRadialOuter, { borderColor: getColor() }]}>
+          <View style={[s.bioRadialInner, { borderColor: getColor() + '40' }]}>
+            <Text style={[s.bioRadialScore, { color: getColor() }]}>{score}</Text>
+            <Text style={s.bioRadialSubtext}>{data.category}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Component breakdown */}
+      <View style={s.bioComponentsCon}>
+        <Text style={s.bioComponentsTitle}>Score Breakdown</Text>
+        {components.map((comp, i) => (
+          <View key={i} style={s.bioComponentRow}>
+            <View style={[s.bioComponentDot, { backgroundColor: comp.color }]} />
+            <Text style={s.bioComponentLabel}>{comp.label}</Text>
+            <Text style={s.bioComponentValue}>{comp.value}%</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Advice */}
+      <View style={[s.bioAdviceBox, { backgroundColor: getColor() + '10', borderLeftColor: getColor() }]}>
+        <Text style={s.bioAdviceText}>{data.advice}</Text>
+      </View>
+    </View>
+  );
+};
+
+
+const SleepQualityChart: React.FC<{ data: SleepQualityResult }> = ({ data }) => {
+  const score = data.score;
+  const getColor = () => {
+    if (score >= 85) return COLORS.success;
+    if (score >= 70) return COLORS.info;
+    if (score >= 50) return COLORS.warning;
+    return COLORS.danger;
+  };
+
+  return (
+    <View style={s.bioSleepCon}>
+      <Text style={s.title}>Sleep Quality Score</Text>
+      
+      {/* Score display */}
+      <View style={s.bioScoreDisplay}>
+        <Text style={[s.bioScoreValue, { color: getColor() }]}>{score}</Text>
+        <Text style={s.bioScoreMax}>/ 100</Text>
+        <Text style={[s.bioScoreQuality, { color: getColor() }]}>{data.quality}</Text>
+      </View>
+
+      {/* Progress bar */}
+      <View style={s.bioProgressBarCon}>
+        <View style={s.bioProgressBarBg}>
+          <View style={[s.bioProgressBarFill, { width: `${score}%`, backgroundColor: getColor() }]} />
+        </View>
+      </View>
+
+      {/* Improvements list */}
+      <View style={s.bioImprovementsCon}>
+        <Text style={s.bioImprovementsTitle}>✨ Improvements</Text>
+        {data.improvements.map((tip, i) => (
+          <View key={i} style={s.bioImprovementItem}>
+            <Text style={s.bioImprovementBullet}>•</Text>
+            <Text style={s.bioImprovementText}>{tip}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+
+const StressChart: React.FC<{ data: StressResult }> = ({ data }) => {
+  const level = data.level;
+  const getColor = () => {
+    if (level < 30) return COLORS.success;
+    if (level < 50) return COLORS.info;
+    if (level < 70) return COLORS.warning;
+    return COLORS.danger;
+  };
+
+  const getEmoji = () => {
+    if (level < 30) return '😌';
+    if (level < 50) return '🙂';
+    if (level < 70) return '😰';
+    return '😫';
+  };
+
+  return (
+    <View style={s.bioStressCon}>
+      <Text style={s.title}>Stress Level Analysis</Text>
+      
+      {/* Stress meter */}
+      <View style={s.bioStressMeterCon}>
+        <View style={s.bioStressMeter}>
+          {/* Zones background */}
+          <View style={s.bioStressZones}>
+            <View style={[s.bioStressZone, { backgroundColor: COLORS.success + '40' }]} />
+            <View style={[s.bioStressZone, { backgroundColor: COLORS.info + '40' }]} />
+            <View style={[s.bioStressZone, { backgroundColor: COLORS.warning + '40' }]} />
+            <View style={[s.bioStressZone, { backgroundColor: COLORS.danger + '40' }]} />
+          </View>
+          {/* Indicator needle */}
+          <View style={[s.bioStressNeedle, { left: `${level}%`, backgroundColor: getColor() }]}>
+            <Text style={s.bioStressEmoji}>{getEmoji()}</Text>
+          </View>
+        </View>
+        <View style={s.bioStressLabels}>
+          <Text style={s.bioStressLabelText}>Low</Text>
+          <Text style={s.bioStressLabelText}>Moderate</Text>
+          <Text style={s.bioStressLabelText}>High</Text>
+          <Text style={s.bioStressLabelText}>Very High</Text>
+        </View>
+      </View>
+
+      {/* Category */}
+      <View style={[s.bioStressCategoryBox, { backgroundColor: getColor() + '20', borderColor: getColor() }]}>
+        <Text style={[s.bioStressCategoryText, { color: getColor() }]}>
+          {data.category} Stress • {level}/100
+        </Text>
+      </View>
+
+      {/* Tips */}
+      <View style={s.bioTipsCon}>
+        <Text style={s.bioTipsTitle}>🧘 Management Tips</Text>
+        {data.tips.map((tip, i) => (
+          <View key={i} style={s.bioTipItem}>
+            <Text style={s.bioTipBullet}>•</Text>
+            <Text style={s.bioTipText}>{tip}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+
 const s = StyleSheet.create({
   container: { marginTop: 16, marginBottom: 8, paddingHorizontal: 16 },
   title: { fontSize: 11, fontWeight: '600', color: Colors.light.text, marginBottom: 10, textAlign: 'center' },
@@ -624,6 +867,7 @@ const s = StyleSheet.create({
   markingLabel: { fontSize: 9, color: Colors.light.textSecondary, marginBottom: 4 },
   markingValue: { fontSize: 12, fontWeight: '700', color: Colors.light.text },
 
+
   // BMI
   bmiCon: { paddingVertical: 16 },
   bmiScale: { flexDirection: 'row', height: 40, borderRadius: 8, overflow: 'hidden', marginBottom: 32 },
@@ -636,6 +880,7 @@ const s = StyleSheet.create({
   bmiRanges: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 4 },
   bmiRange: { fontSize: 9, color: Colors.light.textSecondary },
 
+
   // Pie & Bar
   pieCon: { alignItems: 'center', paddingVertical: 8 },
   barCon: { paddingVertical: 8 },
@@ -647,6 +892,7 @@ const s = StyleSheet.create({
   tdeeValue: { fontSize: 14, fontWeight: '700', color: Colors.light.text },
   divider: { width: 1, height: 40, backgroundColor: Colors.light.border },
 
+
   // OneRM
   oneRmCon: { paddingVertical: 8 },
   oneRmRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
@@ -656,11 +902,13 @@ const s = StyleSheet.create({
   oneRmWeight: { fontSize: 11, fontWeight: '700', color: Colors.light.text, width: 45 },
   oneRmReps: { fontSize: 9, color: Colors.light.textSecondary, width: 65 },
 
+
 // Body Fat (NEW - vertical thermometer)
 bfCon: { paddingVertical: 12, alignItems: 'center' },
 bfVerticalContainer: { flexDirection: 'row', height: 220, width: '100%', marginVertical: 16, position: 'relative' },
 bfVerticalBar: { width: 60, height: '100%', borderRadius: 8, overflow: 'hidden', marginLeft: 20 },
 bfVerticalZone: { width: '100%' },
+
 
 // Pointer styles
 bfPointer: { position: 'absolute', left: 85, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
@@ -684,16 +932,19 @@ bfPointerValueBox: {
 },
 bfPointerValue: { fontSize: 12, fontWeight: '700', color: '#FFF' },
 
+
 // Labels on right
 bfLabelsContainer: { flex: 1, height: '100%', marginLeft: 12, position: 'relative' },
 bfLabelItem: { position: 'absolute', width: '100%', justifyContent: 'center' },
 bfLabelText: { fontSize: 11, marginBottom: 2 },
 bfLabelRange: { fontSize: 9 },
 
+
 // Bottom indicator
 bfBottomInd: { alignItems: 'center', marginTop: 12 },
 bfValue: { fontSize: 14, fontWeight: '700', color: Colors.light.primary },
 bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
+
 
 
   // Ideal Weight
@@ -710,6 +961,7 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   legendDot: { width: 11, height: 11, borderRadius: 6 },
   legendText: { fontSize: 10, color: Colors.light.text },
 
+
   // HR Zones
   hrCon: { paddingVertical: 8 },
   hrBar: { flexDirection: 'row', height: 40, marginBottom: 16, overflow: 'hidden' },
@@ -724,6 +976,7 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   hrDesc: { fontSize: 9, color: Colors.light.textSecondary },
   hrValue: { fontSize: 11, fontWeight: '700', color: Colors.light.text },
 
+
   // VO2Max
   vo2Con: { paddingVertical: 8 },
   vo2Scale: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
@@ -732,6 +985,7 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   vo2Range: { fontSize: 8, color: '#FFF', marginTop: 2 },
   vo2Value: { fontSize: 13, fontWeight: '700', color: Colors.light.primary, textAlign: 'center', marginTop: 8 },
   vo2Cat: { fontSize: 11, color: Colors.light.textSecondary, textAlign: 'center', marginTop: 4 },
+
 
   // Ratios
   ratioCon: { paddingVertical: 8 },
@@ -746,6 +1000,7 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   ratioScaleText: { fontSize: 8, color: Colors.light.textSecondary },
   ratioStat: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
 
+
   // Water
   waterCon: { paddingVertical: 8, alignItems: 'center' },
   waterGlassCon: { flexDirection: 'row', alignItems: 'center', gap: 20, marginVertical: 16 },
@@ -755,6 +1010,7 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   waterAmt: { fontSize: 20, fontWeight: '700', color: COLORS.info },
   waterGls: { fontSize: 14, color: Colors.light.text, marginTop: 4 },
   waterNote: { fontSize: 9, color: Colors.light.textSecondary },
+
 
   // Running
   runCon: { paddingVertical: 8 },
@@ -769,6 +1025,7 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   runZoneRange: { fontSize: 9, color: Colors.light.textSecondary },
   runCurrZone: { fontSize: 10, color: Colors.light.text, textAlign: 'center', marginTop: 12 },
 
+
   // Protein
   protCon: { paddingVertical: 8 },
   protBar: { flexDirection: 'row', height: 52, borderRadius: 8, overflow: 'hidden', marginBottom: 12 },
@@ -778,6 +1035,147 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   protTotal: { fontSize: 14, fontWeight: '700', color: Colors.light.primary, textAlign: 'center', marginBottom: 16 },
   protMeals: { marginTop: 8 },
   protMealsTitle: { fontSize: 10, fontWeight: '600', color: Colors.light.text, marginBottom: 12, textAlign: 'center' },
+
+  // ============================================================================
+  // BIOHACKING STYLES
+  // ============================================================================
+
+  // HRV Chart
+  bioHrvCon: { paddingVertical: 12, alignItems: 'center' },
+  bioGaugeCon: { marginVertical: 20 },
+  bioGaugeCircle: { 
+    width: 140, 
+    height: 140, 
+    borderRadius: 70, 
+    borderWidth: 12, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    backgroundColor: Colors.light.background,
+  },
+  bioGaugeScore: { fontSize: 42, fontWeight: '700' },
+  bioGaugeLabel: { fontSize: 14, color: Colors.light.textSecondary, marginTop: 4 },
+  bioCategoryBadge: { 
+    paddingHorizontal: 20, 
+    paddingVertical: 8, 
+    borderRadius: 20, 
+    borderWidth: 2, 
+    marginTop: 12 
+  },
+  bioCategoryText: { fontSize: 13, fontWeight: '700' },
+  bioRecommendBox: { 
+    marginTop: 20, 
+    backgroundColor: Colors.light.background, 
+    padding: 14, 
+    borderRadius: 10, 
+    width: '100%' 
+  },
+  bioRecommendTitle: { fontSize: 12, fontWeight: '700', color: Colors.light.text, marginBottom: 8 },
+  bioRecommendText: { fontSize: 11, color: Colors.light.textSecondary, lineHeight: 16 },
+
+  // Recovery Chart
+  bioRecoveryCon: { paddingVertical: 12, alignItems: 'center' },
+  bioRadialCon: { marginVertical: 20 },
+  bioRadialOuter: { 
+    width: 160, 
+    height: 160, 
+    borderRadius: 80, 
+    borderWidth: 8, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  bioRadialInner: { 
+    width: 120, 
+    height: 120, 
+    borderRadius: 60, 
+    borderWidth: 6, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    backgroundColor: Colors.light.cardBackground,
+  },
+  bioRadialScore: { fontSize: 38, fontWeight: '700' },
+  bioRadialSubtext: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
+  bioComponentsCon: { width: '100%', marginTop: 16, backgroundColor: Colors.light.background, padding: 12, borderRadius: 10 },
+  bioComponentsTitle: { fontSize: 11, fontWeight: '700', color: Colors.light.text, marginBottom: 10 },
+  bioComponentRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  bioComponentDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+  bioComponentLabel: { flex: 1, fontSize: 10, color: Colors.light.text },
+  bioComponentValue: { fontSize: 11, fontWeight: '700', color: Colors.light.text },
+  bioAdviceBox: { 
+    marginTop: 12, 
+    padding: 12, 
+    borderRadius: 8, 
+    borderLeftWidth: 4, 
+    width: '100%' 
+  },
+  bioAdviceText: { fontSize: 11, color: Colors.light.text, lineHeight: 16 },
+
+  // Sleep Quality Chart
+  bioSleepCon: { paddingVertical: 12, alignItems: 'center' },
+  bioScoreDisplay: { alignItems: 'center', marginVertical: 16 },
+  bioScoreValue: { fontSize: 48, fontWeight: '700' },
+  bioScoreMax: { fontSize: 16, color: Colors.light.textSecondary },
+  bioScoreQuality: { fontSize: 14, fontWeight: '700', marginTop: 8 },
+  bioProgressBarCon: { width: '100%', marginTop: 12 },
+  bioProgressBarBg: { 
+    height: 16, 
+    backgroundColor: Colors.light.background, 
+    borderRadius: 8, 
+    overflow: 'hidden' 
+  },
+  bioProgressBarFill: { height: '100%', borderRadius: 8 },
+  bioImprovementsCon: { width: '100%', marginTop: 20 },
+  bioImprovementsTitle: { fontSize: 12, fontWeight: '700', color: Colors.light.text, marginBottom: 12 },
+  bioImprovementItem: { flexDirection: 'row', marginBottom: 10, paddingRight: 8 },
+  bioImprovementBullet: { fontSize: 14, color: Colors.light.primary, marginRight: 8, marginTop: -2 },
+  bioImprovementText: { flex: 1, fontSize: 11, color: Colors.light.textSecondary, lineHeight: 16 },
+
+  // Stress Chart
+  bioStressCon: { paddingVertical: 12 },
+  bioStressMeterCon: { marginVertical: 20 },
+  bioStressMeter: { 
+    height: 60, 
+    backgroundColor: Colors.light.background, 
+    borderRadius: 30, 
+    overflow: 'hidden', 
+    position: 'relative' 
+  },
+  bioStressZones: { flexDirection: 'row', height: '100%' },
+  bioStressZone: { flex: 1 },
+  bioStressNeedle: { 
+    position: 'absolute', 
+    top: 0, 
+    width: 4, 
+    height: '100%', 
+    transform: [{ translateX: -2 }] 
+  },
+  bioStressEmoji: { 
+    position: 'absolute', 
+    top: -30, 
+    fontSize: 24, 
+    left: -10 
+  },
+  bioStressLabels: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginTop: 8, 
+    paddingHorizontal: 4 
+  },
+  bioStressLabelText: { fontSize: 8, color: Colors.light.textSecondary, flex: 1, textAlign: 'center' },
+  bioStressCategoryBox: { 
+    marginTop: 16, 
+    paddingVertical: 10, 
+    paddingHorizontal: 16, 
+    borderRadius: 8, 
+    borderWidth: 2, 
+    alignItems: 'center' 
+  },
+  bioStressCategoryText: { fontSize: 13, fontWeight: '700' },
+  bioTipsCon: { marginTop: 20 },
+  bioTipsTitle: { fontSize: 12, fontWeight: '700', color: Colors.light.text, marginBottom: 12 },
+  bioTipItem: { flexDirection: 'row', marginBottom: 10, paddingRight: 8 },
+  bioTipBullet: { fontSize: 14, color: Colors.light.primary, marginRight: 8, marginTop: -2 },
+  bioTipText: { flex: 1, fontSize: 11, color: Colors.light.textSecondary, lineHeight: 16 },
 });
+
 
 export default FitCalcChart;

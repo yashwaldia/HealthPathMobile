@@ -1,33 +1,37 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+// app/(tabs)/vitals/vitals.tsx
+// Complete vitals dashboard with chart integration
+// Updated: December 25, 2025 - Integrated VitalDetailsModal with chart support
+
+import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  TouchableOpacity,
   ActivityIndicator,
   Animated,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
-import { useAuth } from '../../context/AuthContext';
 import { Colors } from '../../constants/colors';
-import { vitalsService, getVitalStatus } from '../../services/vitalsService';
-import { VitalRecord, VitalCardData } from '../../types/vitals';
+import { useAuth } from '../../context/AuthContext';
 import { extractVitalsFromDocument } from '../../services/aiService';
+import { getVitalStatus, vitalsService } from '../../services/vitalsService';
+import { VitalCardData, VitalRecord, VitalType } from '../../types/vitals';
 
 // --- IMPORT COMPONENTS ---
-import VitalCard from '../../components/vitals/VitalCard';
-import QuickAddModal from '../../components/vitals/QuickAddModal';
-import VitalDetailsModal from '../../components/vitals/VitalDetailsModal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import CustomToast from '../../components/ui/CustomToast';
 import AIInsightsModal from '../../components/vitals/AIInsightsModal';
 import ExportDataModal from '../../components/vitals/ExportDataModal';
-import CustomToast from '../../components/ui/CustomToast';
-import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import QuickAddModal from '../../components/vitals/QuickAddModal';
+import VitalCard from '../../components/vitals/VitalCard';
+import VitalDetailsModal from '../../components/vitals/VitalDetailsModal';
 
 export default function VitalsScreen() {
   const router = useRouter();
@@ -45,6 +49,18 @@ export default function VitalsScreen() {
   const [isExportModalVisible, setExportModalVisible] = useState(false);
   const [selectedVitalId, setSelectedVitalId] = useState<string | null>(null);
   const [showUploadChoice, setShowUploadChoice] = useState(false);
+
+  // ✅ NEW: State for vital details modal data
+  const [selectedVitalData, setSelectedVitalData] = useState<{
+    vitalId: VitalType;
+    vitalName: string;
+    unit: string;
+    icon: string;
+    currentValue: string;
+    currentStatus: 'normal' | 'alert' | 'critical';
+    lastUpdated?: Date;
+    history: VitalRecord[];
+  } | null>(null);
 
   // Toast State
   const [toast, setToast] = useState<{
@@ -139,7 +155,7 @@ export default function VitalsScreen() {
     setLoading(true);
     try {
       const vitals = await vitalsService.getLatestVitals(user.uid);
-      const history = await vitalsService.getVitalsHistory(user.uid, 20);
+      const history = await vitalsService.getVitalsHistory(user.uid, 50); // ✅ Get last 50 records
       setLatestVitals(vitals);
       setVitalsHistory(history);
     } catch (error) {
@@ -161,8 +177,29 @@ export default function VitalsScreen() {
     fetchLatestVitals().then(() => setRefreshing(false));
   }, [fetchLatestVitals]);
   
-  const handleCardPress = (vitalId: string) => {
+  // ✅ UPDATED: Handle card press with full data preparation
+  const handleCardPress = async (vitalId: string) => {
+    if (!user?.uid) return;
+
+    // Find the card data
+    const cardData = vitalCards.find(c => c.id === vitalId);
+    if (!cardData) return;
+
     setSelectedVitalId(vitalId);
+
+    // Prepare data for modal
+    const vitalDataForModal = {
+      vitalId: vitalId as VitalType,
+      vitalName: cardData.title,
+      unit: cardData.unit,
+      icon: cardData.icon,
+      currentValue: cardData.latestValue,
+      currentStatus: cardData.status,
+      lastUpdated: cardData.lastUpdated,
+      history: vitalsHistory, // Pass the full history
+    };
+
+    setSelectedVitalData(vitalDataForModal);
     setDetailsModalVisible(true);
   };
   
@@ -187,6 +224,12 @@ export default function VitalsScreen() {
       showToast('Failed to save record', 'error');
       console.error(err);
     }
+  };
+
+  // ✅ NEW: Handle add reading from details modal
+  const handleAddReadingFromModal = () => {
+    setDetailsModalVisible(false);
+    setAddModalVisible(true);
   };
 
   // --- SMART UPLOAD FEATURE ---
@@ -404,11 +447,18 @@ export default function VitalsScreen() {
         onSave={handleSaveVital}
         currentVitals={memoizedCurrentVitals}
       />
+      
+      {/* ✅ UPDATED: VitalDetailsModal with full data */}
       <VitalDetailsModal
         visible={isDetailsModalVisible}
-        onClose={() => setDetailsModalVisible(false)}
-        vitalId={selectedVitalId}
+        onClose={() => {
+          setDetailsModalVisible(false);
+          setSelectedVitalData(null);
+        }}
+        vitalData={selectedVitalData}
+        onAddReading={handleAddReadingFromModal}
       />
+      
       <AIInsightsModal
         visible={isAIInsightsModalVisible}
         onClose={() => setAIInsightsModalVisible(false)}
@@ -570,7 +620,7 @@ const styles = StyleSheet.create({
   },
   headerTextContainer: {
     flex: 1,
-    alignItems: 'center', // ✅ CENTER THE TEXT
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 20,
@@ -584,8 +634,7 @@ const styles = StyleSheet.create({
   },
   addButton: {
     padding: 4,
-        width: 40, // Fixed width to balance with back button
-
+    width: 40,
   },
   scrollView: {
     flex: 1,

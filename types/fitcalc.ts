@@ -3,8 +3,10 @@
 /**
  * FitCalc - Fitness Calculator Types
  * 
- * This file contains all TypeScript types and interfaces for the 14 fitness calculators
- * organized into three categories: Fitness, Heart, and Daily Health
+ * This file contains all TypeScript types and interfaces for the 18 fitness calculators
+ * organized into four categories: Fitness, Heart, Daily Health, and Biohacking
+ * 
+ * Updated: December 26, 2025 - Simplified biohacking calculator inputs
  */
 
 // ============================================================================
@@ -25,13 +27,17 @@ export type FitCalcId =
   | 'protein'      // Protein Intake
   | 'activity'     // Activity Calories
   | 'running'      // Running Pace
-  | 'ratios';      // Body Ratios
+  | 'ratios'       // Body Ratios
+  | 'hrv'          // Heart Health Score (formerly HRV)
+  | 'recovery'     // Recovery Score
+  | 'sleepquality' // Sleep Quality Score
+  | 'stress';      // Stress Level Analysis
 
 // ============================================================================
 // CATEGORY TYPES
 // ============================================================================
 
-export type CategoryId = 'fitness' | 'heart' | 'dailyhealth';
+export type CategoryId = 'fitness' | 'heart' | 'dailyhealth' | 'biohacking';
 
 export type CategoryDefinition = {
   id: CategoryId;
@@ -48,8 +54,15 @@ export type ActivityLevel = 'sedentary' | 'lightly' | 'moderately' | 'very';
 export type Goal = 'maintain' | 'lose' | 'gain';
 export type Intensity = 'light' | 'moderate' | 'vigorous';
 
+// ✅ NEW: Biohacking-specific types
+export type ExerciseFrequency = 'rarely' | 'sometimes' | 'often' | 'daily';
+export type MuscleSoreness = 'none' | 'light' | 'moderate' | 'severe';
+export type WakeUpFrequency = 'none' | 'once' | 'few' | 'many';
+export type Workload = 'light' | 'normal' | 'heavy' | 'overwhelming';
+export type PhysicalActivityLevel = 'none' | 'light' | 'moderate' | 'intense';
+
 // ============================================================================
-// FITNESS CALCULATORS
+// FITNESS CALCULATORS (UNCHANGED)
 // ============================================================================
 
 // ---- BMI (Body Mass Index) ----
@@ -161,7 +174,7 @@ export type IdealWeightResult = {
 };
 
 // ============================================================================
-// HEART CALCULATORS
+// HEART CALCULATORS (UNCHANGED)
 // ============================================================================
 
 // ---- Heart Rate Zones ----
@@ -191,7 +204,7 @@ export type Vo2maxResult = {
 };
 
 // ============================================================================
-// DAILY HEALTH CALCULATORS
+// DAILY HEALTH CALCULATORS (UNCHANGED)
 // ============================================================================
 
 // ---- Water Intake ----
@@ -256,6 +269,70 @@ export type RatiosResult = {
 };
 
 // ============================================================================
+// BIOHACKING CALCULATORS - ✅ UPDATED WITH SIMPLIFIED INPUTS
+// ============================================================================
+
+// ---- HRV → Heart Health Score (SIMPLIFIED) ----
+
+export type HrvInputs = {
+  age?: string;                      // years
+  energyLevel?: string;              // 1-10 slider
+  stressLevel?: string;              // 1-10 slider
+  exerciseFrequency?: ExerciseFrequency; // rarely/sometimes/often/daily
+};
+
+export type HrvResult = {
+  score: number;         // 0-100 score
+  category: string;      // 'Excellent' | 'Good' | 'Fair' | 'Needs Attention'
+  recommendation: string;
+};
+
+// ---- Recovery Score (SIMPLIFIED) ----
+
+export type RecoveryInputs = {
+  sleepHours?: string;            // hours of sleep (e.g., "7.5")
+  sleepQualityRating?: string;    // 1-10 slider
+  morningFeeling?: string;        // 1-10 slider
+  muscleSoreness?: MuscleSoreness; // none/light/moderate/severe
+};
+
+export type RecoveryResult = {
+  score: number;   // 0-100 score
+  category: string; // 'Fully Recovered' | 'Good' | 'Fair' | 'Poor'
+  advice: string;
+};
+
+// ---- Sleep Quality (SIMPLIFIED) ----
+
+export type SleepQualityInputs = {
+  duration?: string;               // Total sleep hours (e.g., "7.5")
+  sleepQualityRating?: string;     // 1-10 slider
+  wakeUps?: WakeUpFrequency;       // none/once/few/many
+  morningMood?: string;            // 1-10 slider
+};
+
+export type SleepQualityResult = {
+  score: number;          // 0-100 score
+  quality: string;        // 'Excellent' | 'Good' | 'Fair' | 'Poor'
+  improvements: string[]; // Array of improvement tips
+};
+
+// ---- Stress Level (SIMPLIFIED) ----
+
+export type StressInputs = {
+  stressRating?: string;              // 1-10 slider
+  sleepQualityLast?: string;          // 1-10 slider
+  workload?: Workload;                // light/normal/heavy/overwhelming
+  physicalActivity?: PhysicalActivityLevel; // none/light/moderate/intense
+};
+
+export type StressResult = {
+  level: number;    // 0-100 stress level
+  category: string; // 'Low' | 'Moderate' | 'High' | 'Very High'
+  tips: string[];   // Array of stress management tips
+};
+
+// ============================================================================
 // AGGREGATED STATE TYPES
 // ============================================================================
 
@@ -278,6 +355,10 @@ export type FitCalcInputs = {
   activity?: ActivityInputs;
   running?: RunningInputs;
   ratios?: RatiosInputs;
+  hrv?: HrvInputs;
+  recovery?: RecoveryInputs;
+  sleepquality?: SleepQualityInputs;
+  stress?: StressInputs;
 };
 
 /**
@@ -299,6 +380,10 @@ export type FitCalcResults = {
   activity?: ActivityResult;
   running?: RunningResult;
   ratios?: RatiosResult;
+  hrv?: HrvResult;
+  recovery?: RecoveryResult;
+  sleepquality?: SleepQualityResult;
+  stress?: StressResult;
 };
 
 // ============================================================================
@@ -323,6 +408,10 @@ export type GetCalcInputs<T extends FitCalcId> =
   T extends 'activity' ? ActivityInputs :
   T extends 'running' ? RunningInputs :
   T extends 'ratios' ? RatiosInputs :
+  T extends 'hrv' ? HrvInputs :
+  T extends 'recovery' ? RecoveryInputs :
+  T extends 'sleepquality' ? SleepQualityInputs :
+  T extends 'stress' ? StressInputs :
   never;
 
 /**
@@ -343,6 +432,10 @@ export type GetCalcResult<T extends FitCalcId> =
   T extends 'activity' ? ActivityResult :
   T extends 'running' ? RunningResult :
   T extends 'ratios' ? RatiosResult :
+  T extends 'hrv' ? HrvResult :
+  T extends 'recovery' ? RecoveryResult :
+  T extends 'sleepquality' ? SleepQualityResult :
+  T extends 'stress' ? StressResult :
   never;
 
 // ============================================================================
@@ -352,7 +445,8 @@ export type GetCalcResult<T extends FitCalcId> =
 export function isValidFitCalcId(id: string): id is FitCalcId {
   const validIds: FitCalcId[] = [
     'bmi', 'bmr', 'tdee', 'macros', 'onerm', 'bodyfat', 'idealweight',
-    'hrzones', 'vo2max', 'water', 'protein', 'activity', 'running', 'ratios'
+    'hrzones', 'vo2max', 'water', 'protein', 'activity', 'running', 'ratios',
+    'hrv', 'recovery', 'sleepquality', 'stress'
   ];
   return validIds.includes(id as FitCalcId);
 }
@@ -363,4 +457,25 @@ export function isValidGender(value: string): value is Gender {
 
 export function isValidGoal(value: string): value is Goal {
   return value === 'maintain' || value === 'lose' || value === 'gain';
+}
+
+// ✅ NEW: Biohacking validation helpers
+export function isValidExerciseFrequency(value: string): value is ExerciseFrequency {
+  return ['rarely', 'sometimes', 'often', 'daily'].includes(value);
+}
+
+export function isValidMuscleSoreness(value: string): value is MuscleSoreness {
+  return ['none', 'light', 'moderate', 'severe'].includes(value);
+}
+
+export function isValidWakeUpFrequency(value: string): value is WakeUpFrequency {
+  return ['none', 'once', 'few', 'many'].includes(value);
+}
+
+export function isValidWorkload(value: string): value is Workload {
+  return ['light', 'normal', 'heavy', 'overwhelming'].includes(value);
+}
+
+export function isValidPhysicalActivity(value: string): value is PhysicalActivityLevel {
+  return ['none', 'light', 'moderate', 'intense'].includes(value);
 }

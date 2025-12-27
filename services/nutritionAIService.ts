@@ -1,4 +1,5 @@
 // services/nutritionAIService.ts
+// ✅ UPDATED: Fixed meal scanner inconsistency + improved all AI functions (Dec 27, 2025)
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Constants from 'expo-constants';
@@ -17,6 +18,12 @@ if (!API_KEY) {
 }
 
 const genAI = new GoogleGenerativeAI(API_KEY);
+
+// ✅ NEW: Constants for image validation
+const MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20MB limit
+const SUPPORTED_FORMATS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'gif'];
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
 
 // Helper: Convert file URI to base64
 async function fileToBase64(uri: string): Promise<string> {
@@ -53,18 +60,62 @@ function getMimeType(uri: string): string {
   }
 }
 
-// Helper: Clean JSON response from AI (remove markdown fences)
+// ✅ IMPROVED: Better JSON cleaning helper
 function cleanJSONResponse(text: string): string {
   let cleaned = text.trim();
-
-  // Remove markdown code blocks
-  cleaned = cleaned.replace(/```json\n?/g, '');
+  
+  // Remove markdown code blocks (multiple formats)
+  cleaned = cleaned.replace(/```json\n?/gi, '');
+  cleaned = cleaned.replace(/```javascript\n?/gi, '');
   cleaned = cleaned.replace(/```\n?/g, '');
-
+  cleaned = cleaned.replace(/`/g, ''); // Remove single backticks
+  
+  // Try to extract JSON object/array from text
+  // Look for { ... } or [ ... ]
+  const jsonMatch = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  if (jsonMatch) {
+    cleaned = jsonMatch[1]; // ✅ FIXED: Access first capture group
+  }
+  
+  // Remove trailing commas before closing braces/brackets
+  cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
+  
   // Remove any leading/trailing whitespace
   cleaned = cleaned.trim();
-
+  
   return cleaned;
+}
+
+// ✅ NEW: Validate image before AI processing
+async function validateImage(uri: string): Promise<void> {
+  try {
+    // Check file extension
+    const ext = uri.toLowerCase().split('.').pop() || '';
+    if (!SUPPORTED_FORMATS.includes(ext)) {
+      throw new Error(
+        `Unsupported image format: ${ext}. Please use JPG, PNG, or WEBP.`
+      );
+    }
+
+    // Check file size
+    const fileInfo = await FileSystem.getInfoAsync(uri);
+    if (fileInfo.exists && 'size' in fileInfo) {
+      if (fileInfo.size > MAX_IMAGE_SIZE) {
+        throw new Error(
+          'Image file is too large (max 20MB). Please use a smaller image.'
+        );
+      }
+      console.log(`✅ Image validated: ${(fileInfo.size / 1024 / 1024).toFixed(2)}MB`);
+    }
+  } catch (error: any) {
+    console.error('❌ Image validation error:', error);
+    throw error;
+  }
+}
+
+// ✅ NEW: Sleep helper for retry delays
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Type definitions
@@ -101,7 +152,7 @@ export type DeficiencyInsight = {
   summary: string;
 };
 
-// NEW: Result type for two-meal comparison
+// Result type for two-meal comparison
 export type MealCompareResult = {
   meal1: {
     name: string;
@@ -115,39 +166,58 @@ export type MealCompareResult = {
 };
 
 /**
- * Analyze meal from image using Gemini Vision AI
+ * ✅ IMPROVED: Analyze meal from image with retry logic and validation
  * Returns estimated food items with nutrition data
  */
 export async function analyzeMealFromImage(
   uri: string,
 ): Promise<MealAnalysisResult> {
+  if (!API_KEY) {
+    throw new Error('Gemini API key not configured');
+  }
+
+  console.log('🍽️ Starting meal analysis from image...');
+  console.log('📄 Image URI:', uri);
+
+  // ✅ Validate image before processing
   try {
-    if (!API_KEY) {
-      throw new Error('Gemini API key not configured');
-    }
+    await validateImage(uri);
+  } catch (validationError: any) {
+    console.error('❌ Image validation failed:', validationError);
+    throw validationError;
+  }
 
-    console.log('🍽️ Starting meal analysis from image...');
-    console.log('📄 Image URI:', uri);
+  // ✅ Retry logic with exponential backoff
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 0) {
+        const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+        console.log(`⏳ Retry attempt ${attempt}/${MAX_RETRIES} after ${delay}ms...`);
+        await sleep(delay);
+      }
 
-    // Convert file to base64
-    const base64 = await fileToBase64(uri);
-    const mimeType = getMimeType(uri);
-    console.log('🎯 MIME type:', mimeType);
+      // Convert file to base64
+      const base64 = await fileToBase64(uri);
+      const mimeType = getMimeType(uri);
+      console.log('🎯 MIME type:', mimeType);
 
-    // Use Gemini 2.0 Flash for analysis
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: {
-        temperature: 0.4,
-        topP: 0.95,
-        topK: 40,
-        maxOutputTokens: 2048,
-      },
-    });
+      // ✅ Use Gemini 2.5 Flash with forced JSON response
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-2.5-flash',
+        generationConfig: {
+          temperature: 0.4,
+          topP: 0.95,
+          topK: 40,
+          maxOutputTokens: 2048,
+          responseMimeType: 'application/json', // ✅ Force JSON output
+        },
+      });
 
-    const prompt = `You are an expert nutritionist. Analyze this meal photo and identify all visible food items with their estimated nutritional values.
+      const prompt = `You are an expert nutritionist. Analyze this meal photo and identify all visible food items with their estimated nutritional values.
 
-Return ONLY valid JSON in this exact format (no markdown, no explanations):
+CRITICAL: Return ONLY valid JSON in this exact format (no markdown, no explanations):
 
 {
   "foods": [
@@ -184,71 +254,165 @@ Important rules:
 - Insight should be 1-2 sentences, encouraging and helpful
 - Return ONLY the JSON object, no other text`;
 
-    const imagePart = {
-      inlineData: {
-        data: base64,
-        mimeType,
-      },
-    };
+      const imagePart = {
+        inlineData: {
+          data: base64,
+          mimeType,
+        },
+      };
 
-    console.log('🤖 Calling Gemini AI for meal analysis...');
-    const result = await model.generateContent([prompt, imagePart]);
-    const response = await result.response;
-    let text = response.text();
+      console.log('🤖 Calling Gemini AI for meal analysis...');
+      const result = await model.generateContent([prompt, imagePart]);
+      const response = await result.response;
+      let text = response.text();
 
-    console.log('📝 Raw AI response:', text.substring(0, 200) + '...');
+      console.log('📝 Raw AI response:', text.substring(0, 200) + '...');
 
-    // Clean and parse JSON
-    text = cleanJSONResponse(text);
-    console.log('🧹 Cleaned response:', text.substring(0, 200) + '...');
+      // ✅ Better JSON cleaning and parsing
+      text = cleanJSONResponse(text);
+      console.log('🧹 Cleaned response:', text.substring(0, 200) + '...');
 
-    let parsed: MealAnalysisResult;
-    try {
-      parsed = JSON.parse(text);
-    } catch (parseError) {
-      console.error('❌ JSON parse error:', parseError);
-      console.error('Failed text:', text);
-      throw new Error(
-        'AI returned invalid JSON format. Please try with a clearer meal photo.',
-      );
+      let parsed: MealAnalysisResult;
+      try {
+        parsed = JSON.parse(text);
+      } catch (parseError) {
+        console.error('❌ JSON parse error:', parseError);
+        console.error('Failed text (first 500 chars):', text.substring(0, 500));
+        
+        // ✅ Try to fix common JSON issues
+        try {
+          const fixedText = text
+            .replace(/^[^{[]*/, '')
+            .replace(/[^}\]]*$/, '');
+          
+          console.log('🔧 Attempting to parse fixed text...');
+          parsed = JSON.parse(fixedText);
+          console.log('✅ Fixed JSON parsing succeeded!');
+        } catch (secondError) {
+          console.error('❌ Second parse attempt failed:', secondError);
+          
+          if (attempt < MAX_RETRIES) {
+            throw new Error('AI returned invalid JSON format. Retrying...');
+          }
+          
+          throw new Error(
+            'AI returned invalid JSON format. Please try with a clearer meal photo.',
+          );
+        }
+      }
+
+      // ✅ Validate response structure
+      if (!parsed.foods || !Array.isArray(parsed.foods)) {
+        throw new Error(
+          'AI response missing foods array. Please try with a clearer photo.',
+        );
+      }
+
+      if (parsed.foods.length === 0) {
+        throw new Error(
+          'AI could not identify any foods in the image. Please ensure the photo clearly shows food items.',
+        );
+      }
+
+      // ✅ Validate each food item
+      const validFoods = parsed.foods.filter((food: any) => {
+        return (
+          food.name &&
+          typeof food.name === 'string' &&
+          typeof food.calories === 'number' &&
+          typeof food.protein === 'number' &&
+          typeof food.carbs === 'number' &&
+          typeof food.fat === 'number'
+        );
+      });
+
+      if (validFoods.length === 0) {
+        throw new Error('AI returned invalid food data. Please try again.');
+      }
+
+      parsed.foods = validFoods;
+
+      // ✅ Validate and fix totals
+      if (!parsed.totals || typeof parsed.totals !== 'object') {
+        console.warn('⚠️ Missing totals, calculating from foods...');
+        parsed.totals = parsed.foods.reduce(
+          (acc, food) => ({
+            calories: acc.calories + (food.calories || 0),
+            protein: acc.protein + (food.protein || 0),
+            carbs: acc.carbs + (food.carbs || 0),
+            fat: acc.fat + (food.fat || 0),
+            sugar: acc.sugar + (food.sugar || 0),
+            sodium: acc.sodium + (food.sodium || 0),
+          }),
+          { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, sodium: 0 }
+        );
+      }
+
+      if (
+        typeof parsed.totals.calories !== 'number' ||
+        typeof parsed.totals.protein !== 'number' ||
+        typeof parsed.totals.carbs !== 'number' ||
+        typeof parsed.totals.fat !== 'number'
+      ) {
+        throw new Error('AI returned incomplete nutrition totals.');
+      }
+
+      // ✅ Ensure insight exists
+      if (!parsed.insight || typeof parsed.insight !== 'string') {
+        parsed.insight = 'Meal analyzed successfully.';
+      }
+
+      console.log('✅ Meal analyzed successfully:', parsed.foods.length, 'items found');
+      console.log(`📊 Totals: ${parsed.totals.calories} cal, ${parsed.totals.protein}g protein`);
+      
+      return parsed;
+
+    } catch (error: any) {
+      console.error(`❌ Meal analysis error (attempt ${attempt + 1}/${MAX_RETRIES + 1}):`, error);
+      lastError = error;
+
+      // Don't retry for these errors
+      if (
+        error?.message?.includes('API key') ||
+        error?.message?.includes('Unsupported image format') ||
+        error?.message?.includes('too large')
+      ) {
+        break;
+      }
+
+      if (attempt === MAX_RETRIES) {
+        break;
+      }
+
+      console.log('🔄 Will retry...');
     }
+  }
 
-    // Validate response structure
-    if (!parsed.foods || !Array.isArray(parsed.foods) || parsed.foods.length === 0) {
-      throw new Error(
-        'AI could not identify any foods in the image. Please try with a clearer photo.',
-      );
-    }
+  // ✅ Better error messages after all retries failed
+  console.error('❌ All retry attempts failed');
+  console.error('Error details:', lastError?.message, lastError?.stack);
 
-    if (!parsed.totals || typeof parsed.totals.calories !== 'number') {
-      throw new Error('AI returned incomplete nutrition data. Please try again.');
-    }
-
-    console.log('✅ Meal analyzed successfully:', parsed.foods.length, 'items found');
-    return parsed;
-  } catch (error: any) {
-    console.error('❌ Meal analysis error:', error);
-    console.error('Error details:', error?.message, error?.stack);
-
-    if (error instanceof SyntaxError) {
-      throw new Error(
-        'AI response format error. The image may not be a clear meal photo.',
-      );
-    }
-
-    if (error?.message?.includes('API key')) {
-      throw new Error('AI service configuration error. Please check your API key.');
-    }
-
+  if (lastError instanceof SyntaxError) {
     throw new Error(
-      error?.message || 'Failed to analyze meal from image. Please try again.',
+      'AI response format error. The image may not be a clear meal photo. Please try again with better lighting.',
     );
   }
+
+  if (lastError?.message?.includes('API key')) {
+    throw new Error('AI service configuration error. Please check your API key.');
+  }
+
+  if (lastError?.message?.includes('quota') || lastError?.message?.includes('rate limit')) {
+    throw new Error('AI service temporarily unavailable. Please try again in a few minutes.');
+  }
+
+  throw new Error(
+    lastError?.message || 'Failed to analyze meal from image. Please try with a clearer photo.',
+  );
 }
 
 /**
- * NEW: Compare two meal photos and return a nutrient matrix-style result
- * This is what the Image Comparator screen will call.
+ * ✅ IMPROVED: Compare two meal photos with retry logic
  */
 export async function analyzeAndCompareMealImages(
   imageAUri: string,
@@ -278,6 +442,7 @@ export async function analyzeAndCompareMealImages(
         topP: 0.95,
         topK: 40,
         maxOutputTokens: 2048,
+        responseMimeType: 'application/json', // ✅ Force JSON
       },
     });
 
@@ -352,9 +517,16 @@ Important rules:
     } catch (parseError) {
       console.error('❌ JSON parse error (compare):', parseError);
       console.error('Failed text:', text);
-      throw new Error(
-        'AI returned invalid JSON format for meal comparison. Please try again.',
-      );
+      
+      // ✅ Try to fix
+      try {
+        const fixedText = text.replace(/^[^{[]*/, '').replace(/[^}\]]*$/, '');
+        parsed = JSON.parse(fixedText);
+      } catch {
+        throw new Error(
+          'AI returned invalid JSON format for meal comparison. Please try again.',
+        );
+      }
     }
 
     if (!parsed.meal1 || !parsed.meal2) {
@@ -398,8 +570,7 @@ Important rules:
 }
 
 /**
- * Analyze manually entered foods (name + quantity + unit) using text prompt
- * Used by ManualFoodModal when user logs food without a photo
+ * ✅ IMPROVED: Analyze manually entered foods with forced JSON
  */
 export async function analyzeManualFoods(
   foods: {
@@ -426,6 +597,7 @@ export async function analyzeManualFoods(
         topP: 0.95,
         topK: 40,
         maxOutputTokens: 2048,
+        responseMimeType: 'application/json', // ✅ Force JSON
       },
     });
 
@@ -488,7 +660,14 @@ Important rules:
     } catch (parseError) {
       console.error('❌ JSON parse error (manual foods):', parseError);
       console.error('Failed text:', text);
-      throw new Error('AI returned invalid JSON format for manual foods.');
+      
+      // ✅ Try to fix
+      try {
+        const fixedText = text.replace(/^[^{[]*/, '').replace(/[^}\]]*$/, '');
+        parsed = JSON.parse(fixedText);
+      } catch {
+        throw new Error('AI returned invalid JSON format for manual foods.');
+      }
     }
 
     if (!parsed.foods || !Array.isArray(parsed.foods) || parsed.foods.length === 0) {
@@ -529,8 +708,7 @@ Important rules:
 }
 
 /**
- * Predict nutrient deficiencies based on 30-day nutrition history + lab reports
- * Uses AI to correlate dietary gaps with lab abnormalities
+ * ✅ IMPROVED: Predict nutrient deficiencies with better error handling
  */
 export async function predictNutrientDeficiencies(
   userId: string,
@@ -541,13 +719,10 @@ export async function predictNutrientDeficiencies(
     }
 
     console.log('🧬 Running nutrient deficiency prediction for user:', userId);
-
     const end = getTodayISO();
     const start = getISODateNDaysAgo(30);
-
     console.log(`📅 Date range: ${start} to ${end}`);
 
-    // Fetch nutrition and lab data in parallel
     const [nutritionHistory, labReports] = await Promise.all([
       nutritionService.getInRange(userId, start, end),
       getReportsByDateRange(userId, start, end),
@@ -557,7 +732,14 @@ export async function predictNutrientDeficiencies(
       `📊 Data fetched: ${nutritionHistory.length} meals, ${labReports.length} lab reports`,
     );
 
-    // Compact nutrition data for AI prompt
+    if (nutritionHistory.length === 0) {
+      console.log('⚠️ No nutrition data available');
+      return {
+        deficiencies: [],
+        summary: 'Not enough nutrition data to analyze. Start logging your meals to get personalized insights!',
+      };
+    }
+
     const compactNutrition = nutritionHistory.map((n: NutritionEntry) => ({
       date: n.date,
       mealType: n.mealType,
@@ -568,7 +750,6 @@ export async function predictNutrientDeficiencies(
       foods: n.foods.map((f) => f.name),
     }));
 
-    // Compact lab data
     const compactLabs = labReports.map((r: any) => ({
       testDate: r.testDate,
       labName: r.labName,
@@ -576,80 +757,113 @@ export async function predictNutrientDeficiencies(
       riskLevel: r.aiInterpretation?.riskLevel || 'unknown',
     }));
 
-    // Use Gemini 2.0 Flash for analysis
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       generationConfig: {
-        temperature: 0.6,
+        temperature: 0.4,
         topP: 0.9,
         topK: 40,
         maxOutputTokens: 2048,
+        responseMimeType: 'application/json', // ✅ Force JSON
       },
     });
 
-    const prompt = `You are a clinical nutritionist and medical doctor. Analyze the patient's 30-day nutrition history and recent lab reports to identify likely nutrient deficiencies.
+    const prompt = `You are a clinical nutritionist analyzing patient data.
 
 NUTRITION DATA (last 30 days):
 ${JSON.stringify(compactNutrition, null, 2)}
 
-LAB REPORTS (with AI-detected abnormalities):
+LAB REPORTS:
 ${JSON.stringify(compactLabs, null, 2)}
 
-Based on this data, identify nutrient deficiencies by:
-1. Looking for consistently low intake of specific nutrients
-2. Correlating dietary patterns with lab abnormalities
-3. Identifying missing food groups
-4. Considering biochemical markers that suggest deficiencies
+Analyze this data to identify nutrient deficiencies. Consider:
+1. Low intake patterns
+2. Lab abnormalities correlating with diet
+3. Missing food groups
+4. Biochemical markers
 
-Return ONLY valid JSON in this exact format (no markdown):
-
+CRITICAL: Return ONLY this exact JSON structure with NO extra text:
 {
   "deficiencies": [
     {
-      "name": "Nutrient name (e.g., Iron, Vitamin D, Omega-3)",
+      "name": "Iron",
       "confidence": 0.85,
-      "reasons": "Explain why you suspect this deficiency based on diet and labs",
-      "suggestedFoods": ["Food 1", "Food 2", "Food 3"]
+      "reasons": "Low red meat intake, fatigue noted in labs",
+      "suggestedFoods": ["Spinach", "Red meat", "Lentils"]
     }
   ],
-  "summary": "A 2-3 sentence friendly summary of key findings and recommendations."
+  "summary": "Brief 2-3 sentence summary"
 }
 
-Important:
+Rules:
 - Only include deficiencies with confidence > 0.6
-- Be specific about reasons (cite actual data patterns)
-- Suggest 3-5 realistic food sources for each deficiency
+- Confidence must be a decimal number (0.0 to 1.0)
+- Include 3-5 food suggestions per deficiency
 - If no clear deficiencies, return empty array with encouraging summary
-- Confidence must be a number between 0 and 1
-- Return ONLY the JSON object`;
+- NO markdown, NO explanations, ONLY the JSON object`;
 
     console.log('🤖 Calling Gemini AI for deficiency analysis...');
     const result = await model.generateContent(prompt);
     const response = await result.response;
     let text = response.text();
 
-    console.log('📝 Raw AI response:', text.substring(0, 200) + '...');
+    console.log('📝 Raw AI response:', text.substring(0, 300) + '...');
 
-    // Clean and parse JSON
     text = cleanJSONResponse(text);
-    console.log('🧹 Cleaned response:', text.substring(0, 200) + '...');
+    console.log('🧹 Cleaned response:', text.substring(0, 300) + '...');
 
     let parsed: DeficiencyInsight;
     try {
       parsed = JSON.parse(text);
     } catch (parseError) {
       console.error('❌ JSON parse error:', parseError);
-      console.error('Failed text:', text);
-      throw new Error('AI returned invalid JSON format');
+      console.error('Failed text (first 500 chars):', text.substring(0, 500));
+      
+      try {
+        const fixedText = text
+          .replace(/^[^{[]*/, '')
+          .replace(/[^}\]]*$/, '');
+        
+        console.log('🔧 Attempting to parse fixed text...');
+        parsed = JSON.parse(fixedText);
+        console.log('✅ Fixed JSON parsing succeeded!');
+      } catch (secondError) {
+        console.error('❌ Second parse attempt failed:', secondError);
+        throw new Error(
+          'AI returned invalid JSON format. Please try again or contact support if issue persists.',
+        );
+      }
     }
 
-    // Validate response
     if (!parsed.deficiencies || !Array.isArray(parsed.deficiencies)) {
-      throw new Error('AI returned invalid deficiency data');
+      console.error('❌ Invalid deficiencies structure:', parsed);
+      throw new Error('AI returned invalid deficiency data structure');
     }
+
+    parsed.deficiencies = parsed.deficiencies
+      .filter((def: any) => {
+        if (!def.name || typeof def.name !== 'string') return false;
+        if (typeof def.confidence !== 'number') return false;
+        if (!def.reasons || typeof def.reasons !== 'string') return false;
+        if (!Array.isArray(def.suggestedFoods)) return false;
+        
+        if (def.confidence < 0 || def.confidence > 1) {
+          def.confidence = Math.max(0, Math.min(1, def.confidence / 100));
+        }
+        
+        return true;
+      })
+      .map((def: any) => ({
+        name: def.name,
+        confidence: Number(def.confidence),
+        reasons: def.reasons,
+        suggestedFoods: def.suggestedFoods.filter((f: any) => typeof f === 'string'),
+      }));
 
     if (!parsed.summary || typeof parsed.summary !== 'string') {
-      parsed.summary = 'Analysis completed. Check individual deficiency details.';
+      parsed.summary = parsed.deficiencies.length > 0
+        ? 'Analysis completed. Review the deficiency details below.'
+        : 'Great job! No significant nutrient deficiencies detected based on your recent nutrition data.';
     }
 
     console.log('✅ Deficiencies analyzed:', parsed.deficiencies.length, 'found');
@@ -659,13 +873,21 @@ Important:
     console.error('Error details:', error?.message, error?.stack);
 
     if (error instanceof SyntaxError) {
-      throw new Error('AI response format error. Please try again.');
+      throw new Error(
+        'AI response format error. Please try again in a few moments.',
+      );
     }
 
     if (error?.message?.includes('API key')) {
       throw new Error('AI service configuration error. Please check your API key.');
     }
 
-    throw new Error(error?.message || 'Failed to predict nutrient deficiencies');
+    if (error?.message?.includes('quota') || error?.message?.includes('rate limit')) {
+      throw new Error('AI service temporarily unavailable. Please try again in a few minutes.');
+    }
+
+    throw new Error(
+      error?.message || 'Failed to predict nutrient deficiencies. Please try again.',
+    );
   }
 }

@@ -1,4 +1,6 @@
 // app/smart-upload.tsx
+// ✅ UPDATED: Now navigates to add-medication screen for user review instead of auto-saving
+// ✅ FINAL VERSION: Aligned with add-medication.tsx (Dec 27, 2025)
 
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -23,7 +25,6 @@ import { UploadProgressBar } from '../../components/upload/UploadProgressBar';
 import { classifyDocument, extractLabResults, generateInterpretation } from '../../services/classificationService';
 import { PickedFile, showFilePickerOptions } from '../../services/filePickerService';
 import { checkDuplicateReport, saveLabReport } from '../../services/labReportService';
-import { addMedication } from '../../services/medicationService';
 import { uploadFileToStorage } from '../../services/uploadService';
 
 import { DosageForm, FrequencyType, MealRelation } from '../../types/medication';
@@ -229,6 +230,35 @@ export default function SmartUploadScreen() {
     return undefined;
   };
 
+  // ✅ Prepare medication data for add-medication screen
+  const prepareMedicationForReview = (med: any, prescriptionImageUrl?: string) => {
+    const durationDays = parseDuration(med.duration);
+    const startDate = med.startDate || new Date().toISOString().split('T')[0];
+    let endDate: string | undefined;
+    
+    if (durationDays) {
+      const start = new Date(startDate);
+      start.setDate(start.getDate() + durationDays);
+      endDate = start.toISOString().split('T')[0];
+    }
+
+    return {
+      name: med.name,
+      strength: med.strength || '',
+      dosageForm: mapDosageForm(med.dosageForm),
+      frequency: mapFrequency(med.frequency),
+      mealRelation: mapMealRelation(med.mealRelation),
+      startDate,
+      duration: med.duration || '', // Keep original duration string
+      durationDays: durationDays?.toString() || '',
+      endDate: endDate || '',
+      prescribedBy: med.prescribedBy || classification?.doctorName || '',
+      instructions: med.instructions || '',
+      purpose: med.purpose || '',
+    };
+  };
+
+  // ✅ MAIN HANDLER: Save lab report and navigate to medication review
   const handleConfirmAndSave = async () => {
     console.log('🚀 Starting handleConfirmAndSave...');
     console.log('Classification:', classification);
@@ -247,62 +277,7 @@ export default function SmartUploadScreen() {
         message: 'Saving to your health records...',
       });
 
-      // Check if medications exist
-      const extractedMeds = (classification as any).extractedMedications;
-      console.log('💊 Extracted medications:', extractedMeds);
-      console.log('💊 Medications count:', extractedMeds?.length || 0);
-
-      let medicationsSaved = 0;
-
-      // Save medications if found
-      if (Array.isArray(extractedMeds) && extractedMeds.length > 0) {
-        console.log('💊 Starting to save', extractedMeds.length, 'medications...');
-        
-        const medicationPromises = extractedMeds.map(async (med: any, index: number) => {
-          try {
-            console.log(`💊 Saving medication ${index + 1}/${extractedMeds.length}:`, med.name);
-            
-            const durationDays = parseDuration(med.duration);
-            const startDate = med.startDate || new Date().toISOString().split('T')[0];
-            let endDate: string | undefined;
-            if (durationDays) {
-              const start = new Date(startDate);
-              start.setDate(start.getDate() + durationDays);
-              endDate = start.toISOString().split('T')[0];
-            }
-
-            const medicationData = {
-              name: med.name,
-              strength: med.strength || 'As prescribed',
-              dosageForm: mapDosageForm(med.dosageForm),
-              frequency: mapFrequency(med.frequency),
-              mealRelation: mapMealRelation(med.mealRelation),
-              startDate,
-              durationDays,
-              endDate,
-              prescribedBy: med.prescribedBy || classification.doctorName,
-              instructions: med.instructions,
-              reminderEnabled: false,
-              prescriptionImage: uploadedFiles[0]?.fileURL,
-              isActive: true,
-            };
-
-            console.log(`💊 Medication data for ${med.name}:`, medicationData);
-            await addMedication(user.uid, medicationData);
-            console.log(`✅ Successfully saved medication: ${med.name}`);
-            return true;
-          } catch (error) {
-            console.error(`❌ Failed to save medication ${med.name}:`, error);
-            return false;
-          }
-        });
-
-        const results = await Promise.all(medicationPromises);
-        medicationsSaved = results.filter(r => r === true).length;
-        console.log(`✅ Saved ${medicationsSaved}/${extractedMeds.length} medications`);
-      }
-
-      // ALWAYS save lab report (regardless of medications)
+      // ✅ STEP 1: Always save lab report first
       console.log('📄 Saving lab report to Firestore...');
       let testResults = [];
       let aiInterpretation = undefined;
@@ -334,33 +309,83 @@ export default function SmartUploadScreen() {
         message: 'Saved successfully!',
       });
 
-      // Show success message
-      if (medicationsSaved > 0) {
-        Alert.alert(
-          'Success!',
-          `✅ Lab report saved\n💊 ${medicationsSaved} medication${medicationsSaved > 1 ? 's' : ''} added to tracker`,
-          [
-            { text: 'View Medications', onPress: () => router.push('/(tabs)/medication-tracker') },
-            { text: 'View Reports', onPress: () => router.push('/(tabs)') },
-            { text: 'Upload Another', onPress: () => {
-                setSelectedFiles([]); setClassification(null); setUploadedFiles([]);
-                setUploadProgress({ status: 'idle', progress: 0, message: '' });
-            }},
-          ]
+      // ✅ STEP 2: Check for medications and navigate to review screen
+      const extractedMeds = (classification as any).extractedMedications;
+      console.log('💊 Extracted medications:', extractedMeds);
+      console.log('💊 Medications count:', extractedMeds?.length || 0);
+
+      if (Array.isArray(extractedMeds) && extractedMeds.length > 0) {
+        console.log(`💊 Found ${extractedMeds.length} medications - preparing for review...`);
+        
+        // Prepare medication data
+        const prescriptionImageUrl = uploadedFiles[0]?.fileURL;
+        const firstMedication = prepareMedicationForReview(extractedMeds[0], prescriptionImageUrl);
+        const remainingMedications = extractedMeds.slice(1).map((med: any) => 
+          prepareMedicationForReview(med, prescriptionImageUrl)
         );
+
+        console.log('📋 First medication:', firstMedication);
+        console.log('📋 Remaining medications:', remainingMedications.length);
+
+        // Navigate to add-medication with pre-filled data
+        setTimeout(() => {
+          Alert.alert(
+            '💊 Medications Detected',
+            `Found ${extractedMeds.length} medication${extractedMeds.length > 1 ? 's' : ''} in your prescription.\n\nReview and save each one.`,
+            [
+              {
+                text: 'Review Now',
+                onPress: () => {
+                  console.log('🚀 Navigating to add-medication screen...');
+                  router.push({
+                    pathname: '/add-medication',
+                    params: {
+                      prefilled: 'true',
+                      medicationData: JSON.stringify(firstMedication),
+                      remainingMedications: remainingMedications.length > 0 
+                        ? JSON.stringify(remainingMedications) 
+                        : undefined,
+                      prescriptionImage: prescriptionImageUrl,
+                      fromSmartUpload: 'true',
+                    },
+                  });
+                },
+              },
+              {
+                text: 'Skip for Now',
+                style: 'cancel',
+                onPress: () => {
+                  console.log('⏭️ User skipped medication review');
+                  Alert.alert(
+                    'Report Saved',
+                    'Lab report saved successfully. You can add medications later from the medication tracker.',
+                    [{ text: 'OK', onPress: () => router.push('/(tabs)') }]
+                  );
+                },
+              },
+            ]
+          );
+        }, 300); // Small delay for better UX
       } else {
+        // No medications found - show success and go to home
         Alert.alert(
-          'Success!',
+          '✅ Success!',
           'Your document has been analyzed and saved to your health records.',
           [
             { text: 'View Report', onPress: () => router.push('/(tabs)') },
-            { text: 'Upload Another', onPress: () => {
-                setSelectedFiles([]); setClassification(null); setUploadedFiles([]);
+            { 
+              text: 'Upload Another', 
+              onPress: () => {
+                setSelectedFiles([]); 
+                setClassification(null); 
+                setUploadedFiles([]);
                 setUploadProgress({ status: 'idle', progress: 0, message: '' });
-            }},
+              }
+            },
           ]
         );
       }
+
     } catch (error) {
       console.error('❌ Error in handleConfirmAndSave:', error);
       Alert.alert('Error', 'Failed to save. Please try again.');

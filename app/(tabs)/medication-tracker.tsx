@@ -1,7 +1,6 @@
 // app/(tabs)/medication-tracker.tsx
 // ✅ REDESIGNED: Compact calendar + date popup + smart import button below calendar
-// Last Updated: December 18, 2025
-
+// ✅ FIXED: Optimized notification initialization (Dec 27, 2025)
 
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -31,7 +30,6 @@ import { smartImportMedications } from '../../services/smartImportService';
 import { DoseLog, Medication } from '../../types/medication';
 import { getDailySummaryToast, getMotivationalToast } from '../../utils/motivationalMessages';
 
-
 // Frequency map
 const FREQUENCY_MAP: Record<string, number> = {
   'Once a day': 1,
@@ -47,11 +45,9 @@ const FREQUENCY_MAP: Record<string, number> = {
   'Custom': 1,
 };
 
-
 export default function MedicationTrackerScreen() {
   const router = useRouter();
   const { user } = useAuth();
-
 
   // State
   const [medications, setMedications] = useState<Medication[]>([]);
@@ -61,18 +57,15 @@ export default function MedicationTrackerScreen() {
   const [showInactive, setShowInactive] = useState(false);
   const [dosesMap, setDosesMap] = useState<{ [key: string]: DoseLog[] }>({});
 
-
   // Modals
   const [showSmartImport, setShowSmartImport] = useState(false);
   const [showMergeConflict, setShowMergeConflict] = useState(false);
   const [currentConflict, setCurrentConflict] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
-
   // ✅ NEW: Date popup state
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [datePopupVisible, setDatePopupVisible] = useState(false);
-
 
   // Toast
   const [toast, setToast] = useState<{
@@ -81,15 +74,12 @@ export default function MedicationTrackerScreen() {
     type: 'success' | 'error' | 'info' | 'warning';
   }>({ visible: false, message: '', type: 'info' });
 
-
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning') => {
     setToast({ visible: true, message, type });
   };
 
-
   const loadMedications = useCallback(async () => {
     if (!user?.uid) return;
-
 
     try {
       setLoading(true);
@@ -97,13 +87,11 @@ export default function MedicationTrackerScreen() {
       setMedications(allMeds);
       setActiveMedications(allMeds.filter((med) => med.isActive));
 
-
       const dosesPromises = allMeds.map(async (med) => {
         if (!med.isActive) return { medicationId: med.medicationId, doses: [] as DoseLog[] };
         const history = await getDoseHistory(user.uid!, med.medicationId, 30);
         return { medicationId: med.medicationId, doses: history };
       });
-
 
       const dosesResults = await Promise.all(dosesPromises);
       const newDosesMap: { [key: string]: DoseLog[] } = {};
@@ -121,27 +109,58 @@ export default function MedicationTrackerScreen() {
     }
   }, [user]);
 
-
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadMedications();
     setRefreshing(false);
   }, [loadMedications]);
 
-
+  // ✅ Load medications on mount
   useEffect(() => {
     loadMedications();
   }, [loadMedications]);
 
+  // ✅ FIXED: Initialize notifications only once per day (prevents spam!)
+  useEffect(() => {
+    let isMounted = true;
+
+    const initNotifications = async () => {
+      if (!user?.uid) return;
+      
+      try {
+        // Dynamic import to avoid circular dependencies
+        const notificationService = await import('../../services/notificationService');
+        
+        // Check if already initialized today
+        const alreadyScheduledToday = await notificationService.isRemindersScheduledToday(user.uid);
+        if (alreadyScheduledToday) {
+          console.log('ℹ️ Notifications already initialized today, skipping');
+          return;
+        }
+        
+        // Initialize notifications (schedules today's reminders only)
+        if (isMounted) {
+          await notificationService.initializeNotificationService(user.uid);
+          console.log('✅ Notification service initialized successfully');
+        }
+      } catch (error) {
+        console.error('❌ Notification initialization error:', error);
+      }
+    };
+
+    initNotifications();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.uid]);
 
   const handleDeleteMedication = (medicationId: string, name: string) => {
     setDeleteTarget({ id: medicationId, name });
   };
 
-
   const confirmDeleteMedication = async () => {
     if (!user?.uid || !deleteTarget) return;
-
 
     try {
       await deleteMedication(user.uid, deleteTarget.id);
@@ -155,12 +174,10 @@ export default function MedicationTrackerScreen() {
     }
   };
 
-
   const handleMarkDoseTaken = async (medication: Medication) => {
     try {
       if (!user?.uid) return;
       const now = new Date();
-
 
       await logDose(user.uid, medication.medicationId, {
         scheduledTime: now.toISOString(),
@@ -168,7 +185,6 @@ export default function MedicationTrackerScreen() {
         taken: true,
         skipped: false,
       });
-
 
       showToast(`${medication.name} dose taken! ✅`, 'success');
       await loadMedications();
@@ -178,18 +194,15 @@ export default function MedicationTrackerScreen() {
     }
   };
 
-
   const getMedicationStatus = (medication: Medication) => {
     const doses = dosesMap[medication.medicationId] || [];
     const { startDate, durationDays, frequency } = medication;
     const start = new Date(startDate);
     const duration = durationDays ? parseInt(durationDays.toString(), 10) : 0;
 
-
     if (isNaN(start.getTime()) || (durationDays && isNaN(duration))) {
       return { adherence: 0, dosesTakenToday: 0, expectedDoses: 0, isDue: false, isActive: false };
     }
-
 
     const today = new Date();
     let isActiveDateRange = true;
@@ -199,13 +212,11 @@ export default function MedicationTrackerScreen() {
       isActiveDateRange = today >= start && today < end;
     }
 
-
     const todayStr = today.toDateString();
     const dosesTakenToday = doses.filter((d) => {
       const dDate = d.takenTime ? new Date(d.takenTime) : new Date(d.createdAt || '');
       return dDate.toDateString() === todayStr;
     }).length;
-
 
     const expectedDosesPerDay = FREQUENCY_MAP[frequency] || 1;
     const daysSinceStart = Math.max(
@@ -219,13 +230,11 @@ export default function MedicationTrackerScreen() {
       Math.min(daysSinceStart + 1, duration || 9999) * expectedDosesPerDay;
     const totalTaken = doses.length;
 
-
     const adherence =
       totalExpectedDosesSoFar > 0
         ? Math.min(100, Math.round((totalTaken / totalExpectedDosesSoFar) * 100))
         : 100;
     const isDueNow = isActiveDateRange && dosesTakenToday < expectedDosesPerDay;
-
 
     return {
       adherence,
@@ -236,10 +245,8 @@ export default function MedicationTrackerScreen() {
     };
   };
 
-
   const handleSmartImport = async (extractedMeds: any[]) => {
     if (!user?.uid) return;
-
 
     try {
       const results = await smartImportMedications(user.uid, extractedMeds);
@@ -263,13 +270,11 @@ export default function MedicationTrackerScreen() {
     }
   };
 
-
   // ✅ NEW: Handle date press - show popup with medications
   const handleDatePress = (date: Date) => {
     setSelectedDate(date);
     setDatePopupVisible(true);
   };
-
 
   // ✅ NEW: Get medications for selected date
   const getMedicationsForDate = (date: Date): Medication[] => {
@@ -281,10 +286,8 @@ export default function MedicationTrackerScreen() {
         return false;
       }
 
-
       const end = new Date(start);
       end.setDate(start.getDate() + duration);
-
 
       const dayOnly = new Date(date);
       dayOnly.setHours(0, 0, 0, 0);
@@ -293,18 +296,15 @@ export default function MedicationTrackerScreen() {
       const endOnly = new Date(end);
       endOnly.setHours(0, 0, 0, 0);
 
-
       return dayOnly >= startOnly && dayOnly < endOnly;
     });
   };
-
 
   const renderMedicationCard = (medication: Medication) => {
     const status = getMedicationStatus(medication);
     const doses = dosesMap[medication.medicationId] || [];
     const isAsNeeded =
       medication.frequency === 'As needed' || medication.frequency === 'Custom';
-
 
     return (
       <View key={medication.medicationId} style={styles.medicationCard}>
@@ -329,7 +329,6 @@ export default function MedicationTrackerScreen() {
             </View>
           </View>
 
-
           <View style={styles.medicationInfo}>
             <Text style={styles.medicationName}>{medication.name}</Text>
             <Text style={styles.medicationStrength}>
@@ -337,7 +336,6 @@ export default function MedicationTrackerScreen() {
             </Text>
             <Text style={styles.frequencyText}>{medication.frequency}</Text>
           </View>
-
 
           <TouchableOpacity
             style={styles.deleteButton}
@@ -348,7 +346,6 @@ export default function MedicationTrackerScreen() {
             <Ionicons name="trash-outline" size={20} color={Colors.light.error} />
           </TouchableOpacity>
         </View>
-
 
         <View style={styles.detailsRow}>
           <View style={styles.detailItem}>
@@ -371,9 +368,7 @@ export default function MedicationTrackerScreen() {
           )}
         </View>
 
-
         <DoseHistorySection doseHistory={doses.slice(0, 5)} />
-
 
         <View style={styles.actionRow}>
           <TouchableOpacity
@@ -406,7 +401,6 @@ export default function MedicationTrackerScreen() {
     );
   };
 
-
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
       <Ionicons
@@ -428,9 +422,7 @@ export default function MedicationTrackerScreen() {
     </View>
   );
 
-
   const displayedMedications = showInactive ? medications : activeMedications;
-
 
   const dailySummary = useMemo(() => {
     const totalExpected = activeMedications.reduce((sum, med) => {
@@ -452,10 +444,8 @@ export default function MedicationTrackerScreen() {
     );
   }, [activeMedications, dosesMap]);
 
-
   // ✅ NEW: Date popup content
   const selectedDateMeds = selectedDate ? getMedicationsForDate(selectedDate) : [];
-
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -465,7 +455,6 @@ export default function MedicationTrackerScreen() {
         type={toast.type}
         onHide={() => setToast({ ...toast, visible: false })}
       />
-
 
       <ConfirmDialog
         visible={!!deleteTarget}
@@ -477,7 +466,6 @@ export default function MedicationTrackerScreen() {
         onConfirm={confirmDeleteMedication}
         onCancel={() => setDeleteTarget(null)}
       />
-
 
       <MergeConflictModal
         visible={showMergeConflict}
@@ -493,13 +481,11 @@ export default function MedicationTrackerScreen() {
         }}
       />
 
-
       <SmartImportModal
         visible={showSmartImport}
         onClose={() => setShowSmartImport(false)}
         onSaveAll={handleSmartImport}
       />
-
 
       {/* ✅ NEW: Date Popup Modal */}
       <Modal
@@ -526,7 +512,6 @@ export default function MedicationTrackerScreen() {
                 <Ionicons name="close-circle" size={28} color={Colors.light.textSecondary} />
               </TouchableOpacity>
             </View>
-
 
             {selectedDateMeds.length === 0 ? (
               <View style={styles.noMedsContainer}>
@@ -555,7 +540,6 @@ export default function MedicationTrackerScreen() {
         </TouchableOpacity>
       </Modal>
 
-
       {/* ✅ UPDATED: Header with back button */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -572,7 +556,6 @@ export default function MedicationTrackerScreen() {
           <Ionicons name="add" size={28} color={Colors.light.text} />
         </TouchableOpacity>
       </View>
-
 
       {/* ✅ FIXED: Everything moved inside ScrollView */}
       {loading ? (
@@ -596,7 +579,6 @@ export default function MedicationTrackerScreen() {
             />
           </View>
 
-
           {/* ✅ NEW: Smart Import Button (below calendar) */}
           <View style={styles.smartImportContainer}>
             <TouchableOpacity
@@ -609,7 +591,6 @@ export default function MedicationTrackerScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-
 
           {/* Filter Toggle */}
           <View style={styles.filterContainer}>
@@ -641,14 +622,12 @@ export default function MedicationTrackerScreen() {
             </TouchableOpacity>
           </View>
 
-
           {/* Daily Summary */}
           {activeMedications.length > 0 && (
             <View style={styles.dailySummary}>
               <Text style={styles.dailySummaryText}>{dailySummary.message}</Text>
             </View>
           )}
-
 
           {/* Medications List */}
           {displayedMedications.length === 0
@@ -660,13 +639,11 @@ export default function MedicationTrackerScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
   },
-  // ✅ UPDATED: Header with back button
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -693,13 +670,11 @@ const styles = StyleSheet.create({
     width: 40,
     alignItems: 'flex-end',
   },
-  // ✅ UPDATED: Smaller calendar
   calendarSection: {
     marginHorizontal: 12,
     marginTop: 12,
     marginBottom: 12,
   },
-  // ✅ NEW: Smart import button container
   smartImportContainer: {
     paddingHorizontal: 16,
     marginBottom: 12,
@@ -723,7 +698,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
-  // ✅ NEW: Date popup modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

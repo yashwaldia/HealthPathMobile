@@ -1,26 +1,26 @@
 // app/_layout.tsx
 
-import { Stack, useSegments, useRouter, Redirect } from 'expo-router';
-import { AuthProvider, useAuth } from '../context/AuthContext';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Buffer } from 'buffer';
-import { useEffect } from 'react';
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { View, ActivityIndicator } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import { useEffect } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { AuthProvider, useAuth } from '../context/AuthContext';
 
-import { 
-  initializeNotificationService,
+import { Colors } from '../constants/colors';
+import {
+  deactivateMedication,
+  getMedication,
+  logDose
+} from '../services/medicationService'; // ✅ ADDED: getMedication, deactivateMedication
+import {
   handleNotificationResponse,
+  initializeNotificationService,
   setupNotificationCategories,
 } from '../services/notificationService';
-import { 
-  logDose, 
-  getMedication, 
-  deactivateMedication 
-} from '../services/medicationService';  // ✅ ADDED: getMedication, deactivateMedication
 import { profileService } from '../services/profileService';
-import { Colors } from '../constants/colors';
 
 // Make Buffer available globally for BLE operations
 if (typeof global.Buffer === 'undefined') {

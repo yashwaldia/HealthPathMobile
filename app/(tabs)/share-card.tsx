@@ -11,8 +11,8 @@ import motivationalCardService from '@/services/motivationalCardService';
 import type { MotivationalCardData } from '@/types/motivationalCard';
 import { Ionicons } from '@expo/vector-icons';
 import { makeImageFromView } from '@shopify/react-native-skia';
-import { useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,

@@ -1,11 +1,12 @@
 // app/add-medication.tsx
+// ✅ Smart Upload Integration + Pre-filled Data Support
 // ✅ Stable duration logic + All TypeScript errors resolved
-// Last Updated: December 18, 2025
+// Last Updated: December 27, 2025
 
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router'; // ✅ ADDED: useLocalSearchParams
+import React, { useEffect, useState } from 'react'; // ✅ ADDED: useEffect
 import {
   ActivityIndicator,
   Alert,
@@ -38,6 +39,7 @@ import {
 export default function AddMedicationScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const params = useLocalSearchParams(); // ✅ NEW: Get route params
 
   // Form State
   const [name, setName] = useState('');
@@ -61,6 +63,12 @@ export default function AddMedicationScreen() {
 
   // Modal States
   const [showCameraScan, setShowCameraScan] = useState(false);
+
+  // ✅ NEW: Smart Upload State
+  const [isFromSmartUpload, setIsFromSmartUpload] = useState(false);
+  const [remainingMedsCount, setRemainingMedsCount] = useState(0);
+  const [currentMedIndex, setCurrentMedIndex] = useState(1);
+  const [totalMedsCount, setTotalMedsCount] = useState(1);
 
   // Dropdown Options
   const dosageForms: DosageForm[] = [
@@ -96,6 +104,43 @@ export default function AddMedicationScreen() {
     'Empty stomach',
     'Any time',
   ];
+
+  // ✅ NEW: Handle prefilled data from Smart Upload
+  useEffect(() => {
+    if (params.prefilled === 'true' && params.medicationData) {
+      try {
+        console.log('📋 Loading prefilled medication data from Smart Upload...');
+        const medData = JSON.parse(params.medicationData as string);
+        
+        // Mark as coming from smart upload
+        setIsFromSmartUpload(true);
+        
+        // Calculate counts for UI
+        const remaining = params.remainingMedications 
+          ? JSON.parse(params.remainingMedications as string) 
+          : [];
+        const total = remaining.length + 1;
+        const current = total - remaining.length;
+        
+        setRemainingMedsCount(remaining.length);
+        setCurrentMedIndex(current);
+        setTotalMedsCount(total);
+        
+        // Pre-fill the form using existing handler
+        handleAiScanResult(medData);
+        
+        // Set prescription image if provided
+        if (params.prescriptionImage) {
+          setPrescriptionImage(params.prescriptionImage as string);
+        }
+        
+        console.log(`✅ Loaded medication ${current} of ${total}`);
+      } catch (error) {
+        console.error('❌ Error parsing prefilled medication data:', error);
+        Alert.alert('Error', 'Failed to load medication data. Please try again.');
+      }
+    }
+  }, [params.prefilled, params.medicationData]);
 
   /**
    * When user finishes editing duration (onBlur) calculate end date once.
@@ -294,7 +339,7 @@ export default function AddMedicationScreen() {
   };
 
   /**
-   * Handle save medication
+   * ✅ UPDATED: Handle save with Smart Upload flow
    */
   const handleSave = async () => {
     if (!validateForm() || !user?.uid) return;
@@ -322,6 +367,66 @@ export default function AddMedicationScreen() {
         isActive: true,
       });
 
+      console.log(`✅ Medication saved: ${name}`);
+
+      // ✅ NEW: Check if we're in Smart Upload mode with remaining medications
+      if (isFromSmartUpload && params.remainingMedications) {
+        try {
+          const remaining = JSON.parse(params.remainingMedications as string);
+          
+          if (remaining.length > 0) {
+            // More medications to add - navigate to next one
+            const nextMed = remaining[0];
+            const newRemaining = remaining.slice(1);
+            
+            Alert.alert(
+              '✅ Medication Saved!',
+              `${name} has been added. Let's add the next medication (${remaining.length} remaining).`,
+              [
+                {
+                  text: 'Continue',
+                  onPress: () => {
+                    router.replace({
+                      pathname: '/add-medication',
+                      params: {
+                        prefilled: 'true',
+                        medicationData: JSON.stringify(nextMed),
+                        remainingMedications: JSON.stringify(newRemaining),
+                        prescriptionImage: params.prescriptionImage,
+                        fromSmartUpload: 'true',
+                      },
+                    });
+                  },
+                },
+                {
+                  text: 'Skip Remaining',
+                  style: 'cancel',
+                  onPress: () => {
+                    Alert.alert(
+                      'Complete!',
+                      `✅ Successfully added medication from prescription!`,
+                      [{ text: 'OK', onPress: () => router.push('/(tabs)/medication-tracker') }]
+                    );
+                  },
+                },
+              ]
+            );
+            return;
+          } else {
+            // All medications added
+            Alert.alert(
+              '🎉 All Medications Added!',
+              `Successfully added all ${totalMedsCount} medication${totalMedsCount > 1 ? 's' : ''} from your prescription.`,
+              [{ text: 'View Medications', onPress: () => router.push('/(tabs)/medication-tracker') }]
+            );
+            return;
+          }
+        } catch (error) {
+          console.error('Error handling remaining medications:', error);
+        }
+      }
+
+      // Regular flow (not from smart upload)
       Alert.alert('Success!', 'Medication added successfully ✅', [
         { text: 'OK', onPress: () => router.back() },
       ]);
@@ -379,7 +484,17 @@ export default function AddMedicationScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="close" size={24} color={Colors.light.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Medication</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>
+            {isFromSmartUpload ? 'Review Medication' : 'Add Medication'}
+          </Text>
+          {/* ✅ NEW: Show progress indicator when from Smart Upload */}
+          {isFromSmartUpload && (
+            <Text style={styles.headerSubtitle}>
+              Medication {currentMedIndex} of {totalMedsCount}
+            </Text>
+          )}
+        </View>
         <View style={{ width: 40 }} />
       </View>
 
@@ -393,20 +508,35 @@ export default function AddMedicationScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ✨ QUICK AI SCAN SECTION */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>✨ Quick AI Scan</Text>
-            <TouchableOpacity
-              style={styles.aiScanButton}
-              onPress={() => setShowCameraScan(true)}
-            >
-              <Ionicons name="scan-circle-outline" size={24} color="white" />
-              <Text style={styles.aiScanButtonText}>Scan Medication Label</Text>
-            </TouchableOpacity>
-            <Text style={styles.aiScanSubtitle}>
-              AI will auto-fill the form from your photo
-            </Text>
-          </View>
+          {/* ✅ NEW: Smart Upload Banner */}
+          {isFromSmartUpload && (
+            <View style={styles.smartUploadBanner}>
+              <Ionicons name="sparkles" size={20} color="#8B5CF6" />
+              <View style={styles.bannerTextContainer}>
+                <Text style={styles.bannerTitle}>AI Extracted Details</Text>
+                <Text style={styles.bannerSubtitle}>
+                  Review and edit the information below before saving
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* ✨ QUICK AI SCAN SECTION - Hide when from Smart Upload */}
+          {!isFromSmartUpload && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>✨ Quick AI Scan</Text>
+              <TouchableOpacity
+                style={styles.aiScanButton}
+                onPress={() => setShowCameraScan(true)}
+              >
+                <Ionicons name="scan-circle-outline" size={24} color="white" />
+                <Text style={styles.aiScanButtonText}>Scan Medication Label</Text>
+              </TouchableOpacity>
+              <Text style={styles.aiScanSubtitle}>
+                AI will auto-fill the form from your photo
+              </Text>
+            </View>
+          )}
 
           {/* Basic Information Section */}
           <View style={styles.section}>
@@ -597,7 +727,11 @@ export default function AddMedicationScreen() {
             ) : (
               <>
                 <Ionicons name="checkmark" size={20} color="#FFFFFF" />
-                <Text style={styles.saveButtonText}>Save Medication</Text>
+                <Text style={styles.saveButtonText}>
+                  {isFromSmartUpload && remainingMedsCount > 0
+                    ? `Save & Continue (${remainingMedsCount} remaining)`
+                    : 'Save Medication'}
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -614,7 +748,7 @@ export default function AddMedicationScreen() {
   );
 }
 
-// STYLES (unchanged)
+// ✅ UPDATED STYLES
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -636,10 +770,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // ✅ NEW: Header center container
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: Colors.light.text,
+  },
+  // ✅ NEW: Header subtitle for progress
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.primary,
+    marginTop: 2,
+  },
+  // ✅ NEW: Smart Upload Banner
+  smartUploadBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F3FF',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+  },
+  bannerTextContainer: {
+    flex: 1,
+  },
+  bannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#8B5CF6',
+    marginBottom: 4,
+  },
+  bannerSubtitle: {
+    fontSize: 12,
+    color: '#6B21A8',
   },
   keyboardView: {
     flex: 1,
