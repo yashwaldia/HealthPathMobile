@@ -258,8 +258,6 @@ export default function NutritionTrackerScreen() {
 
           <NutritionQuickActions
             onEntryAdded={handleEntryAdded}
-            onPredictorRun={undefined}
-            onManualLogPress={openManualAddModal}
           />
 
           <NutritionCaloriesChart

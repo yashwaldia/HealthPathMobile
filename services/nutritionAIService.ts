@@ -725,6 +725,9 @@ Important rules:
 /**
  * ✅ IMPROVED: Predict nutrient deficiencies with user-friendly errors
  */
+/**
+ * ✅ IMPROVED: Predict nutrient deficiencies with truncation handling
+ */
 export async function predictNutrientDeficiencies(
   userId: string,
 ): Promise<DeficiencyInsight> {
@@ -755,106 +758,141 @@ export async function predictNutrientDeficiencies(
       };
     }
 
+    // ✅ IMPROVED: More compact nutrition data (only totals, no individual foods)
     const compactNutrition = nutritionHistory.map((n: NutritionEntry) => ({
       date: n.date,
       mealType: n.mealType,
-      totalCalories: n.totalCalories,
-      totalProtein: n.totalProtein,
-      totalCarbs: n.totalCarbs,
-      totalFats: n.totalFats,
-      foods: n.foods.map((f) => f.name),
+      cal: n.totalCalories,
+      pro: n.totalProtein,
+      carb: n.totalCarbs,
+      fat: n.totalFats,
     }));
 
     const compactLabs = labReports.map((r: any) => ({
-      testDate: r.testDate,
-      labName: r.labName,
-      abnormalTests: r.aiInterpretation?.abnormalTests || [],
-      riskLevel: r.aiInterpretation?.riskLevel || 'unknown',
+      date: r.testDate,
+      abnormal: r.aiInterpretation?.abnormalTests || [],
+      risk: r.aiInterpretation?.riskLevel || 'unknown',
     }));
 
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       generationConfig: {
-        temperature: 0.4,
+        temperature: 0.3, // ✅ Lower temperature for more focused output
         topP: 0.9,
         topK: 40,
-        maxOutputTokens: 2048,
-        responseMimeType: 'application/json', // ✅ Force JSON
+        maxOutputTokens: 4096, // ✅ INCREASED from 2048 to 4096
+        responseMimeType: 'application/json',
       },
     });
 
-    const prompt = `You are a clinical nutritionist analyzing patient data.
+    // ✅ SIMPLIFIED: Shorter, more focused prompt
+    const prompt = `You are a nutritionist. Analyze this 30-day nutrition data and identify TOP 3 nutrient deficiencies.
 
-NUTRITION DATA (last 30 days):
+NUTRITION DATA:
 ${JSON.stringify(compactNutrition, null, 2)}
 
 LAB REPORTS:
 ${JSON.stringify(compactLabs, null, 2)}
 
-Analyze this data to identify nutrient deficiencies. Consider:
-1. Low intake patterns
-2. Lab abnormalities correlating with diet
-3. Missing food groups
-4. Biochemical markers
-
-CRITICAL: Return ONLY this exact JSON structure with NO extra text:
+Return ONLY this JSON (max 3 deficiencies, keep it concise):
 {
   "deficiencies": [
     {
-      "name": "Iron",
+      "name": "Vitamin D",
       "confidence": 0.85,
-      "reasons": "Low red meat intake, fatigue noted in labs",
-      "suggestedFoods": ["Spinach", "Red meat", "Lentils"]
+      "reasons": "Low dairy intake, no sun exposure mentioned",
+      "suggestedFoods": ["Salmon", "Eggs", "Milk"]
     }
   ],
-  "summary": "Brief 2-3 sentence summary"
+  "summary": "Brief 1-2 sentence summary"
 }
 
 Rules:
-- Only include deficiencies with confidence > 0.6
-- Confidence must be a decimal number (0.0 to 1.0)
-- Include 3-5 food suggestions per deficiency
-- If no clear deficiencies, return empty array with encouraging summary
-- NO markdown, NO explanations, ONLY the JSON object`;
+- Max 3 deficiencies (most important ones)
+- Confidence > 0.6
+- 3-5 food suggestions per deficiency
+- Keep reasons under 100 chars
+- If no deficiencies, return empty array
+- NO markdown, ONLY JSON`;
 
     console.log('🤖 Calling Gemini AI for deficiency analysis...');
     const result = await model.generateContent(prompt);
     const response = await result.response;
     let text = response.text();
 
-    console.log('📝 Raw AI response:', text.substring(0, 300) + '...');
+    console.log('📝 Raw AI response length:', text.length);
+    console.log('📝 Raw AI response (first 300 chars):', text.substring(0, 300) + '...');
+
+    // ✅ NEW: Check if response was truncated
+    if (text.length > 4000 && !text.trim().endsWith('}')) {
+      console.warn('⚠️ Response appears truncated, attempting to fix...');
+      // Try to close the JSON properly
+      const openBraces = (text.match(/{/g) || []).length;
+      const closeBraces = (text.match(/}/g) || []).length;
+      const missingBraces = openBraces - closeBraces;
+      
+      if (missingBraces > 0) {
+        text = text + '\n]}\n}'.repeat(Math.min(missingBraces, 3));
+        console.log('🔧 Added missing closing braces:', missingBraces);
+      }
+    }
 
     text = cleanJSONResponse(text);
-    console.log('🧹 Cleaned response:', text.substring(0, 300) + '...');
+    console.log('🧹 Cleaned response length:', text.length);
 
     let parsed: DeficiencyInsight;
     try {
       parsed = JSON.parse(text);
     } catch (parseError) {
       console.error('❌ JSON parse error:', parseError);
-      console.error('Failed text (first 500 chars):', text.substring(0, 500));
+      console.error('Failed text (full):', text); // ✅ Log full text now
       
       try {
-        const fixedText = text
-          .replace(/^[^{[]*/, '')
-          .replace(/[^}\]]*$/, '');
+        // ✅ IMPROVED: Better JSON fixing
+        let fixedText = text
+          .replace(/^[^{[]*/, '') // Remove leading junk
+          .replace(/[^}\]]*$/, ''); // Remove trailing junk
+        
+        // Try to fix incomplete arrays
+        if ((fixedText.match(/\[/g) || []).length > (fixedText.match(/\]/g) || []).length) {
+          fixedText = fixedText + ']';
+        }
+        
+        // Try to fix incomplete objects
+        const openBraces = (fixedText.match(/{/g) || []).length;
+        const closeBraces = (fixedText.match(/}/g) || []).length;
+        if (openBraces > closeBraces) {
+          fixedText = fixedText + '}'.repeat(openBraces - closeBraces);
+        }
         
         console.log('🔧 Attempting to parse fixed text...');
+        console.log('🔧 Fixed text:', fixedText.substring(0, 500) + '...');
+        
         parsed = JSON.parse(fixedText);
         console.log('✅ Fixed JSON parsing succeeded!');
       } catch (secondError) {
         console.error('❌ Second parse attempt failed:', secondError);
-        throw new Error(
-          'AI returned invalid JSON format. Please try again or contact support if issue persists.',
-        );
+        
+        // ✅ NEW: Return a safe fallback instead of throwing
+        console.warn('⚠️ Using fallback response due to parse errors');
+        return {
+          deficiencies: [],
+          summary: 'Unable to complete analysis due to data processing error. Please try again in a moment.',
+        };
       }
     }
 
     if (!parsed.deficiencies || !Array.isArray(parsed.deficiencies)) {
       console.error('❌ Invalid deficiencies structure:', parsed);
-      throw new Error('AI returned invalid deficiency data structure');
+      
+      // ✅ NEW: Return fallback instead of throwing
+      return {
+        deficiencies: [],
+        summary: 'Analysis completed but results could not be processed. Please try again.',
+      };
     }
 
+    // ✅ Validate and clean deficiencies
     parsed.deficiencies = parsed.deficiencies
       .filter((def: any) => {
         if (!def.name || typeof def.name !== 'string') return false;
@@ -868,11 +906,12 @@ Rules:
         
         return true;
       })
+      .slice(0, 5) // ✅ Limit to max 5 deficiencies
       .map((def: any) => ({
         name: def.name,
         confidence: Number(def.confidence),
         reasons: def.reasons,
-        suggestedFoods: def.suggestedFoods.filter((f: any) => typeof f === 'string'),
+        suggestedFoods: def.suggestedFoods.filter((f: any) => typeof f === 'string').slice(0, 5),
       }));
 
     if (!parsed.summary || typeof parsed.summary !== 'string') {

@@ -1,5 +1,5 @@
 // components/nutrition/NutritionQuickActions.tsx
-// ✅ UPDATED: Added multi-line error message support (Dec 28, 2025)
+// ✅ UPDATED: Simplified to only Scan Meal feature (Dec 28, 2025)
 
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
@@ -7,15 +7,13 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
-import { analyzeMealFromImage, predictNutrientDeficiencies } from '../../services/nutritionAIService';
+import { analyzeMealFromImage } from '../../services/nutritionAIService';
 import { nutritionService } from '../../services/nutritionService';
 import { getTodayISO } from '../../utils/dateUtils';
 import MealTypeSelectorModal, { MealType } from './MealTypeSelectorModal';
 
 type Props = {
   onEntryAdded: () => void;
-  onPredictorRun?: (result: any) => void;
-  onManualLogPress: () => void;
 };
 
 type PendingAnalysis = {
@@ -41,15 +39,9 @@ type PendingAnalysis = {
   insight: string;
 } | null;
 
-export default function NutritionQuickActions({
-  onEntryAdded,
-  onPredictorRun,
-  onManualLogPress,
-}: Props) {
+export default function NutritionQuickActions({ onEntryAdded }: Props) {
   const { user } = useAuth();
   const [scanning, setScanning] = useState(false);
-  const [logging, setLogging] = useState(false);
-  const [predicting, setPredicting] = useState(false);
 
   const [mealTypeModalVisible, setMealTypeModalVisible] = useState(false);
   const [pendingAnalysis, setPendingAnalysis] = useState<PendingAnalysis>(null);
@@ -127,7 +119,6 @@ export default function NutritionQuickActions({
     }
   };
 
-  // ✅ IMPROVED: Better error message handling
   const processMealImage = async (uri: string) => {
     try {
       setScanning(true);
@@ -158,7 +149,7 @@ export default function NutritionQuickActions({
     } catch (error: any) {
       console.error('❌ Process meal error:', error);
       
-      // ✅ NEW: Split multi-line error messages into title and message
+      // ✅ Split multi-line error messages into title and message
       const errorMessage = error.message || 'Could not analyze the meal. Please try again.';
       const lines = errorMessage.split('\n');
       const title = lines[0] || 'Analysis Failed';
@@ -234,72 +225,9 @@ export default function NutritionQuickActions({
     }
   };
 
-  const handleLogFood = () => {
-    try {
-      if (!user?.uid) {
-        Alert.alert('Not logged in', 'Please sign in to log meals.');
-        return;
-      }
-
-      setLogging(true);
-      onManualLogPress();
-    } catch (error) {
-      console.error('Manual log trigger error:', error);
-      Alert.alert('Error', 'Failed to open manual log.');
-    } finally {
-      setLogging(false);
-    }
-  };
-
-  // ✅ IMPROVED: Better error message handling for predictor
-  const handleRunPredictor = async () => {
-    try {
-      if (!user?.uid) {
-        Alert.alert('Not logged in', 'Please sign in to run the predictor.');
-        return;
-      }
-
-      Alert.alert(
-        'Nutrient Deficiency Predictor',
-        'Analyzing your nutrition history and lab reports...',
-        [{ text: 'OK' }]
-      );
-
-      setPredicting(true);
-
-      const result = await predictNutrientDeficiencies(user.uid);
-
-      setPredicting(false);
-
-      const defNames =
-        result.deficiencies && result.deficiencies.length > 0
-          ? result.deficiencies
-              .map((d: any) => `• ${d.name} (${Math.round(d.confidence * 100)}%)`)
-              .join('\n')
-          : 'No significant deficiencies detected! 🎉';
-
-      Alert.alert('Analysis Complete', `${defNames}\n\n${result.summary}`, [{ text: 'OK' }]);
-
-      if (onPredictorRun) {
-        onPredictorRun(result);
-      }
-    } catch (error: any) {
-      console.error('❌ Predictor error:', error);
-      setPredicting(false);
-      
-      // ✅ NEW: Split multi-line error messages into title and message
-      const errorMessage = error.message || 'Unable to run predictor. Please try again.';
-      const lines = errorMessage.split('\n');
-      const title = lines[0] || 'Analysis Failed';
-      const message = lines.slice(1).join('\n') || 'Please try again later.';
-      
-      Alert.alert(title, message, [{ text: 'OK' }]);
-    }
-  };
-
   return (
     <View style={styles.container}>
-      {/* Scan Meal Button with dotted border like Vitals/Smart Upload */}
+      {/* Scan Meal Button with dotted border */}
       <TouchableOpacity
         style={styles.card}
         activeOpacity={0.8}
@@ -318,43 +246,6 @@ export default function NutritionQuickActions({
           <Text style={styles.subtitle}>Use AI to estimate calories & macros</Text>
         </View>
       </TouchableOpacity>
-
-      {/* Quick Actions Row */}
-      <View style={styles.row}>
-        <TouchableOpacity
-          style={styles.smallCard}
-          activeOpacity={0.8}
-          onPress={handleLogFood}
-          disabled={logging}
-        >
-          {logging ? (
-            <ActivityIndicator size="small" color={Colors.light.primary} />
-          ) : (
-            <Ionicons name="create-outline" size={18} color={Colors.light.primary} />
-          )}
-          <View style={styles.smallTextContainer}>
-            <Text style={styles.smallTitle}>Log Food</Text>
-            <Text style={styles.smallSubtitle}>Add meal manually</Text>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.smallCard}
-          activeOpacity={0.8}
-          onPress={handleRunPredictor}
-          disabled={predicting}
-        >
-          {predicting ? (
-            <ActivityIndicator size="small" color={Colors.light.primary} />
-          ) : (
-            <Ionicons name="flask-outline" size={18} color={Colors.light.primary} />
-          )}
-          <View style={styles.smallTextContainer}>
-            <Text style={styles.smallTitle}>🧬 Predictor</Text>
-            <Text style={styles.smallSubtitle}>Check nutrient gaps</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
 
       <MealTypeSelectorModal
         visible={mealTypeModalVisible}
@@ -375,7 +266,6 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     marginTop: 16,
-    gap: 10,
   },
   card: {
     flexDirection: 'row',
@@ -386,7 +276,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderWidth: 2,
     borderColor: Colors.light.primary + '44',
-    borderStyle: 'dashed', // dotted-style outline like vitals/smart-upload
+    borderStyle: 'dashed',
   },
   iconCircle: {
     width: 44,
@@ -409,34 +299,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.light.textSecondary,
     marginTop: 2,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  smallCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.light.cardBackground,
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  smallTextContainer: {
-    marginLeft: 8,
-    flex: 1,
-  },
-  smallTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.light.text,
-  },
-  smallSubtitle: {
-    fontSize: 11,
-    color: Colors.light.textSecondary,
-    marginTop: 1,
   },
 });
