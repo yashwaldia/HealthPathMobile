@@ -1,4 +1,5 @@
 // components/nutrition/NutritionQuickActions.tsx
+// ✅ UPDATED: Added multi-line error message support (Dec 28, 2025)
 
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
@@ -126,6 +127,7 @@ export default function NutritionQuickActions({
     }
   };
 
+  // ✅ IMPROVED: Better error message handling
   const processMealImage = async (uri: string) => {
     try {
       setScanning(true);
@@ -155,10 +157,14 @@ export default function NutritionQuickActions({
       setMealTypeModalVisible(true);
     } catch (error: any) {
       console.error('❌ Process meal error:', error);
-      Alert.alert(
-        'Analysis Failed',
-        error.message || 'Could not analyze the meal. Please try again.'
-      );
+      
+      // ✅ NEW: Split multi-line error messages into title and message
+      const errorMessage = error.message || 'Could not analyze the meal. Please try again.';
+      const lines = errorMessage.split('\n');
+      const title = lines[0] || 'Analysis Failed';
+      const message = lines.slice(1).join('\n') || 'Please try again with a clearer photo.';
+      
+      Alert.alert(title, message, [{ text: 'OK' }]);
     } finally {
       setScanning(false);
     }
@@ -245,6 +251,7 @@ export default function NutritionQuickActions({
     }
   };
 
+  // ✅ IMPROVED: Better error message handling for predictor
   const handleRunPredictor = async () => {
     try {
       if (!user?.uid) {
@@ -279,10 +286,14 @@ export default function NutritionQuickActions({
     } catch (error: any) {
       console.error('❌ Predictor error:', error);
       setPredicting(false);
-      Alert.alert(
-        'Analysis Failed',
-        error.message || 'Unable to run predictor. Please try again.'
-      );
+      
+      // ✅ NEW: Split multi-line error messages into title and message
+      const errorMessage = error.message || 'Unable to run predictor. Please try again.';
+      const lines = errorMessage.split('\n');
+      const title = lines[0] || 'Analysis Failed';
+      const message = lines.slice(1).join('\n') || 'Please try again later.';
+      
+      Alert.alert(title, message, [{ text: 'OK' }]);
     }
   };
 
@@ -429,4 +440,3 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 });
-

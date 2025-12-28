@@ -1,9 +1,14 @@
+// components/nutrition/NutritionDeficiencyCard.tsx
+// ✅ UPDATED: Added meal data validation + improved empty state UI (Dec 28, 2025)
+
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { predictNutrientDeficiencies, DeficiencyInsight } from '../../services/nutritionAIService';
 import { useAuth } from '../../context/AuthContext';
+import { getTodayISO, getISODateNDaysAgo } from '../../utils/dateUtils';
+import { nutritionService } from '../../services/nutritionService';
 
 type Props = {
   onAnalysisComplete?: (result: DeficiencyInsight) => void;
@@ -16,16 +21,35 @@ export default function NutritionDeficiencyCard({ onAnalysisComplete }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [hasRun, setHasRun] = useState(false);
 
-  // Run analysis ONLY when user requests
+  // ✅ IMPROVED: Run analysis with data validation
   const runAnalysis = async () => {
     if (!user?.uid) {
       setError('Please sign in to run analysis');
       return;
     }
+
     try {
       setLoading(true);
       setError(null);
       setHasRun(true);
+
+      // ✅ NEW: Check if user has logged meals
+      const today = getTodayISO();
+      const sevenDaysAgo = getISODateNDaysAgo(7);
+      const recentMeals = await nutritionService.getInRange(user.uid, sevenDaysAgo, today);
+
+      if (recentMeals.length < 3) {
+        setError('Not enough meal data');
+        setLoading(false);
+        
+        // ✅ Show user-friendly alert with multi-line message
+        Alert.alert(
+          '📊 Need More Data',
+          `You've logged ${recentMeals.length} meal${recentMeals.length === 1 ? '' : 's'} in the last 7 days.\n\nThe predictor needs at least 3 recent meals to provide accurate insights.\n\n✅ Start by:\n• Scanning meals with your camera\n• Manually logging your daily food`,
+          [{ text: 'Got It' }]
+        );
+        return;
+      }
 
       const result = await predictNutrientDeficiencies(user.uid);
 
@@ -34,8 +58,16 @@ export default function NutritionDeficiencyCard({ onAnalysisComplete }: Props) {
         onAnalysisComplete(result);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to analyze nutrient deficiencies');
-      Alert.alert('Analysis Failed', err.message || 'Unable to run predictor. Please try again later.');
+      const errorMessage = err.message || 'Failed to analyze nutrient deficiencies';
+      setError(errorMessage);
+      
+      // ✅ NEW: Show user-friendly alert with proper multi-line support
+      // Split error into title and message if formatted
+      const lines = errorMessage.split('\n');
+      const title = lines[0] || 'Analysis Failed';
+      const message = lines.slice(1).join('\n') || 'Please try again later.';
+      
+      Alert.alert(title, message, [{ text: 'OK' }]);
     } finally {
       setLoading(false);
     }
@@ -88,20 +120,42 @@ export default function NutritionDeficiencyCard({ onAnalysisComplete }: Props) {
     );
   }
 
-  // If no data yet (user not logged in or hasn't run)
+  // ✅ IMPROVED: Better empty state UI with guidance
   if (!insight) {
     return (
       <View style={styles.container}>
         <View style={styles.row}>
-          <Ionicons name="flask-outline" size={20} color={Colors.light.primary} />
+          <Ionicons name="flask" size={20} color={Colors.light.primary} />
           <Text style={styles.title}>Nutrient Deficiency Predictor</Text>
         </View>
-        <Text style={styles.summary}>
-          Run AI-powered analysis to identify potential nutrient gaps based on your diet and lab reports.
-        </Text>
-        <TouchableOpacity style={styles.rerunButton} onPress={runAnalysis} disabled={loading}>
-          <Text style={styles.rerunText}>Run Analysis</Text>
-          <Ionicons name="arrow-forward-circle" size={18} color={Colors.light.primary} style={{ marginLeft: 4 }} />
+
+        {/* ✅ NEW: Better empty state with icon and steps */}
+        <View style={styles.emptyState}>
+          <Ionicons 
+            name="analytics-outline" 
+            size={48} 
+            color={Colors.light.textSecondary} 
+            style={{ marginBottom: 12 }} 
+          />
+          <Text style={styles.emptyTitle}>Get AI-Powered Insights</Text>
+          <Text style={styles.emptyDescription}>
+            Identify potential nutrient gaps based on your diet and lab reports.
+          </Text>
+          
+          <View style={styles.requirementBox}>
+            <Text style={styles.requirementTitle}>📋 What you need:</Text>
+            <Text style={styles.requirementText}>• At least 3-7 logged meals</Text>
+            <Text style={styles.requirementText}>• Optional: Lab report data</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={runAnalysis}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="play-circle" size={20} color="#fff" />
+          <Text style={styles.primaryButtonText}>Run Analysis</Text>
         </TouchableOpacity>
       </View>
     );
@@ -181,7 +235,6 @@ export default function NutritionDeficiencyCard({ onAnalysisComplete }: Props) {
 }
 
 const styles = StyleSheet.create({
-  // ...same as previously shared styles...
   container: {
     marginTop: 18,
     marginHorizontal: 16,
@@ -310,5 +363,59 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.light.success,
     fontWeight: '600',
+  },
+  // ✅ NEW: Empty state styles
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyDescription: {
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  requirementBox: {
+    backgroundColor: Colors.light.primary + '08',
+    borderRadius: 10,
+    padding: 12,
+    width: '100%',
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.light.primary,
+  },
+  requirementTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 6,
+  },
+  requirementText: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginBottom: 3,
+  },
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginTop: 12,
+    gap: 8,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

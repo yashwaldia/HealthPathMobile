@@ -1,5 +1,5 @@
 // services/nutritionAIService.ts
-// ✅ UPDATED: Fixed meal scanner inconsistency + improved all AI functions (Dec 27, 2025)
+// ✅ UPDATED: Added user-friendly error messages + improved error handling (Dec 28, 2025)
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Constants from 'expo-constants';
@@ -68,14 +68,14 @@ function cleanJSONResponse(text: string): string {
   cleaned = cleaned.replace(/```json\n?/gi, '');
   cleaned = cleaned.replace(/```javascript\n?/gi, '');
   cleaned = cleaned.replace(/```\n?/g, '');
-  cleaned = cleaned.replace(/`/g, ''); // Remove single backticks
+  cleaned = cleaned.replace(/`/g, ''); // Remove single backticks.  
   
   // Try to extract JSON object/array from text
   // Look for { ... } or [ ... ]
   const jsonMatch = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
   if (jsonMatch) {
     cleaned = jsonMatch[1]; // ✅ FIXED: Access first capture group
-  }
+    }
   
   // Remove trailing commas before closing braces/brackets
   cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
@@ -84,6 +84,68 @@ function cleanJSONResponse(text: string): string {
   cleaned = cleaned.trim();
   
   return cleaned;
+}
+
+// ✅ NEW: User-friendly error message generator
+function getUserFriendlyError(error: any, context: 'scan' | 'predictor' | 'manual' | 'compare'): string {
+  const errorMsg = error?.message?.toLowerCase() || '';
+  
+  // Image quality issues (JSON parsing errors typically mean bad image)
+  if (errorMsg.includes('invalid json') || errorMsg.includes('parse') || errorMsg.includes('format error')) {
+    if (context === 'scan') {
+      return '📸 Image Quality Issue\n\nThe AI couldn\'t clearly identify the food in this photo.\n\n✅ Tips for better results:\n-  Take photos in good lighting\n-  Ensure food is clearly visible\n-  Avoid blurry or dark images\n-  Try capturing from directly above the plate';
+    }
+    if (context === 'compare') {
+      return '📸 Image Analysis Issue\n\nOne or both images couldn\'t be analyzed clearly.\n\n✅ Please ensure:\n-  Both images show food clearly\n-  Photos are well-lit and in focus\n-  Food items are visible and identifiable';
+    }
+    return '🤖 AI Analysis Error\n\nThe AI couldn\'t process your request properly.\n\n✅ Please try again with clearer information.';
+  }
+  
+  // No data to analyze
+  if (errorMsg.includes('no data') || errorMsg.includes('not enough') || errorMsg.includes('no nutrition data')) {
+    return '📊 Not Enough Data\n\nYou need to log at least 3-7 meals before the predictor can provide accurate insights.\n\n✅ Get started:\n-  Use "Scan Meal" to log food with your camera\n-  Or tap "Log Food" to add meals manually\n-  Come back after logging a few days of meals';
+  }
+  
+  // API/Service configuration issues
+  if (errorMsg.includes('api key') || errorMsg.includes('configuration')) {
+    return '⚙️ Service Configuration Issue\n\nThere\'s a problem with the AI service setup.\n\n✅ Please contact support or try again later.';
+  }
+  
+  // Rate limiting / Quota issues
+  if (errorMsg.includes('quota') || errorMsg.includes('rate limit') || errorMsg.includes('temporarily unavailable')) {
+    return '⏰ Service Temporarily Busy\n\nThe AI service is experiencing high demand right now.\n\n✅ Please wait 2-3 minutes and try again.';
+  }
+  
+  // Network/Connection issues
+  if (errorMsg.includes('network') || errorMsg.includes('timeout') || errorMsg.includes('connection')) {
+    return '📡 Connection Issue\n\nUnable to reach the AI service.\n\n✅ Please check:\n-  Your internet connection is active\n-  You have stable WiFi or mobile data\n-  Try again in a moment';
+  }
+  
+  // File/Image format issues
+  if (errorMsg.includes('unsupported') || errorMsg.includes('format')) {
+    return '🖼️ Unsupported Image Format\n\nThis image format isn\'t supported.\n\n✅ Please use:\n-  JPG or JPEG\n-  PNG\n-  WEBP\n\nTry taking a new photo with your camera.';
+  }
+  
+  // File size issues
+  if (errorMsg.includes('too large') || errorMsg.includes('size')) {
+    return '📦 Image File Too Large\n\nThe image file size exceeds the 20MB limit.\n\n✅ Please:\n-  Use your phone\'s camera compression\n-  Reduce image quality/resolution\n-  Try a different photo';
+  }
+  
+  // Empty/No foods detected
+  if (errorMsg.includes('no foods') || errorMsg.includes('could not identify') || errorMsg.includes('no food provided')) {
+    if (context === 'scan') {
+      return '🍽️ No Food Detected\n\nThe AI couldn\'t identify any food items in this image.\n\n✅ Make sure:\n-  Food is clearly visible in the frame\n-  The image isn\'t too dark or blurry\n-  You\'re photographing actual food (not empty plates)';
+    }
+    return '❌ No Food Items\n\nPlease add at least one food item to analyze.';
+  }
+  
+  // Invalid food data
+  if (errorMsg.includes('invalid food') || errorMsg.includes('incomplete')) {
+    return '⚠️ Invalid Food Data\n\nThe AI returned incomplete nutrition information.\n\n✅ Please try again, or:\n-  Use "Manual Log" to enter food details yourself\n-  Try a different photo with better visibility';
+  }
+  
+  // Default friendly message for unknown errors
+  return '❌ Analysis Failed\n\nSomething went wrong while analyzing your request.\n\n✅ What to try:\n-  Check your internet connection\n-  Try again in a moment\n-  Contact support if this keeps happening\n\nError: ' + (error?.message || 'Unknown error');
 }
 
 // ✅ NEW: Validate image before AI processing
@@ -166,7 +228,7 @@ export type MealCompareResult = {
 };
 
 /**
- * ✅ IMPROVED: Analyze meal from image with retry logic and validation
+ * ✅ IMPROVED: Analyze meal from image with retry logic and user-friendly errors
  * Returns estimated food items with nutrition data
  */
 export async function analyzeMealFromImage(
@@ -184,7 +246,7 @@ export async function analyzeMealFromImage(
     await validateImage(uri);
   } catch (validationError: any) {
     console.error('❌ Image validation failed:', validationError);
-    throw validationError;
+    throw new Error(getUserFriendlyError(validationError, 'scan'));
   }
 
   // ✅ Retry logic with exponential backoff
@@ -388,31 +450,13 @@ Important rules:
     }
   }
 
-  // ✅ Better error messages after all retries failed
+  // ✅ User-friendly error after all retries failed
   console.error('❌ All retry attempts failed');
-  console.error('Error details:', lastError?.message, lastError?.stack);
-
-  if (lastError instanceof SyntaxError) {
-    throw new Error(
-      'AI response format error. The image may not be a clear meal photo. Please try again with better lighting.',
-    );
-  }
-
-  if (lastError?.message?.includes('API key')) {
-    throw new Error('AI service configuration error. Please check your API key.');
-  }
-
-  if (lastError?.message?.includes('quota') || lastError?.message?.includes('rate limit')) {
-    throw new Error('AI service temporarily unavailable. Please try again in a few minutes.');
-  }
-
-  throw new Error(
-    lastError?.message || 'Failed to analyze meal from image. Please try with a clearer photo.',
-  );
+  throw new Error(getUserFriendlyError(lastError, 'scan'));
 }
 
 /**
- * ✅ IMPROVED: Compare two meal photos with retry logic
+ * ✅ IMPROVED: Compare two meal photos with user-friendly errors
  */
 export async function analyzeAndCompareMealImages(
   imageAUri: string,
@@ -551,26 +595,12 @@ Important rules:
     return parsed;
   } catch (error: any) {
     console.error('❌ Meal comparison error:', error);
-    console.error('Error details:', error?.message, error?.stack);
-
-    if (error instanceof SyntaxError) {
-      throw new Error(
-        'AI response format error for meal comparison. Please try again.',
-      );
-    }
-
-    if (error?.message?.includes('API key')) {
-      throw new Error('AI service configuration error. Please check your API key.');
-    }
-
-    throw new Error(
-      error?.message || 'Failed to compare meals from images. Please try again.',
-    );
+    throw new Error(getUserFriendlyError(error, 'compare'));
   }
 }
 
 /**
- * ✅ IMPROVED: Analyze manually entered foods with forced JSON
+ * ✅ IMPROVED: Analyze manually entered foods with user-friendly errors
  */
 export async function analyzeManualFoods(
   foods: {
@@ -688,27 +718,12 @@ Important rules:
     return parsed;
   } catch (error: any) {
     console.error('❌ Manual foods analysis error:', error);
-    console.error('Error details:', error?.message, error?.stack);
-
-    if (error instanceof SyntaxError) {
-      throw new Error(
-        'AI response format error for manual foods. Please try again.',
-      );
-    }
-
-    if (error?.message?.includes('API key')) {
-      throw new Error('AI service configuration error. Please check your API key.');
-    }
-
-    throw new Error(
-      error?.message ||
-        'Failed to analyze manually entered foods. Please try again.',
-    );
+    throw new Error(getUserFriendlyError(error, 'manual'));
   }
 }
 
 /**
- * ✅ IMPROVED: Predict nutrient deficiencies with better error handling
+ * ✅ IMPROVED: Predict nutrient deficiencies with user-friendly errors
  */
 export async function predictNutrientDeficiencies(
   userId: string,
@@ -870,24 +885,6 @@ Rules:
     return parsed;
   } catch (error: any) {
     console.error('❌ Deficiency prediction error:', error);
-    console.error('Error details:', error?.message, error?.stack);
-
-    if (error instanceof SyntaxError) {
-      throw new Error(
-        'AI response format error. Please try again in a few moments.',
-      );
-    }
-
-    if (error?.message?.includes('API key')) {
-      throw new Error('AI service configuration error. Please check your API key.');
-    }
-
-    if (error?.message?.includes('quota') || error?.message?.includes('rate limit')) {
-      throw new Error('AI service temporarily unavailable. Please try again in a few minutes.');
-    }
-
-    throw new Error(
-      error?.message || 'Failed to predict nutrient deficiencies. Please try again.',
-    );
+    throw new Error(getUserFriendlyError(error, 'predictor'));
   }
 }
