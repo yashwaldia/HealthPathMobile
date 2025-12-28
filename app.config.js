@@ -1,7 +1,7 @@
 module.exports = {
   expo: {
-    name: "HealthPath",
-    slug: "HealthPath",
+    name: "PI HEALTH",
+    slug: "pi-health",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/android-icon-512.png",
@@ -80,8 +80,6 @@ module.exports = {
           "android_task_executor_keep_alive_seconds": 3
         }
       ]
-      // ✅ NOTE: react-native-view-shot and expo-linear-gradient 
-      // work automatically - no plugin entries needed!
     ],
     experiments: {
       typedRoutes: true,
@@ -89,7 +87,7 @@ module.exports = {
     },
     extra: {
       eas: {
-        projectId: "ab4e9c68-9397-41d9-aacc-f5b3153548c7"
+        "projectId": "06dda70b-aa52-4902-a00b-08a6fca7e67d"
       }
     }
   }
