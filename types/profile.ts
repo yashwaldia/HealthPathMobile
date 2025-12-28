@@ -49,7 +49,14 @@ export interface ProfileData {
   physicalActivity: string;
   exerciseRoutine: string;
 
-  // Female Health (Optional)
+  // ✅ Female Health - Core Period Tracking (Only for Female users)
+  // Based on industry standards from Flo, Clue, and Apple Health
+  periodStartDate?: string; // YYYY-MM-DD format (Last period start date)
+  periodEndDate?: string; // YYYY-MM-DD format (Last period end date)
+  averageCycleLength?: number; // Days (e.g., 28, 30)
+  flowIntensity?: 'Spotting' | 'Light' | 'Medium' | 'Heavy'; // Latest period flow intensity
+  
+  // Legacy fields (kept for backward compatibility)
   lastMenstrualPeriod?: string;
   cycleLength?: string;
   isPregnant?: 'Yes' | 'No' | 'Unknown';
@@ -76,6 +83,9 @@ export type Gender =
   | 'Female'
   | 'Other'
   | 'Prefer not to say';
+
+// Flow intensity options for period tracking
+export type FlowIntensity = 'Spotting' | 'Light' | 'Medium' | 'Heavy';
 
 // Helper type for updating profile
 export type ProfileUpdateData = {
@@ -115,6 +125,18 @@ export const getDefaultProfile = (): ProfileData => ({
   alcoholConsumption: '',
   physicalActivity: '',
   exerciseRoutine: '',
+  
+  // ✅ Female Health - Period Tracking Defaults
+  periodStartDate: undefined,
+  periodEndDate: undefined,
+  averageCycleLength: undefined,
+  flowIntensity: undefined,
+  
+  // Legacy defaults
+  lastMenstrualPeriod: undefined,
+  cycleLength: undefined,
+  isPregnant: undefined,
+  
   vitalsReminderTime: '09:00',
   notificationsEnabled: true,
   darkMode: false,

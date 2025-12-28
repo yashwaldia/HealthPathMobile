@@ -395,6 +395,82 @@ export default function EditProfileModal({
                   editable={!loading}
                 />
               </View>
+
+              {/* ✅ PERIOD TRACKING SECTION - Only show if gender is Female */}
+              {formData.gender === 'Female' && (
+                <>
+                  <View style={styles.femaleHealthHeader}>
+                    <Ionicons name="water" size={20} color={Colors.light.primary} />
+                    <Text style={styles.sectionTitle}>Period Tracking</Text>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Last Period Start Date</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="YYYY-MM-DD (e.g., 2025-12-01)"
+                      value={formData.periodStartDate || ''}
+                      onChangeText={(text) => handleInputChange('periodStartDate', text)}
+                      placeholderTextColor={Colors.light.textSecondary}
+                      editable={!loading}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Last Period End Date</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="YYYY-MM-DD (e.g., 2025-12-05)"
+                      value={formData.periodEndDate || ''}
+                      onChangeText={(text) => handleInputChange('periodEndDate', text)}
+                      placeholderTextColor={Colors.light.textSecondary}
+                      editable={!loading}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Average Cycle Length (Days)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g., 28"
+                      value={formData.averageCycleLength?.toString() || ''}
+                      onChangeText={(text) => handleInputChange('averageCycleLength', text)}
+                      keyboardType="number-pad"
+                      placeholderTextColor={Colors.light.textSecondary}
+                      editable={!loading}
+                    />
+                    <Text style={styles.helperText}>
+                      Typical cycle length is 21-35 days (average 28 days)
+                    </Text>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Flow Intensity</Text>
+                    <View style={styles.flowIntensityContainer}>
+                      {['Spotting', 'Light', 'Medium', 'Heavy'].map((intensity) => (
+                        <TouchableOpacity
+                          key={intensity}
+                          style={[
+                            styles.flowButton,
+                            formData.flowIntensity === intensity && styles.flowButtonActive,
+                          ]}
+                          onPress={() => handleInputChange('flowIntensity', intensity as any)}
+                          disabled={loading}
+                        >
+                          <Text
+                            style={[
+                              styles.flowButtonText,
+                              formData.flowIntensity === intensity && styles.flowButtonTextActive,
+                            ]}
+                          >
+                            {intensity}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </>
+              )}
             </ScrollView>
 
             {/* Buttons */}
@@ -465,6 +541,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: 16,
   },
+  // ✅ NEW: Female health header with icon
+  femaleHealthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 12,
+  },
   row: {
     flexDirection: 'row',
     marginBottom: 16,
@@ -477,6 +561,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.text,
     marginBottom: 8,
+  },
+  // ✅ NEW: Helper text for guidance
+  helperText: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   input: {
     paddingHorizontal: 12,
@@ -542,6 +633,32 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
   },
   bloodGroupButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  // ✅ NEW: Flow intensity button styles
+  flowIntensityContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  flowButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: Colors.light.cardBackground,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  flowButtonActive: {
+    backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
+  },
+  flowButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.text,
+  },
+  flowButtonTextActive: {
     color: '#FFFFFF',
   },
   buttonGroup: {

@@ -1,5 +1,5 @@
 // components/vitals/VitalDetailsModal.tsx
-// FIXED VERSION - All hooks before early return
+// ✅ UPDATED: Added SafeAreaView support for bottom navigation (Dec 28, 2025)
 
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart } from 'react-native-chart-kit';
 import { Colors } from '../../constants/colors';
 import { getVitalStatus } from '../../services/vitalsService';
@@ -42,6 +43,7 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
   onAddReading,
 }) => {
   // ✅ ALL HOOKS FIRST - No matter what
+  const insets = useSafeAreaInsets(); // ✅ Get safe area insets
   const [timeRange, setTimeRange] = useState<TimeRange>('30D');
 
   // ✅ Extract values with safe fallbacks
@@ -236,7 +238,10 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 100 }} // ✅ Add bottom padding for safe area
+          >
             {/* Latest Value Card */}
             <View style={styles.latestValueCard}>
               <View style={styles.latestValueRow}>
@@ -444,9 +449,9 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
             </View>
           </ScrollView>
 
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            {onAddReading && (
+          {/* ✅ Action Buttons with Safe Area */}
+          {onAddReading && (
+            <View style={[styles.actionButtons, { paddingBottom: Math.max(insets.bottom, 20) }]}>
               <TouchableOpacity
                 style={styles.addButton}
                 onPress={() => {
@@ -457,14 +462,13 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
                 <Ionicons name="add-circle" size={20} color="#fff" />
                 <Text style={styles.addButtonText}>Add New Reading</Text>
               </TouchableOpacity>
-            )}
-          </View>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
   );
 };
-
 
 const styles = StyleSheet.create({
   modalContainer: {
@@ -477,7 +481,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '95%',
-    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
@@ -748,6 +751,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
+    // ✅ paddingBottom will be added dynamically with safe area
   },
   addButton: {
     flexDirection: 'row',

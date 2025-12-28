@@ -320,7 +320,7 @@ export default function ProfileScreen() {
     return profile?.profile?.[key]?.toString() || defaultValue;
   };
 
-  // ✅ Unified “full name” resolver used in both header and Basic Info
+  // ✅ Unified "full name" resolver used in both header and Basic Info
   const fullName =
     profile?.profile?.fullName?.toString().trim() ||
     profile?.displayName?.toString().trim() ||
@@ -384,7 +384,7 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Basic Information</Text>
 
-            {/* ✅ Basic Info “Full Name” uses the same unified fullName */}
+            {/* ✅ Basic Info "Full Name" uses the same unified fullName */}
             <InfoCard
               icon="person-outline"
               label="Full Name"
@@ -464,6 +464,49 @@ export default function ProfileScreen() {
               value={getProfileValue('physicalActivity')}
             />
           </View>
+
+          {/* ✅ PERIOD TRACKING SECTION - Only show if gender is Female */}
+          {profile?.profile?.gender === 'Female' && (
+            <View style={styles.section}>
+              <View style={styles.periodTrackingHeader}>
+                <Ionicons name="water" size={22} color={Colors.light.primary} />
+                <Text style={styles.sectionTitle}>Period Tracking</Text>
+              </View>
+
+              <InfoCard
+                icon="calendar-outline"
+                label="Last Period Start"
+                value={
+                  profile?.profile?.periodStartDate
+                    ? profileService.formatDate(profile.profile.periodStartDate)
+                    : 'Not tracked'
+                }
+              />
+              <InfoCard
+                icon="calendar-outline"
+                label="Last Period End"
+                value={
+                  profile?.profile?.periodEndDate
+                    ? profileService.formatDate(profile.profile.periodEndDate)
+                    : 'Not tracked'
+                }
+              />
+              <InfoCard
+                icon="time-outline"
+                label="Average Cycle Length"
+                value={
+                  profile?.profile?.averageCycleLength
+                    ? `${profile.profile.averageCycleLength} days`
+                    : 'Not set'
+                }
+              />
+              <InfoCard
+                icon="pulse-outline"
+                label="Flow Intensity"
+                value={getProfileValue('flowIntensity', 'Not tracked')}
+              />
+            </View>
+          )}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>App Settings</Text>
@@ -688,6 +731,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: Colors.light.text,
+    marginBottom: 12,
+  },
+  // ✅ NEW: Period tracking header with icon
+  periodTrackingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginBottom: 12,
   },
   infoCard: {
