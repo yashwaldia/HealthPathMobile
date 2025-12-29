@@ -13,6 +13,25 @@
 import { getApp } from '@react-native-firebase/app';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import appCheck from '@react-native-firebase/app-check';
+
+// ============================================
+// FIREBASE APP CHECK INITIALIZATION
+// ============================================
+
+const rnfbProvider = appCheck().newReactNativeFirebaseAppCheckProvider();
+rnfbProvider.configure({
+  android: {
+    provider: 'playIntegrity',
+  },
+});
+
+appCheck().initializeAppCheck({ 
+  provider: rnfbProvider, 
+  isTokenAutoRefreshEnabled: true 
+});
+
+console.log('✅ Firebase App Check initialized with Play Integrity');
 
 // ============================================
 // FIREBASE APP INITIALIZATION CHECK
@@ -38,16 +57,6 @@ try {
 console.log('✅ React Native Firebase Auth initialized');
 console.log('✅ React Native Firestore initialized');
 console.log('📱 Native auth persistence: Automatic (no AsyncStorage needed)');
-
-// ❌ REMOVE THIS ENTIRE BLOCK - It causes the error
-// firestore().settings({
-//   persistence: true,
-//   cacheSizeBytes: firestore.CACHE_SIZE_UNLIMITED,
-// });
-
-// ℹ️ Firestore offline persistence is ENABLED BY DEFAULT in React Native Firebase
-// No need to configure it manually
-
 console.log('✅ Firestore offline persistence enabled (default)');
 
 // ============================================
@@ -58,7 +67,7 @@ console.log('✅ Firestore offline persistence enabled (default)');
 export { auth, firestore };
 
 // Export getApp for accessing the Firebase app instance if needed
-  export { getApp } from '@react-native-firebase/app';
+export { getApp } from '@react-native-firebase/app';
 
 // Default export
 export default auth;
@@ -66,4 +75,3 @@ export default auth;
 // Type exports for TypeScript consumers
 export type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 export type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
-

@@ -24,6 +24,7 @@ module.exports = {
     //   googleServicesFile: process.env.GOOGLE_SERVICES_PLIST ?? "./GoogleService-Info.plist"
     // },
     android: {
+      package: "com.ab1224.HealthPathMobile",
       adaptiveIcon: {
         foregroundImage: "./assets/images/ic_launcher.png",
         backgroundColor: "#FFF5F0"
@@ -39,7 +40,6 @@ module.exports = {
         "android.permission.USE_EXACT_ALARM",
         "android.permission.RECORD_AUDIO"
       ],
-      package: "com.ab1224.HealthPathMobile",
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json"
     },
     web: {
