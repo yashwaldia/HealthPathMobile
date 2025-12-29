@@ -16,6 +16,7 @@ export const formatFileSize = (bytes: number): string => {
 
 /**
  * Upload a file to Firebase Storage with progress tracking
+ * ✅ FIXED: Using putFile() instead of put(blob) for React Native Firebase
  */
 export const uploadFileToStorage = async (
   fileUri: string,
@@ -66,39 +67,15 @@ export const uploadFileToStorage = async (
     console.log('  Sanitized Name:', sanitizedFileName);
     console.log('  Storage Path:', storagePath);
     console.log('  MIME Type:', mimeType);
+    console.log('  File URI:', fileUri);
     
     const storageRef = storage().ref(storagePath);
     console.log('  Storage Ref Created:', storageRef.fullPath);
 
-    // Fetch the file as a blob (React Native standard)
-    console.log('  Fetching file from:', fileUri);
-    const response = await fetch(fileUri);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
-    }
-    
-    const blob = await response.blob();
-    const fileSize = blob.size;
-    
-    console.log('  File Size:', formatFileSize(fileSize));
-    console.log('  Blob Type:', blob.type);
-    console.log('  Blob Size (bytes):', fileSize);
-
-    // ✅ Validate blob
-    if (fileSize === 0) {
-      throw new Error('File is empty (0 bytes)');
-    }
-
-    // ✅ Check file size limit (20MB for lab reports)
-    const MAX_SIZE = 20 * 1024 * 1024; // 20MB
-    if (fileSize > MAX_SIZE) {
-      throw new Error(`File size ${formatFileSize(fileSize)} exceeds limit of ${formatFileSize(MAX_SIZE)}`);
-    }
-
-    // Upload with progress tracking using putFile (React Native optimized)
-    console.log('  Starting upload...');
-    const uploadTask = storageRef.put(blob, {
+    // ✅ FIXED: Use putFile() for React Native Firebase (NOT put(blob))
+    // This directly uploads from the local file system without fetching as blob
+    console.log('  Starting upload with putFile()...');
+    const uploadTask = storageRef.putFile(fileUri, {
       contentType: mimeType,
       customMetadata: {
         uploadedBy: userId,
@@ -126,11 +103,17 @@ export const uploadFileToStorage = async (
       });
 
       uploadTask.then(async () => {
-        // Upload complete - get download URL
+        // Upload complete - get download URL and metadata
         try {
-          console.log('  ✅ Upload Complete! Getting download URL...');
+          console.log('  ✅ Upload Complete! Getting metadata and download URL...');
+          
+          // Get file metadata to retrieve the actual file size
+          const metadata = await storageRef.getMetadata();
+          const fileSize = metadata.size;
+          
           const downloadURL = await storageRef.getDownloadURL();
           console.log('  Download URL:', downloadURL);
+          console.log('  File Size:', formatFileSize(fileSize));
           
           const uploadedFile: UploadedFile = {
             fileName: sanitizedFileName,
