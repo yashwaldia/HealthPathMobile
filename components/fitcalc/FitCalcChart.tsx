@@ -9,9 +9,12 @@ import {
   ActivityInputs, ActivityResult, BmiInputs, BmiResult, BmrResult,
   BodyFatInputs, BodyFatResult, HrZonesResult, HrvResult, IdealWeightInputs,
   IdealWeightResult, MacrosResult, OneRmResult, ProteinInputs,
-  ProteinResult, RatiosResult, RecoveryResult, RunningResult, SleepQualityResult,
+  ProteinResult, RatiosResult, RecoveryResult, RunningResult,
+  SleepGraphResult,
+  SleepQualityResult, // ✅ ADD THIS
   StressResult, TdeeInputs, TdeeResult, Vo2maxResult, WaterResult,
 } from '../../types/fitcalc';
+
 
 
 type ChartProps =
@@ -32,6 +35,7 @@ type ChartProps =
   | { type: 'hrv'; data: HrvResult }
   | { type: 'recovery'; data: RecoveryResult }
   | { type: 'sleepquality'; data: SleepQualityResult }
+  | { type: 'sleepgraph'; data: SleepGraphResult } // ✅ ADD THIS
   | { type: 'stress'; data: StressResult };
 
 
@@ -114,6 +118,7 @@ export const FitCalcChart = React.memo<ChartProps>((props) => {
       case 'hrv': return <HrvChart data={props.data} />;
       case 'recovery': return <RecoveryChart data={props.data} />;
       case 'sleepquality': return <SleepQualityChart data={props.data} />;
+      case 'sleepgraph': return <SleepGraphChart data={props.data} />; // ✅ ADD THIS
       case 'stress': return <StressChart data={props.data} />;
       default: return null;
     }
@@ -454,7 +459,7 @@ const Vo2MaxChart: React.FC<{ data: Vo2maxResult }> = ({ data }) => {
 
   return (
     <View style={s.vo2Con}>
-      <Text style={s.title}>VO₂max Fitness Level</Text>
+      <Text style={s.title}>VOâ‚‚max Fitness Level</Text>
       <View style={s.vo2Scale}>
         {levels.map((l, i) => {
           const prev = i > 0 ? levels[i - 1].max : 0;
@@ -470,7 +475,7 @@ const Vo2MaxChart: React.FC<{ data: Vo2maxResult }> = ({ data }) => {
           );
         })}
       </View>
-      <Text style={s.vo2Value}>Your VO₂max: {data.value} ml/kg/min</Text>
+      <Text style={s.vo2Value}>Your VOâ‚‚max: {data.value} ml/kg/min</Text>
       <Text style={s.vo2Cat}>Category: {curr?.label}</Text>
     </View>
   );
@@ -541,9 +546,9 @@ const RatiosChart: React.FC<{ data: RatiosResult }> = ({ data }) => {
 const WaterChart: React.FC<{ data: WaterResult }> = ({ data }) => {
   const liters = parseFloat(data.value), glasses = Math.ceil(liters * 4);
   const items: MarkingItem[] = [
-    { label: 'Morning', value: `${Math.ceil(glasses * 0.3)}🥛` },
-    { label: 'Afternoon', value: `${Math.ceil(glasses * 0.4)}🥛` },
-    { label: 'Evening', value: `${Math.ceil(glasses * 0.3)}🥛` },
+    { label: 'Morning', value: `${Math.ceil(glasses * 0.3)}ðŸ¥›` },
+    { label: 'Afternoon', value: `${Math.ceil(glasses * 0.4)}ðŸ¥›` },
+    { label: 'Evening', value: `${Math.ceil(glasses * 0.3)}ðŸ¥›` },
   ];
 
 
@@ -556,7 +561,7 @@ const WaterChart: React.FC<{ data: WaterResult }> = ({ data }) => {
         </View>
         <View style={s.waterLabels}>
           <Text style={s.waterAmt}>{data.value}L</Text>
-          <Text style={s.waterGls}>≈ {glasses} glasses</Text>
+          <Text style={s.waterGls}>â‰ˆ {glasses} glasses</Text>
           <Text style={s.waterNote}>(250ml each)</Text>
         </View>
       </View>
@@ -685,7 +690,7 @@ const HrvChart: React.FC<{ data: HrvResult }> = ({ data }) => {
 
       {/* Recommendation */}
       <View style={s.bioRecommendBox}>
-        <Text style={s.bioRecommendTitle}>💡 Recommendation</Text>
+        <Text style={s.bioRecommendTitle}>ðŸ’¡ Recommendation</Text>
         <Text style={s.bioRecommendText}>{data.recommendation}</Text>
       </View>
     </View>
@@ -773,13 +778,133 @@ const SleepQualityChart: React.FC<{ data: SleepQualityResult }> = ({ data }) => 
 
       {/* Improvements list */}
       <View style={s.bioImprovementsCon}>
-        <Text style={s.bioImprovementsTitle}>✨ Improvements</Text>
+        <Text style={s.bioImprovementsTitle}>âœ¨ Improvements</Text>
         {data.improvements.map((tip, i) => (
           <View key={i} style={s.bioImprovementItem}>
-            <Text style={s.bioImprovementBullet}>•</Text>
+            <Text style={s.bioImprovementBullet}>â€¢</Text>
             <Text style={s.bioImprovementText}>{tip}</Text>
           </View>
         ))}
+      </View>
+    </View>
+  );
+};
+// ✅ NEW: Sleep Graph Chart - Line chart showing sleep history
+const SleepGraphChart: React.FC<{ data: SleepGraphResult }> = ({ data }) => {
+  if (data.totalSessions === 0) {
+    return (
+      <View style={s.bioSleepGraphCon}>
+        <Text style={s.title}>Sleep History (30 Days)</Text>
+        <View style={s.emptyStateBox}>
+          <Text style={s.emptyStateEmoji}>😴</Text>
+          <Text style={s.emptyStateText}>No sleep data yet</Text>
+          <Text style={s.emptyStateSubtext}>Use the Sleep Quality tab to start tracking</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Prepare data for line chart
+  const chartData = {
+    labels: data.sessions.slice(-7).map(s => {
+      const date = new Date(s.date);
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    }),
+    datasets: [{
+      data: data.sessions.slice(-7).map(s => s.hours),
+      color: (opacity = 1) => `rgba(67, 97, 238, ${opacity})`,
+      strokeWidth: 3,
+    }],
+  };
+
+  const getColor = (hours: number) => {
+    if (hours >= 7 && hours <= 9) return COLORS.success;
+    if (hours >= 6) return COLORS.info;
+    return COLORS.warning;
+  };
+
+  const avgColor = getColor(data.averageDuration);
+  const consistencyColor = data.consistency >= 70 ? COLORS.success : data.consistency >= 50 ? COLORS.info : COLORS.warning;
+
+  return (
+    <View style={s.bioSleepGraphCon}>
+      <Text style={s.title}>Sleep History (Last 30 Days)</Text>
+
+      {/* Summary Cards */}
+      <View style={s.sleepSummaryRow}>
+        <View style={[s.sleepSummaryCard, { backgroundColor: avgColor + '20', borderColor: avgColor }]}>
+          <Text style={[s.sleepSummaryValue, { color: avgColor }]}>{data.averageDuration}h</Text>
+          <Text style={s.sleepSummaryLabel}>Average</Text>
+        </View>
+        <View style={[s.sleepSummaryCard, { backgroundColor: consistencyColor + '20', borderColor: consistencyColor }]}>
+          <Text style={[s.sleepSummaryValue, { color: consistencyColor }]}>{data.consistency}%</Text>
+          <Text style={s.sleepSummaryLabel}>Consistency</Text>
+        </View>
+        <View style={[s.sleepSummaryCard, { backgroundColor: COLORS.primary + '20', borderColor: COLORS.primary }]}>
+          <Text style={[s.sleepSummaryValue, { color: COLORS.primary }]}>{data.totalSessions}</Text>
+          <Text style={s.sleepSummaryLabel}>Sessions</Text>
+        </View>
+      </View>
+
+      {/* Line Chart */}
+      {data.sessions.length >= 2 && (
+        <View style={s.chartWrap}>
+          <BarChart
+            data={chartData}
+            width={SCREEN_WIDTH - 100}
+            height={160}
+            chartConfig={{
+              ...CHART_CONFIG,
+              decimalPlaces: 1,
+            }}
+            fromZero
+            showValuesOnTopOfBars
+            withInnerLines={true}
+            yAxisLabel=""
+            yAxisSuffix="h"
+          />
+        </View>
+      )}
+
+      {/* Stats Grid */}
+      <View style={s.sleepStatsGrid}>
+        <View style={s.sleepStatItem}>
+          <Text style={s.sleepStatLabel}>Last 7 Days</Text>
+          <Text style={s.sleepStatValue}>{data.last7DaysAvg}h avg</Text>
+        </View>
+        <View style={s.sleepStatDivider} />
+        <View style={s.sleepStatItem}>
+          <Text style={s.sleepStatLabel}>Longest</Text>
+          <Text style={s.sleepStatValue}>{data.longestSleep}h</Text>
+        </View>
+        <View style={s.sleepStatDivider} />
+        <View style={s.sleepStatItem}>
+          <Text style={s.sleepStatLabel}>Shortest</Text>
+          <Text style={s.sleepStatValue}>{data.shortestSleep}h</Text>
+        </View>
+      </View>
+
+      {/* Insights */}
+      <View style={s.sleepInsightBox}>
+        <Text style={s.sleepInsightTitle}>💡 Insights</Text>
+        {data.averageDuration >= 7 && data.averageDuration <= 9 ? (
+          <Text style={s.sleepInsightText}>
+            Excellent! You're consistently getting the recommended 7-9 hours of sleep.
+          </Text>
+        ) : data.averageDuration < 7 ? (
+          <Text style={s.sleepInsightText}>
+            You're averaging {data.averageDuration} hours per night. Try to aim for 7-9 hours for optimal health.
+          </Text>
+        ) : (
+          <Text style={s.sleepInsightText}>
+            You're sleeping over 9 hours on average. Ensure the quality of your sleep is good.
+          </Text>
+        )}
+        {data.consistency < 50 && (
+          <Text style={[s.sleepInsightText, { marginTop: 8 }]}>
+            💤 Your sleep schedule is inconsistent. Try going to bed and waking up at the same time daily.
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -796,10 +921,10 @@ const StressChart: React.FC<{ data: StressResult }> = ({ data }) => {
   };
 
   const getEmoji = () => {
-    if (level < 30) return '😌';
-    if (level < 50) return '🙂';
-    if (level < 70) return '😰';
-    return '😫';
+    if (level < 30) return 'ðŸ˜Œ';
+    if (level < 50) return 'ðŸ™‚';
+    if (level < 70) return 'ðŸ˜°';
+    return 'ðŸ˜«';
   };
 
   return (
@@ -832,16 +957,16 @@ const StressChart: React.FC<{ data: StressResult }> = ({ data }) => {
       {/* Category */}
       <View style={[s.bioStressCategoryBox, { backgroundColor: getColor() + '20', borderColor: getColor() }]}>
         <Text style={[s.bioStressCategoryText, { color: getColor() }]}>
-          {data.category} Stress • {level}/100
+          {data.category} Stress â€¢ {level}/100
         </Text>
       </View>
 
       {/* Tips */}
       <View style={s.bioTipsCon}>
-        <Text style={s.bioTipsTitle}>🧘 Management Tips</Text>
+        <Text style={s.bioTipsTitle}>ðŸ§˜ Management Tips</Text>
         {data.tips.map((tip, i) => (
           <View key={i} style={s.bioTipItem}>
-            <Text style={s.bioTipBullet}>•</Text>
+            <Text style={s.bioTipBullet}>â€¢</Text>
             <Text style={s.bioTipText}>{tip}</Text>
           </View>
         ))}
@@ -1173,8 +1298,104 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   bioTipsCon: { marginTop: 20 },
   bioTipsTitle: { fontSize: 12, fontWeight: '700', color: Colors.light.text, marginBottom: 12 },
   bioTipItem: { flexDirection: 'row', marginBottom: 10, paddingRight: 8 },
-  bioTipBullet: { fontSize: 14, color: Colors.light.primary, marginRight: 8, marginTop: -2 },
+  bioTipBullet: { fontSize: 14, color: Colors.light.primary, marginRight: 8, marginTop: -2 },  
   bioTipText: { flex: 1, fontSize: 11, color: Colors.light.textSecondary, lineHeight: 16 },
+  // Sleep Graph Chart
+  bioSleepGraphCon: { paddingVertical: 12, alignItems: 'center' },
+  
+  sleepSummaryRow: { 
+    flexDirection: 'row', 
+    width: '100%', 
+    gap: 8, 
+    marginTop: 12, 
+    marginBottom: 16 
+  },
+  sleepSummaryCard: { 
+    flex: 1, 
+    padding: 12, 
+    borderRadius: 10, 
+    borderWidth: 2, 
+    alignItems: 'center' 
+  },
+  sleepSummaryValue: { 
+    fontSize: 20, 
+    fontWeight: '700' 
+  },
+  sleepSummaryLabel: { 
+    fontSize: 9, 
+    color: Colors.light.textSecondary, 
+    marginTop: 4 
+  },
+  
+  sleepStatsGrid: { 
+    flexDirection: 'row', 
+    width: '100%', 
+    backgroundColor: Colors.light.background, 
+    borderRadius: 10, 
+    padding: 14, 
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  sleepStatItem: { 
+    flex: 1, 
+    alignItems: 'center' 
+  },
+  sleepStatDivider: { 
+    width: 1, 
+    height: 40, 
+    backgroundColor: Colors.light.border 
+  },
+  sleepStatLabel: { 
+    fontSize: 9, 
+    color: Colors.light.textSecondary, 
+    marginBottom: 6 
+  },
+  sleepStatValue: { 
+    fontSize: 14, 
+    fontWeight: '700', 
+    color: Colors.light.text 
+  },
+  
+  sleepInsightBox: { 
+    marginTop: 16, 
+    backgroundColor: Colors.light.background, 
+    padding: 14, 
+    borderRadius: 10, 
+    width: '100%',
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  sleepInsightTitle: { 
+    fontSize: 12, 
+    fontWeight: '700', 
+    color: Colors.light.text, 
+    marginBottom: 8 
+  },
+  sleepInsightText: { 
+    fontSize: 11, 
+    color: Colors.light.textSecondary, 
+    lineHeight: 16 
+  },
+  
+  emptyStateBox: { 
+    alignItems: 'center', 
+    paddingVertical: 40 
+  },
+  emptyStateEmoji: { 
+    fontSize: 48, 
+    marginBottom: 12 
+  },
+  emptyStateText: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: Colors.light.text, 
+    marginBottom: 4 
+  },
+  emptyStateSubtext: { 
+    fontSize: 11, 
+    color: Colors.light.textSecondary 
+  },
+
 });
 
 

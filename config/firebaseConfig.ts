@@ -11,9 +11,9 @@
  */
 
 import { getApp } from '@react-native-firebase/app';
+import appCheck from '@react-native-firebase/app-check';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
-import appCheck from '@react-native-firebase/app-check';
 
 // ============================================
 // FIREBASE APP CHECK INITIALIZATION
@@ -67,7 +67,7 @@ console.log('✅ Firestore offline persistence enabled (default)');
 export { auth, firestore };
 
 // Export getApp for accessing the Firebase app instance if needed
-export { getApp } from '@react-native-firebase/app';
+  export { getApp } from '@react-native-firebase/app';
 
 // Default export
 export default auth;
@@ -75,3 +75,4 @@ export default auth;
 // Type exports for TypeScript consumers
 export type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 export type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+

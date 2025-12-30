@@ -1,14 +1,14 @@
 // components/nutrition/NutritionDeficiencyCard.tsx
 // ✅ UPDATED: Added meal data validation + improved empty state UI (Dec 28, 2025)
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { Colors } from '../../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
-import { predictNutrientDeficiencies, DeficiencyInsight } from '../../services/nutritionAIService';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
-import { getTodayISO, getISODateNDaysAgo } from '../../utils/dateUtils';
+import { DeficiencyInsight, predictNutrientDeficiencies } from '../../services/nutritionAIService';
 import { nutritionService } from '../../services/nutritionService';
+import { getISODateNDaysAgo, getTodayISO } from '../../utils/dateUtils';
 
 type Props = {
   onAnalysisComplete?: (result: DeficiencyInsight) => void;

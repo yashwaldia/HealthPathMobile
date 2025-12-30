@@ -1,8 +1,8 @@
 // services/storageService.ts
 // ✅ FIXED: Updated to React Native Firebase v23 (using putFile instead of put/blob)
-import * as ImagePicker from 'expo-image-picker';
-import storage from '@react-native-firebase/storage';
 import auth from '@react-native-firebase/auth';
+import storage from '@react-native-firebase/storage';
+import * as ImagePicker from 'expo-image-picker';
 import { Alert, Platform } from 'react-native';
 
 class StorageService {

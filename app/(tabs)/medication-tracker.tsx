@@ -1,6 +1,7 @@
 // app/(tabs)/medication-tracker.tsx
 // ✅ REDESIGNED: Compact calendar + date popup + smart import button below calendar
-// ✅ FIXED: Optimized notification initialization (Dec 27, 2025)
+// ✅ FIXED: Optimized notification initialization + Background task integration
+// Last Updated: December 30, 2025
 
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -29,6 +30,9 @@ import { deleteMedication, getAllMedications, getDoseHistory, logDose } from '..
 import { smartImportMedications } from '../../services/smartImportService';
 import { DoseLog, Medication } from '../../types/medication';
 import { getDailySummaryToast, getMotivationalToast } from '../../utils/motivationalMessages';
+
+// ✅ NEW: Import background task service
+import { registerBackgroundTask } from '../../services/backgroundTaskService';
 
 // Frequency map
 const FREQUENCY_MAP: Record<string, number> = {
@@ -63,7 +67,7 @@ export default function MedicationTrackerScreen() {
   const [currentConflict, setCurrentConflict] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
-  // ✅ NEW: Date popup state
+  // Date popup state
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [datePopupVisible, setDatePopupVisible] = useState(false);
 
@@ -115,12 +119,12 @@ export default function MedicationTrackerScreen() {
     setRefreshing(false);
   }, [loadMedications]);
 
-  // ✅ Load medications on mount
+  // Load medications on mount
   useEffect(() => {
     loadMedications();
   }, [loadMedications]);
 
-  // ✅ FIXED: Initialize notifications only once per day (prevents spam!)
+  // ✅ IMPROVED: Better notification initialization with background task
   useEffect(() => {
     let isMounted = true;
 
@@ -128,23 +132,40 @@ export default function MedicationTrackerScreen() {
       if (!user?.uid) return;
       
       try {
+        console.log('🚀 Starting notification initialization...');
+        
         // Dynamic import to avoid circular dependencies
         const notificationService = await import('../../services/notificationService');
         
-        // Check if already initialized today
+        // ✅ CRITICAL: ALWAYS run cleanup first (removes expired medications)
+        console.log('🧹 Running cleanup...');
+        await notificationService.cancelCompletedMedications(user.uid);
+
+        // Check if already scheduled today
         const alreadyScheduledToday = await notificationService.isRemindersScheduledToday(user.uid);
-        if (alreadyScheduledToday) {
-          console.log('ℹ️ Notifications already initialized today, skipping');
-          return;
+
+        if (!alreadyScheduledToday) {
+          console.log('📅 Scheduling reminders for next 7 days...');
+          await notificationService.scheduleAllMedicationReminders(user.uid);
+        } else {
+          console.log('ℹ️ Reminders already scheduled today');
         }
-        
-        // Initialize notifications (schedules today's reminders only)
+
+        // ✅ NEW: Register background task for automatic daily refresh
         if (isMounted) {
-          await notificationService.initializeNotificationService(user.uid);
-          console.log('✅ Notification service initialized successfully');
+          console.log('⏰ Registering background task...');
+          const registered = await registerBackgroundTask();
+          if (registered) {
+            console.log('✅ Background task registered successfully');
+          } else {
+            console.warn('⚠️ Failed to register background task');
+          }
         }
+
+        console.log('✅ Notification service initialized');
       } catch (error) {
         console.error('❌ Notification initialization error:', error);
+        // Don't show error toast to user - notifications will retry on next app open
       }
     };
 
@@ -270,13 +291,11 @@ export default function MedicationTrackerScreen() {
     }
   };
 
-  // ✅ NEW: Handle date press - show popup with medications
   const handleDatePress = (date: Date) => {
     setSelectedDate(date);
     setDatePopupVisible(true);
   };
 
-  // ✅ NEW: Get medications for selected date
   const getMedicationsForDate = (date: Date): Medication[] => {
     return medications.filter(med => {
       const start = new Date(med.startDate);
@@ -444,7 +463,6 @@ export default function MedicationTrackerScreen() {
     );
   }, [activeMedications, dosesMap]);
 
-  // ✅ NEW: Date popup content
   const selectedDateMeds = selectedDate ? getMedicationsForDate(selectedDate) : [];
 
   return (
@@ -487,7 +505,7 @@ export default function MedicationTrackerScreen() {
         onSaveAll={handleSmartImport}
       />
 
-      {/* ✅ NEW: Date Popup Modal */}
+      {/* Date Popup Modal */}
       <Modal
         visible={datePopupVisible}
         transparent
@@ -540,7 +558,7 @@ export default function MedicationTrackerScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* ✅ UPDATED: Header with back button */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -557,7 +575,7 @@ export default function MedicationTrackerScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ✅ FIXED: Everything moved inside ScrollView */}
+      {/* Main Content */}
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.light.primary} />
@@ -571,7 +589,7 @@ export default function MedicationTrackerScreen() {
           }
           showsVerticalScrollIndicator={false}
         >
-          {/* ✅ UPDATED: Compact Calendar */}
+          {/* Calendar */}
           <View style={styles.calendarSection}>
             <MedicationCalendar 
               medications={medications}
@@ -579,7 +597,7 @@ export default function MedicationTrackerScreen() {
             />
           </View>
 
-          {/* ✅ NEW: Smart Import Button (below calendar) */}
+          {/* Smart Import Button */}
           <View style={styles.smartImportContainer}>
             <TouchableOpacity
               style={styles.smartImportButton}

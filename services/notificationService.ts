@@ -1,10 +1,14 @@
 // services/notificationService.ts
+// ✅ FIXED: Multi-day scheduling + Better cleanup + Fixed time slots
+// Last Updated: December 30, 2025
+
 import firestore from '@react-native-firebase/firestore';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { Medication } from '../types/medication';
 import { createReminderNotification } from './appNotificationService';
 import { getActiveMedications, getAllMedications } from './medicationService';
+
 
 // ============================================
 // NOTIFICATION CONFIGURATION
@@ -19,6 +23,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
+
 // ============================================
 // TYPES & INTERFACES
 // ============================================
@@ -29,8 +34,10 @@ export interface MedicationReminderData {
   mealRelation: string;
   instructions?: string;
   type: string;
+  scheduledDate?: string;
   [key: string]: unknown;
 }
+
 
 export interface ScheduledNotification {
   identifier: string;
@@ -38,7 +45,8 @@ export interface ScheduledNotification {
   scheduledTime: Date;
 }
 
-// ✅ NEW: Sleep Timer Notification Data
+
+// ✅ Sleep Timer Notification Data
 export interface SleepTimerNotificationData {
   type: 'sleep-timer';
   startTime: number;
@@ -46,79 +54,95 @@ export interface SleepTimerNotificationData {
   action?: 'stop' | 'cancel';
 }
 
-// ✅ NEW: Sleep Timer Constants
+
+// ✅ Sleep Timer Constants
 export const SLEEP_TIMER_NOTIFICATION_ID = 'sleep-timer-active';
 export const SLEEP_TIMER_CHANNEL_ID = 'sleep-timer';
 
+
 // ============================================
-// TIME SLOT CALCULATION (✅ FIXED: Uses reminderTimes first, then frequency)
+// ✅ FIXED TIME SLOT CALCULATION
 // ============================================
 const getMedicationTimeSlots = (medication: Medication): number[] => {
-  // ✅ PRIORITY 1: Use user-customized reminderTimes if available
+  // Priority 1: Use user-customized reminderTimes if available
   if (medication.reminderTimes && medication.reminderTimes.length > 0) {
     return medication.reminderTimes
       .map(time => parseInt(time.split(':')[0])) // "09:00" -> 9
       .filter(hour => hour >= 0 && hour <= 23);
   }
 
-  // ✅ PRIORITY 2: Fallback to frequency-based defaults
+  // ✅ FIXED: Simplified frequency map with proper times
   const frequencyMap: Record<string, number[]> = {
-    'Once a day': [9],
-    'Twice a day': [9, 21],
-    'Thrice a day': [9, 14, 21],
-    'Four times a day': [8, 12, 16, 20],
-    'Every 4 hours': [8, 12, 16, 20, 0, 4],
-    'Every 6 hours': [8, 14, 20, 2],
-    'Every 8 hours': [8, 16, 0],
-    'Every 12 hours': [9, 21],
-    'Weekly': [9], // Morning once a week
+    'Once a day': [8],              // 8 AM only
+    'Twice a day': [8, 21],         // 8 AM, 9 PM
+    'Thrice a day': [8, 14, 21],    // 8 AM, 2 PM, 9 PM
+    'Four times a day': [8, 12, 17, 21],  // 8 AM, 12 PM, 5 PM, 9 PM
+    'Every 4 hours': [8, 12, 16, 20],     // 4 times only (not 6)
+    'Every 6 hours': [8, 14, 20, 2],      // 4 times
+    'Every 8 hours': [8, 16, 0],          // 3 times
+    'Every 12 hours': [8, 20],            // 2 times
+    'Weekly': [8],                        // Once a week at 8 AM
   };
 
-  return frequencyMap[medication.frequency] || [9];
+  return frequencyMap[medication.frequency] || [8];
 };
 
+
 // ============================================
-// ✅ FIXED: EXPORT this function so medication-tracker.tsx can use it
+// ✅ IMPROVED: Better daily check using timestamp
 // ============================================
 export const isRemindersScheduledToday = async (userId: string): Promise<boolean> => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const snapshot = await firestore()
-      .collection(`users/${userId}/notifications`)
-      .where('type', '==', 'reminder')
-      .where('data.scheduledToday', '==', true)
-      .where('timestamp', '>=', today)
-      .limit(1)
+    const doc = await firestore()
+      .collection(`users/${userId}/metadata`)
+      .doc('notifications')
       .get();
+
+    if (!doc.exists) return false;
+
+    const data = doc.data();
+    const lastScheduled = data?.lastScheduledDate;
     
-    return !snapshot.empty;
+    if (!lastScheduled) return false;
+
+    const lastScheduledDate = new Date(lastScheduled);
+    const today = new Date();
+    
+    // Check if last scheduled was today
+    return (
+      lastScheduledDate.getDate() === today.getDate() &&
+      lastScheduledDate.getMonth() === today.getMonth() &&
+      lastScheduledDate.getFullYear() === today.getFullYear()
+    );
   } catch (error) {
     console.warn('⚠️ Could not check daily reminder flag:', error);
     return false;
   }
 };
 
+
 // ============================================
-// CLEANUP COMPLETED MEDICATIONS
+// ✅ IMPROVED: More thorough cleanup of expired medications
 // ============================================
 export const cancelCompletedMedications = async (userId: string): Promise<void> => {
   try {
-    console.log('🧹 Checking for completed medications to cleanup...');
+    console.log('🧹 Cleaning up completed/expired medications...');
+    
     const allMedications = await getAllMedications(userId);
     const now = new Date();
     const completedMedIds: string[] = [];
-    
+
     for (const med of allMedications) {
       const isInactive = !med.isActive;
       const isExpired = med.endDate && now > new Date(med.endDate);
+
       if (isInactive || isExpired) {
         completedMedIds.push(med.medicationId);
-        console.log(`✅ Found completed med: ${med.name} (${isInactive ? 'inactive' : 'expired'})`);
+        console.log(`✅ Found completed/expired: ${med.name} (${isInactive ? 'inactive' : 'expired'})`);
       }
     }
-    
+
+    // Cancel notifications for completed medications
     for (const medId of completedMedIds) {
       try {
         await cancelMedicationReminder(medId);
@@ -126,12 +150,13 @@ export const cancelCompletedMedications = async (userId: string): Promise<void> 
         console.warn(`⚠️ Failed to cancel reminders for ${medId}:`, error);
       }
     }
-    
+
     console.log(`✅ Cleaned up ${completedMedIds.length} completed medications`);
   } catch (error) {
     console.error('❌ Error cancelling completed medications:', error);
   }
 };
+
 
 // ============================================
 // NOTIFICATION LISTENER SETUP
@@ -164,7 +189,7 @@ export const setupNotificationListeners = (userId: string) => {
       }
     }
     
-    // ✅ NEW: Handle sleep timer notifications
+    // Handle sleep timer notifications
     if (data?.type === 'sleep-timer') {
       console.log('😴 Sleep timer notification received');
     }
@@ -181,7 +206,7 @@ export const setupNotificationListeners = (userId: string) => {
       console.log('⏰ User snoozed medication');
     }
     
-    // ✅ NEW: Handle sleep timer actions
+    // Handle sleep timer actions
     if (response.actionIdentifier === 'stop-timer') {
       console.log('🛑 User stopped sleep timer from notification');
     } else if (response.actionIdentifier === 'cancel-timer') {
@@ -197,6 +222,7 @@ export const setupNotificationListeners = (userId: string) => {
     },
   };
 };
+
 
 // ============================================
 // PERMISSION MANAGEMENT
@@ -229,6 +255,7 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
   }
 };
 
+
 export const checkNotificationPermissions = async (): Promise<boolean> => {
   try {
     const { status } = await Notifications.getPermissionsAsync();
@@ -238,6 +265,7 @@ export const checkNotificationPermissions = async (): Promise<boolean> => {
     return false;
   }
 };
+
 
 const configureAndroidNotificationChannels = async (): Promise<void> => {
   if (Platform.OS !== 'android') return;
@@ -268,16 +296,18 @@ const configureAndroidNotificationChannels = async (): Promise<void> => {
   console.log('✅ Android notification channels configured');
 };
 
+
 // ============================================
-// ✅ FIXED: MEDICATION REMINDER SCHEDULING (NO MORE REPEATS!)
+// ✅ CRITICAL FIX: Schedule for next 7 days (not just today!)
 // ============================================
 export const scheduleMedicationReminder = async (
-  medication: Medication, 
+  medication: Medication,
   userId: string
 ): Promise<string[]> => {
   try {
     console.log(`📅 Scheduling reminder for: ${medication.name}`);
 
+    // Check if medication is active
     if (!medication.isActive) {
       console.log(`⏭️ Medication ${medication.name} is inactive, skipping`);
       return [];
@@ -287,72 +317,73 @@ export const scheduleMedicationReminder = async (
     const startDate = new Date(medication.startDate);
     const endDate = medication.endDate ? new Date(medication.endDate) : null;
 
-    if (now < startDate || (endDate && now > endDate) || medication.frequency === 'As needed') {
-      console.log(`⏭️ Medication ${medication.name} - not in active date range`);
+    // ✅ CRITICAL: Check if medication is expired
+    if (endDate && now > endDate) {
+      console.log(`⏭️ Medication ${medication.name} has expired (${endDate.toLocaleDateString()}), skipping`);
+      return [];
+    }
+
+    if (now < startDate || medication.frequency === 'As needed') {
+      console.log(`⏭️ Medication ${medication.name} - not in active date range or is as-needed`);
       return [];
     }
 
     const timeSlots = getMedicationTimeSlots(medication);
     const scheduledIds: string[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
-    // ✅ FIXED: Schedule ONLY for TODAY (no repeats!)
-    for (const hour of timeSlots) {
-      const triggerTime = new Date(today);
-      triggerTime.setHours(hour, 0, 0, 0);
+    // ✅ FIXED: Schedule for next 7 days (or until endDate)
+    const daysToSchedule = endDate 
+      ? Math.min(7, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+      : 7;
 
-      // Skip if time already passed today
-      if (triggerTime < now) continue;
+    console.log(`📅 Scheduling ${medication.name} for next ${daysToSchedule} days`);
 
-      const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `💊 Time for ${medication.name}`,
-          body: `${medication.strength} • ${medication.mealRelation}`,
-          data: {
-            medicationId: medication.medicationId,
-            medicationName: medication.name,
-            strength: medication.strength,
-            mealRelation: medication.mealRelation,
-            instructions: medication.instructions,
-            type: 'medication-reminder',
-            scheduledToday: true, // ✅ NEW: Daily flag
-          } as MedicationReminderData,
-          sound: 'default',
-          badge: 1,
-          categoryIdentifier: 'medication',
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: triggerTime,
-        },
-      });
+    for (let dayOffset = 0; dayOffset < daysToSchedule; dayOffset++) {
+      const targetDate = new Date(now);
+      targetDate.setDate(targetDate.getDate() + dayOffset);
+      targetDate.setHours(0, 0, 0, 0);
 
-      scheduledIds.push(notificationId);
-      console.log(`✅ Scheduled ${medication.name} at ${hour}:00 today - ID: ${notificationId}`);
+      // ✅ Handle weekly frequency - only schedule once per week
+      if (medication.frequency === 'Weekly' && dayOffset !== 0 && dayOffset !== 7) {
+        continue; // Skip days except first day and 7th day
+      }
 
-      // Save to Firestore
-      try {
-        await createReminderNotification(
-          userId, 
-          `💊 Time for ${medication.name}`, 
-          `${medication.strength} • ${medication.mealRelation}`, 
-          {
-            medicationId: medication.medicationId,
-            medicationName: medication.name,
-            strength: medication.strength,
-            mealRelation: medication.mealRelation,
-            instructions: medication.instructions,
-            scheduledTime: `${hour}:00`,
-            notificationId: notificationId,
-            scheduledToday: true,
-          }
-        );
-      } catch (firestoreError) {
-        console.error('❌ Error saving to Firestore:', firestoreError);
+      for (const hour of timeSlots) {
+        const triggerTime = new Date(targetDate);
+        triggerTime.setHours(hour, 0, 0, 0);
+
+        // Skip if time already passed
+        if (triggerTime <= now) continue;
+
+        const notificationId = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `💊 Time for ${medication.name}`,
+            body: `${medication.strength} • ${medication.mealRelation}`,
+            data: {
+              medicationId: medication.medicationId,
+              medicationName: medication.name,
+              strength: medication.strength,
+              mealRelation: medication.mealRelation,
+              instructions: medication.instructions,
+              type: 'medication-reminder',
+              scheduledDate: targetDate.toISOString(),
+            } as MedicationReminderData,
+            sound: 'default',
+            badge: 1,
+            categoryIdentifier: 'medication',
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: triggerTime,
+          },
+        });
+
+        scheduledIds.push(notificationId);
+        console.log(`✅ Scheduled ${medication.name} for ${triggerTime.toLocaleString()}`);
       }
     }
 
+    console.log(`✅ Total ${scheduledIds.length} notifications scheduled for ${medication.name}`);
     return scheduledIds;
   } catch (error) {
     console.error(`❌ Error scheduling reminder for ${medication.name}:`, error);
@@ -360,22 +391,22 @@ export const scheduleMedicationReminder = async (
   }
 };
 
-// ✅ FIXED: Only schedule if not done today
+
+// ============================================
+// ✅ IMPROVED: Better scheduling with cleanup
+// ============================================
 export const scheduleAllMedicationReminders = async (userId: string): Promise<void> => {
   try {
-    // ✅ NEW: Check if already scheduled today
-    const alreadyScheduledToday = await isRemindersScheduledToday(userId);
-    if (alreadyScheduledToday) {
-      console.log('ℹ️ Reminders already scheduled today, skipping');
-      return;
-    }
+    console.log('🔄 Scheduling reminders for all active medications...');
 
-    console.log('🔄 Scheduling TODAY\'S reminders for all active medications...');
-    
-    // Cancel any old notifications first
+    // ✅ CRITICAL: Clean up expired medications FIRST
+    await cancelCompletedMedications(userId);
+
+    // ✅ CRITICAL: Cancel ALL old notifications to prevent duplicates
     await cancelAllMedicationReminders();
-    
+
     const medications = await getActiveMedications(userId);
+    
     if (medications.length === 0) {
       console.log('ℹ️ No active medications found');
       return;
@@ -387,12 +418,23 @@ export const scheduleAllMedicationReminders = async (userId: string): Promise<vo
       totalScheduled += scheduledIds.length;
     }
 
-    console.log(`✅ Scheduled ${totalScheduled} reminders for today (${medications.length} medications)`);
+    // ✅ NEW: Save last scheduled timestamp to Firestore
+    await firestore()
+      .collection(`users/${userId}/metadata`)
+      .doc('notifications')
+      .set({
+        lastScheduledDate: new Date().toISOString(),
+        lastScheduledTimestamp: firestore.FieldValue.serverTimestamp(),
+        totalScheduled: totalScheduled,
+      }, { merge: true });
+
+    console.log(`✅ Scheduled ${totalScheduled} reminders for ${medications.length} medications`);
   } catch (error) {
     console.error('❌ Error scheduling all medication reminders:', error);
     throw error;
   }
 };
+
 
 // ============================================
 // NOTIFICATION CANCELLATION
@@ -415,6 +457,7 @@ export const cancelAllMedicationReminders = async (): Promise<void> => {
   }
 };
 
+
 export const cancelMedicationReminder = async (medicationId: string): Promise<void> => {
   try {
     const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
@@ -433,6 +476,7 @@ export const cancelMedicationReminder = async (medicationId: string): Promise<vo
   }
 };
 
+
 export const cancelSleepTimerNotification = async (): Promise<void> => {
   try {
     await Notifications.dismissNotificationAsync(SLEEP_TIMER_NOTIFICATION_ID);
@@ -442,6 +486,7 @@ export const cancelSleepTimerNotification = async (): Promise<void> => {
     throw error;
   }
 };
+
 
 // ============================================
 // NOTIFICATION ACTIONS & CATEGORIES
@@ -464,6 +509,7 @@ export const setupNotificationCategories = async (): Promise<void> => {
   }
 };
 
+
 export const handleNotificationResponse = (
   response: Notifications.NotificationResponse,
   onTakeNow: (medicationId: string) => void,
@@ -482,6 +528,7 @@ export const handleNotificationResponse = (
     console.log(`👆 User opened notification for ${medicationData.medicationName}`);
   }
 };
+
 
 export const snoozeMedicationReminder = async (medication: Medication, userId: string): Promise<string> => {
   try {
@@ -539,6 +586,7 @@ export const snoozeMedicationReminder = async (medication: Medication, userId: s
   }
 };
 
+
 // ============================================
 // DEBUGGING & TESTING
 // ============================================
@@ -552,6 +600,7 @@ export const getAllScheduledNotifications = async (): Promise<Notifications.Noti
     return [];
   }
 };
+
 
 export const sendTestNotification = async (): Promise<void> => {
   try {
@@ -569,8 +618,9 @@ export const sendTestNotification = async (): Promise<void> => {
   }
 };
 
+
 // ============================================
-// ✅ FIXED: INITIALIZATION (Only runs scheduling if needed)
+// ✅ IMPROVED: Better initialization
 // ============================================
 export const initializeNotificationService = async (userId: string): Promise<void> => {
   try {
@@ -583,9 +633,11 @@ export const initializeNotificationService = async (userId: string): Promise<voi
     }
 
     await setupNotificationCategories();
+    
+    // ✅ ALWAYS run cleanup first
     await cancelCompletedMedications(userId);
     
-    // ✅ FIXED: Only schedule if needed (not every app start)
+    // ✅ Only schedule if needed (not every app start)
     const alreadyScheduledToday = await isRemindersScheduledToday(userId);
     if (!alreadyScheduledToday) {
       await scheduleAllMedicationReminders(userId);

@@ -1,21 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  Modal,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
-  Animated,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { UserProfile, ProfileData } from '../../types/profile';
 import { profileService } from '../../services/profileService';
+import { ProfileData, UserProfile } from '../../types/profile';
 
 interface EditProfileModalProps {
   visible: boolean;
@@ -35,35 +34,14 @@ export default function EditProfileModal({
   const [formEmail, setFormEmail] = useState<string>('');
   const [formPhoneNumber, setFormPhoneNumber] = useState<string>('');
 
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-
   useEffect(() => {
     if (visible && profile) {
       // Initialize form with current profile data
       setFormData(profile.profile || {});
       setFormEmail(profile.email || '');
       setFormPhoneNumber(profile.phoneNumber || '');
-
-      // Start animations
-      fadeAnim.setValue(0);
-      slideAnim.setValue(50);
-
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]).start();
     }
-  }, [visible, profile, fadeAnim, slideAnim]);
+  }, [visible, profile]);
 
   const handleInputChange = (field: keyof ProfileData, value: string) => {
     setFormData((prev) => ({
@@ -116,15 +94,7 @@ export default function EditProfileModal({
         style={styles.modalOverlay}
       >
         <View style={styles.modalOverlay}>
-          <Animated.View
-            style={[
-              styles.modalContent,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              },
-            ]}
-          >
+          <View style={styles.modalContent}>
             {/* Header */}
             <View style={styles.header}>
               <Text style={styles.headerTitle}>Edit Profile</Text>
@@ -496,7 +466,7 @@ export default function EditProfileModal({
                 </Text>
               </TouchableOpacity>
             </View>
-          </Animated.View>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -541,7 +511,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: 16,
   },
-  // ✅ NEW: Female health header with icon
   femaleHealthHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -562,7 +531,6 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     marginBottom: 8,
   },
-  // ✅ NEW: Helper text for guidance
   helperText: {
     fontSize: 12,
     color: Colors.light.textSecondary,
@@ -635,7 +603,6 @@ const styles = StyleSheet.create({
   bloodGroupButtonTextActive: {
     color: '#FFFFFF',
   },
-  // ✅ NEW: Flow intensity button styles
   flowIntensityContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',

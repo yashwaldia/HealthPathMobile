@@ -1,6 +1,6 @@
 // services/uploadService.ts
-import storage from '@react-native-firebase/storage';
 import auth from '@react-native-firebase/auth';
+import storage from '@react-native-firebase/storage';
 import { UploadedFile, UploadProgress } from '../types/upload';
 
 /**

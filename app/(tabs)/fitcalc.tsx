@@ -1,10 +1,10 @@
 // app/(tabs)/fitcalc.tsx
 
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient'; // ✅ ADD THIS
+import { LinearGradient } from 'expo-linear-gradient'; // âœ… ADD THIS
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'; // ✅ ADD AppState
+import { ActivityIndicator, Alert, AppState, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'; // âœ… ADD AppState
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FitCalcCard } from '../../components/fitcalc/FitCalcCard';
 import { FitCalcChart } from '../../components/fitcalc/FitCalcChart';
@@ -18,19 +18,22 @@ import {
   FitCalcId, FitCalcInputs, FitCalcResults, HrvInputs, HrvResult, HrZonesInputs, HrZonesResult,
   IdealWeightInputs, IdealWeightResult, MacrosInputs, MacrosResult, OneRmInputs, OneRmResult,
   ProteinInputs, ProteinResult, RatiosInputs, RatiosResult, RecoveryInputs, RecoveryResult,
-  RunningInputs, RunningResult, SleepQualityInputs, SleepQualityResult, StressInputs, StressResult,
+  RunningInputs, RunningResult,
+  SleepGraphResult,
+  SleepQualityInputs, SleepQualityResult, // ✅ ADD THIS
+  StressInputs, StressResult,
   TdeeInputs, TdeeResult, Vo2maxInputs, Vo2maxResult, WaterInputs, WaterResult
 } from '../../types/fitcalc';
 
-// Sleep Timer Imports
 import {
   calculateElapsedTime,
   cancelSleepTimer,
-  formatSleepDuration, // ✅ ADD THIS
+  formatSleepDuration,
+  getRecentSleepSessions, // ✅ ADD THIS
   getSleepTimerStatus,
   startSleepTimer,
   stopSleepTimer,
-  updateSleepTimerNotification, // ✅ ADD THIS
+  updateSleepTimerNotification,
 } from '../../services/sleepTimerService';
 import { SleepTimerState } from '../../types/sleepTimer';
 
@@ -44,8 +47,9 @@ const CATEGORIES = [
   { id: 'fitness' as CategoryId, label: 'Fitness', icon: 'barbell-outline' as const, calculators: ['bmi', 'bmr', 'tdee', 'macros', 'onerm', 'bodyfat', 'idealweight'] as FitCalcId[] },
   { id: 'heart' as CategoryId, label: 'Heart', icon: 'heart-outline' as const, calculators: ['hrzones', 'vo2max'] as FitCalcId[] },
   { id: 'dailyhealth' as CategoryId, label: 'Daily Health', icon: 'fitness-outline' as const, calculators: ['water', 'protein', 'activity', 'running', 'ratios'] as FitCalcId[] },
-  { id: 'biohacking' as CategoryId, label: 'Biohacking', icon: 'flash-outline' as const, calculators: ['sleepquality', 'recovery', 'hrv', 'stress'] as FitCalcId[] },
+  { id: 'biohacking' as CategoryId, label: 'Biohacking', icon: 'flash-outline' as const, calculators: ['sleepquality', 'sleepgraph', 'recovery', 'hrv', 'stress'] as FitCalcId[] }, // ✅ ADDED sleepgraph
 ];
+
 
 const MACRO_PRESETS = {
   balanced: { p: 0.3, c: 0.4, f: 0.3, note: 'P 30% / C 40% / F 30%', label: 'Balanced' },
@@ -392,20 +396,93 @@ function computeStress(inputs: StressInputs): StressResult | null {
   return { level: stressLevel, category: result.cat, tips: result.tips };
 }
 
+// ✅ NEW: Sleep Graph Calculator
+async function computeSleepGraph(userId: string | undefined): Promise<SleepGraphResult | null> {
+  if (!userId) return null;
+  
+  try {
+    const sessions = await getRecentSleepSessions(userId, 30); // Last 30 days
+    
+    if (sessions.length === 0) {
+      return {
+        totalSessions: 0,
+        averageDuration: 0,
+        longestSleep: 0,
+        shortestSleep: 0,
+        last7DaysAvg: 0,
+        last30DaysAvg: 0,
+        consistency: 0,
+        sessions: [],
+      };
+    }
+    
+    // Calculate metrics
+    const durations = sessions.map(s => s.durationHours);
+    const totalDuration = durations.reduce((sum, d) => sum + d, 0);
+    const averageDuration = totalDuration / sessions.length;
+    const longestSleep = Math.max(...durations);
+    const shortestSleep = Math.min(...durations);
+    
+    // Last 7 days average
+    const now = Date.now();
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const last7Days = sessions.filter(s => new Date(s.startTime).getTime() >= sevenDaysAgo);
+    const last7DaysAvg = last7Days.length > 0
+      ? last7Days.reduce((sum, s) => sum + s.durationHours, 0) / last7Days.length
+      : 0;
+    
+    // Last 30 days average (same as overall if <30 days of data)
+    const last30DaysAvg = averageDuration;
+    
+    // Calculate consistency score (0-100)
+    // Based on how close sleep durations are to the average
+    const variance = durations.reduce((sum, d) => sum + Math.pow(d - averageDuration, 2), 0) / durations.length;
+    const stdDev = Math.sqrt(variance);
+    const consistency = Math.max(0, Math.min(100, 100 - (stdDev * 20))); // Lower std dev = higher consistency
+    
+    // Format sessions for chart
+    const chartSessions = sessions
+      .slice(0, 30) // Last 30 sessions
+      .reverse() // Oldest to newest for chart
+      .map(s => ({
+        date: new Date(s.startTime).toISOString().split('T')[0],
+        hours: parseFloat(s.durationHours.toFixed(1)),
+      }));
+    
+    return {
+      totalSessions: sessions.length,
+      averageDuration: parseFloat(averageDuration.toFixed(1)),
+      longestSleep: parseFloat(longestSleep.toFixed(1)),
+      shortestSleep: parseFloat(shortestSleep.toFixed(1)),
+      last7DaysAvg: parseFloat(last7DaysAvg.toFixed(1)),
+      last30DaysAvg: parseFloat(last30DaysAvg.toFixed(1)),
+      consistency: Math.round(consistency),
+      sessions: chartSessions,
+    };
+  } catch (error) {
+    console.error('Error computing sleep graph:', error);
+    return null;
+  }
+}
+
+
 // ============================================================================
 // COMPUTATION ROUTER
 // ============================================================================
 
-function computeForId(id: FitCalcId, inputs: FitCalcInputs): any | null {
+function computeForId(id: FitCalcId, inputs: FitCalcInputs, userId?: string): any | null {
   const computations: Record<FitCalcId, (inputs: any) => any | null> = {
     bmi: computeBmi, bmr: computeBmr, tdee: computeTdee, macros: computeMacros, onerm: computeOneRm,
     bodyfat: computeBodyFat, idealweight: computeIdealWeight, hrzones: computeHrZones, vo2max: computeVo2max,
     water: computeWater, protein: computeProtein, activity: computeActivity, running: computeRunning,
-    ratios: computeRatios, hrv: computeHrv, recovery: computeRecovery, sleepquality: computeSleepQuality, stress: computeStress
+    ratios: computeRatios, hrv: computeHrv, recovery: computeRecovery, sleepquality: computeSleepQuality, 
+    sleepgraph: () => computeSleepGraph(userId), // ✅ ADD THIS
+    stress: computeStress
   };
   
   return computations[id]?.(inputs[id] || {}) || null;
 }
+
 
 // ============================================================================
 // MAIN COMPONENT
@@ -453,7 +530,7 @@ export default function FitCalcScreen() {
         setSleepTimerElapsed('0h 0m');
       }
     } catch (error) {
-      console.error('❌ Error checking sleep timer:', error);
+      console.error('âŒ Error checking sleep timer:', error);
     }
   }, []);
   
@@ -468,7 +545,7 @@ export default function FitCalcScreen() {
       await checkSleepTimer();
       showToast('Sleep tracking started', 'success');
     } catch (error) {
-      console.error('❌ Error starting sleep timer:', error);
+      console.error('âŒ Error starting sleep timer:', error);
       showToast('Failed to start sleep timer', 'error');
     }
   }, [user?.uid, checkSleepTimer, showToast]);
@@ -489,9 +566,9 @@ export default function FitCalcScreen() {
         showToast(`Sleep recorded: ${formatSleepDuration(session.duration)}`, 'success');
       }
     } catch (error: any) {
-      console.error('❌ Error stopping sleep timer:', error);
+      console.error('âŒ Error stopping sleep timer:', error);
       
-      // ✅ Better error messages
+      // âœ… Better error messages
       if (error?.message?.includes('permission-denied')) {
         showToast('Permission error. Please check Firestore rules.', 'error');
       } else {
@@ -516,7 +593,7 @@ export default function FitCalcScreen() {
               await checkSleepTimer();
               showToast('Sleep timer cancelled', 'info');
             } catch (error) {
-              console.error('❌ Error cancelling timer:', error);
+              console.error('âŒ Error cancelling timer:', error);
               showToast('Failed to cancel timer', 'error');
             }
           },
@@ -547,7 +624,7 @@ export default function FitCalcScreen() {
     }
   }, [activeCalculator, loadHistory, checkSleepTimer, results.bmr, inputs.tdee?.bmr]);
   
-  // ✅ Update timer display every minute + update notification
+  // âœ… Update timer display every minute + update notification
   useEffect(() => {
     if (!sleepTimerActive || !sleepTimerStart) return;
     
@@ -563,7 +640,7 @@ export default function FitCalcScreen() {
     return () => clearInterval(interval);
   }, [sleepTimerActive, sleepTimerStart]);
   
-  // ✅ Update notification when app comes to foreground
+  // âœ… Update notification when app comes to foreground
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (nextAppState === 'active') {
@@ -593,33 +670,46 @@ export default function FitCalcScreen() {
     handleInputChange(activeCalculator, fieldKey, value);
   }, [activeCalculator, handleInputChange]);
   
-  const handleCalculate = useCallback(async () => {
-    const result = computeForId(activeCalculator, inputs);
-    
-    if (!result) {
-      const messages: Record<FitCalcId, string> = {
-        bmi: 'Please enter height and weight', bmr: 'Please fill age, height and weight', macros: 'Please enter goal calories',
-        tdee: 'Please fill BMR and activity level', onerm: 'Please enter weight and reps', bodyfat: 'Please fill all measurements',
-        hrzones: 'Please enter your age', vo2max: 'Please enter time for 1.5 mile run', activity: 'Please fill all activity details',
-        ratios: 'Please enter height, waist and hip', idealweight: 'Please select gender and enter height', water: 'Please enter weight and activity level',
-        running: 'Please enter distance and time', protein: 'Please fill weight, activity and goal',
-        hrv: 'Please fill all fields', recovery: 'Please fill all fields', sleepquality: 'Please fill all fields', stress: 'Please fill all fields'
-      };
-      showToast(messages[activeCalculator] || 'Please complete required fields', 'warning');
+const handleCalculate = useCallback(async () => {
+  // ✅ Special handling for sleepgraph - auto-load data
+  if (activeCalculator === 'sleepgraph') {
+    const result = await computeSleepGraph(user?.uid);
+    if (!result || result.totalSessions === 0) {
+      showToast('No sleep data found. Start tracking with Sleep Quality tab!', 'info');
       return;
     }
-    
-    setResults(prev => ({ ...prev, [activeCalculator]: result }));
-    setResultSaved(prev => ({ ...prev, [activeCalculator]: false }));
-    
-    if (activeCalculator === 'bmr') {
-      setInputs(prev => ({ ...prev, tdee: { ...(prev.tdee || {}), bmr: (result as BmrResult).value.toString() } }));
-    }
-    if (activeCalculator === 'tdee') {
-      setInputs(prev => ({ ...prev, macros: { ...(prev.macros || {}), calories: (result as TdeeResult).target.toString() } }));
-    }
-  }, [activeCalculator, inputs, showToast]);
+    setResults(prev => ({ ...prev, sleepgraph: result }));
+    return;
+  }
   
+  const result = computeForId(activeCalculator, inputs, user?.uid);
+  
+  if (!result) {
+    const messages: Record<FitCalcId, string> = {
+      bmi: 'Please enter height and weight', bmr: 'Please fill age, height and weight', macros: 'Please enter goal calories',
+      tdee: 'Please fill BMR and activity level', onerm: 'Please enter weight and reps', bodyfat: 'Please fill all measurements',
+      hrzones: 'Please enter your age', vo2max: 'Please enter time for 1.5 mile run', activity: 'Please fill all activity details',
+      ratios: 'Please enter height, waist and hip', idealweight: 'Please select gender and enter height', water: 'Please enter weight and activity level',
+      running: 'Please enter distance and time', protein: 'Please fill weight, activity and goal',
+      hrv: 'Please fill all fields', recovery: 'Please fill all fields', sleepquality: 'Please fill all fields', 
+      sleepgraph: 'No sleep data available', // ✅ ADD THIS
+      stress: 'Please fill all fields'
+    };
+    showToast(messages[activeCalculator] || 'Please complete required fields', 'warning');
+    return;
+  }
+  
+  setResults(prev => ({ ...prev, [activeCalculator]: result }));
+  setResultSaved(prev => ({ ...prev, [activeCalculator]: false }));
+  
+  if (activeCalculator === 'bmr') {
+    setInputs(prev => ({ ...prev, tdee: { ...(prev.tdee || {}), bmr: (result as BmrResult).value.toString() } }));
+  }
+  if (activeCalculator === 'tdee') {
+    setInputs(prev => ({ ...prev, macros: { ...(prev.macros || {}), calories: (result as TdeeResult).target.toString() } }));
+  }
+}, [activeCalculator, inputs, user?.uid, showToast]);
+
   const handleSave = useCallback(async () => {
     if (!user?.uid || !results[activeCalculator]) return;
     setSaving(true);
@@ -668,7 +758,7 @@ export default function FitCalcScreen() {
     return <FitCalcChart {...chartProps} />;
   }, [activeCalculator, results, inputs]);
   
-  // ✅ ENHANCED: Professional Sleep Timer UI
+  // âœ… ENHANCED: Professional Sleep Timer UI
   const renderSleepTimerSection = useCallback(() => {
     if (activeCalculator !== 'sleepquality') return null;
     
@@ -816,7 +906,7 @@ export default function FitCalcScreen() {
           <View style={styles.resultContainer}>
             <Text style={styles.resultLabel}>Your TDEE</Text>
             <Text style={styles.resultValue}>{tdee.tdee} kcal/day</Text>
-            <Text style={styles.resultHint}>Maintenance: {tdee.tdee} kcal • Goal: {tdee.target} kcal</Text>
+            <Text style={styles.resultHint}>Maintenance: {tdee.tdee} kcal â€¢ Goal: {tdee.target} kcal</Text>
           </View>
           {renderChart()}
           <View style={styles.insightBox}>
@@ -898,7 +988,7 @@ export default function FitCalcScreen() {
       bmi: (e: any) => {
         const i = e.inputs as BmiInputs;
         const r = e.result as BmiResult;
-        return { line1: dateStr, line2: `Height: ${i?.height ?? '-'} cm, Weight: ${i?.weight ?? '-'} kg`, line3: `BMI: ${r?.value ?? '-'} • ${r?.category ?? '-'}` };
+        return { line1: dateStr, line2: `Height: ${i?.height ?? '-'} cm, Weight: ${i?.weight ?? '-'} kg`, line3: `BMI: ${r?.value ?? '-'} â€¢ ${r?.category ?? '-'}` };
       },
       bmr: (e: any) => {
         const i = e.inputs as BmrInputs;
@@ -908,13 +998,13 @@ export default function FitCalcScreen() {
       tdee: (e: any) => {
         const i = e.inputs as TdeeInputs;
         const r = e.result as TdeeResult;
-        return { line1: dateStr, line2: `BMR: ${i?.bmr ?? '-'}, Activity: ${i?.activity ?? '-'}`, line3: `TDEE: ${r?.tdee ?? '-'} • Goal: ${r?.target ?? '-'} kcal` };
+        return { line1: dateStr, line2: `BMR: ${i?.bmr ?? '-'}, Activity: ${i?.activity ?? '-'}`, line3: `TDEE: ${r?.tdee ?? '-'} â€¢ Goal: ${r?.target ?? '-'} kcal` };
       },
       macros: (e: any) => {
         const i = e.inputs as MacrosInputs;
         const r = e.result as MacrosResult;
         const preset = MACRO_PRESETS[(i?.preset ?? 'balanced') as keyof typeof MACRO_PRESETS];
-        return { line1: dateStr, line2: `Goal: ${i?.calories ?? '-'} kcal • Preset: ${preset?.label ?? '-'}`, line3: `P ${r?.protein ?? '-'}g • C ${r?.carbs ?? '-'}g • F ${r?.fat ?? '-'}g` };
+        return { line1: dateStr, line2: `Goal: ${i?.calories ?? '-'} kcal â€¢ Preset: ${preset?.label ?? '-'}`, line3: `P ${r?.protein ?? '-'}g â€¢ C ${r?.carbs ?? '-'}g â€¢ F ${r?.fat ?? '-'}g` };
       }
     };
     
@@ -968,6 +1058,7 @@ export default function FitCalcScreen() {
               <ActivityIndicator size="large" color={Colors.light.primary} style={styles.loader} />
             ) : (
               <FitCalcCard
+                calculatorId={activeCalculator}  // ✅ ADD THIS LINE
                 title={activeConfig.title}
                 description={activeConfig.description}
                 fields={activeConfig.fields}
@@ -1019,7 +1110,7 @@ const styles = StyleSheet.create({
   loader: { marginTop: 40 },
   resultContainer: { marginTop: 0, backgroundColor: Colors.light.background, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: Colors.light.border },
   resultLabel: { fontSize: 14, fontWeight: '600', color: Colors.light.textSecondary, marginBottom: 4 },
-  resultValue: { fontSize: 32, fontWeight: '700', color: Colors.light.primary, marginBottom: 4 },
+  resultValue: { fontSize: 22, fontWeight: '700', color: Colors.light.primary, marginBottom: 4 },
   resultCategory: { fontSize: 16, fontWeight: '600', color: Colors.light.text, marginBottom: 6 },
   resultHint: { fontSize: 13, color: Colors.light.textSecondary, lineHeight: 18 },
   resultPreset: { fontSize: 12, color: Colors.light.textSecondary, marginBottom: 12 },
@@ -1034,7 +1125,7 @@ const styles = StyleSheet.create({
   insightText: { fontSize: 12, color: Colors.light.text, lineHeight: 18 },
 });
 
-// ✅ PROFESSIONAL SLEEP TIMER STYLES
+// âœ… PROFESSIONAL SLEEP TIMER STYLES
 const sleepStyles = StyleSheet.create({
   container: {
     marginBottom: 20,

@@ -51,11 +51,11 @@ export interface ProfileData {
 
   // ✅ Female Health - Core Period Tracking (Only for Female users)
   // Based on industry standards from Flo, Clue, and Apple Health
-  periodStartDate?: string; // YYYY-MM-DD format (Last period start date)
-  periodEndDate?: string; // YYYY-MM-DD format (Last period end date)
-  averageCycleLength?: number; // Days (e.g., 28, 30)
-  flowIntensity?: 'Spotting' | 'Light' | 'Medium' | 'Heavy'; // Latest period flow intensity
-  
+  periodStartDate?: string;      // YYYY-MM-DD format (Last period start date)
+  periodEndDate?: string;        // YYYY-MM-DD format (Last period end date)
+  averageCycleLength?: number;   // Days (e.g., 28, 30)
+  flowIntensity?: FlowIntensity; // Latest period flow intensity
+
   // Legacy fields (kept for backward compatibility)
   lastMenstrualPeriod?: string;
   cycleLength?: string;
@@ -86,6 +86,37 @@ export type Gender =
 
 // Flow intensity options for period tracking
 export type FlowIntensity = 'Spotting' | 'Light' | 'Medium' | 'Heavy';
+
+// ✅ Period cycle calculator result
+export interface PeriodCycleResult {
+  hasSufficientData: boolean;
+  // Base dates (ISO YYYY-MM-DD)
+  lastPeriodStart?: string;
+  lastPeriodEnd?: string;
+  averageCycleLength?: number;
+
+  // Core predictions
+  nextPeriodStart?: string;
+  nextPeriodEnd?: string;
+  ovulationDate?: string;
+  fertileWindowStart?: string;
+  fertileWindowEnd?: string;
+
+  // Derived metrics
+  cycleDay?: number;        // e.g. 15 (today is day 15 of current cycle)
+  cycleLength?: number;     // used in calculation (falls back to 28)
+  daysUntilNextPeriod?: number;
+  daysUntilOvulation?: number;
+
+  // Phase info
+  currentPhase?:
+    | 'Menstruation'
+    | 'Follicular'
+    | 'Ovulation'
+    | 'Luteal'
+    | 'Unknown';
+  notes?: string;
+}
 
 // Helper type for updating profile
 export type ProfileUpdateData = {
@@ -125,18 +156,18 @@ export const getDefaultProfile = (): ProfileData => ({
   alcoholConsumption: '',
   physicalActivity: '',
   exerciseRoutine: '',
-  
+
   // ✅ Female Health - Period Tracking Defaults
   periodStartDate: undefined,
   periodEndDate: undefined,
   averageCycleLength: undefined,
   flowIntensity: undefined,
-  
+
   // Legacy defaults
   lastMenstrualPeriod: undefined,
   cycleLength: undefined,
   isPregnant: undefined,
-  
+
   vitalsReminderTime: '09:00',
   notificationsEnabled: true,
   darkMode: false,

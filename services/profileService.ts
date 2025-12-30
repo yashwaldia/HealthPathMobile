@@ -7,7 +7,7 @@
 
 import type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import firestore from '@react-native-firebase/firestore';
-import { ProfileData, ProfileUpdateData, UserProfile, getDefaultProfile } from '../types/profile';
+import { getDefaultProfile, PeriodCycleResult, ProfileData, ProfileUpdateData, UserProfile } from '../types/profile';
 
 export const profileService = {
   /**
@@ -233,6 +233,123 @@ export const profileService = {
       month: 'long',
       day: 'numeric',
     });
+  },
+
+  /**
+   * ✅ NEW: Calculate Period Cycle Predictions
+   * Based on last period start date and average cycle length
+   * Returns next period date, ovulation date, fertile window, and current cycle phase
+   */
+  calculatePeriodCycle(profileData: ProfileData): PeriodCycleResult {
+    const { periodStartDate, averageCycleLength } = profileData;
+
+    // Check if we have sufficient data
+    if (!periodStartDate) {
+      return {
+        hasSufficientData: false,
+        notes: 'Please enter your last period start date to see predictions.',
+      };
+    }
+
+    // Parse the last period start date
+    const lastPeriodStart = new Date(periodStartDate);
+    if (isNaN(lastPeriodStart.getTime())) {
+      return {
+        hasSufficientData: false,
+        notes: 'Invalid period start date format. Please use YYYY-MM-DD.',
+      };
+    }
+
+    // Use provided cycle length or default to 28 days
+    const cycleLength = averageCycleLength || 28;
+    
+    // Validate cycle length (typical range: 21-35 days)
+    if (cycleLength < 21 || cycleLength > 45) {
+      return {
+        hasSufficientData: false,
+        notes: 'Average cycle length should be between 21-45 days.',
+      };
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize to midnight
+
+    // Calculate days since last period started
+    const daysSinceLastPeriod = Math.floor(
+      (today.getTime() - lastPeriodStart.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    // Calculate current cycle day (1-based)
+    const cycleDay = (daysSinceLastPeriod % cycleLength) + 1;
+
+    // Calculate next period start date
+    const nextPeriodStart = new Date(lastPeriodStart);
+    const cyclesPassed = Math.floor(daysSinceLastPeriod / cycleLength) + 1;
+    nextPeriodStart.setDate(lastPeriodStart.getDate() + (cycleLength * cyclesPassed));
+
+    // Calculate days until next period
+    const daysUntilNextPeriod = Math.floor(
+      (nextPeriodStart.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    // Calculate next period end date (assuming 5-day period duration)
+    const periodDuration = 5;
+    const nextPeriodEnd = new Date(nextPeriodStart);
+    nextPeriodEnd.setDate(nextPeriodStart.getDate() + periodDuration);
+
+    // Calculate ovulation date (typically 14 days before next period)
+    const ovulationDate = new Date(nextPeriodStart);
+    ovulationDate.setDate(nextPeriodStart.getDate() - 14);
+
+    // Calculate days until ovulation
+    const daysUntilOvulation = Math.floor(
+      (ovulationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    // Calculate fertile window (5 days before ovulation to 1 day after)
+    const fertileWindowStart = new Date(ovulationDate);
+    fertileWindowStart.setDate(ovulationDate.getDate() - 5);
+    
+    const fertileWindowEnd = new Date(ovulationDate);
+    fertileWindowEnd.setDate(ovulationDate.getDate() + 1);
+
+    // Determine current cycle phase
+    let currentPhase: PeriodCycleResult['currentPhase'] = 'Unknown';
+    
+    if (cycleDay >= 1 && cycleDay <= 5) {
+      currentPhase = 'Menstruation';
+    } else if (cycleDay >= 6 && cycleDay <= 13) {
+      currentPhase = 'Follicular';
+    } else if (cycleDay >= 14 && cycleDay <= 16) {
+      currentPhase = 'Ovulation';
+    } else if (cycleDay >= 17 && cycleDay <= cycleLength) {
+      currentPhase = 'Luteal';
+    }
+
+    // Format dates to YYYY-MM-DD
+    const formatToISO = (date: Date): string => {
+      return date.toISOString().split('T')[0];
+    };
+
+    return {
+      hasSufficientData: true,
+      lastPeriodStart: periodStartDate,
+      lastPeriodEnd: profileData.periodEndDate,
+      averageCycleLength: cycleLength,
+      nextPeriodStart: formatToISO(nextPeriodStart),
+      nextPeriodEnd: formatToISO(nextPeriodEnd),
+      ovulationDate: formatToISO(ovulationDate),
+      fertileWindowStart: formatToISO(fertileWindowStart),
+      fertileWindowEnd: formatToISO(fertileWindowEnd),
+      cycleDay,
+      cycleLength,
+      daysUntilNextPeriod,
+      daysUntilOvulation,
+      currentPhase,
+      notes: daysUntilNextPeriod < 0 
+        ? 'Your period may be overdue. Please update your period data.'
+        : undefined,
+    };
   },
 
   /**

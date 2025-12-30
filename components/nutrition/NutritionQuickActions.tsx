@@ -1,10 +1,10 @@
 // components/nutrition/NutritionQuickActions.tsx
 // ✅ UPDATED: Simplified to only Scan Meal feature (Dec 28, 2025)
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { analyzeMealFromImage } from '../../services/nutritionAIService';

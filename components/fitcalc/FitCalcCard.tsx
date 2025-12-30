@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { FitCalcHistoryEntry } from '../../services/fitCalcService';
+import { FitCalcId } from '../../types/fitcalc'; // ✅ NEW IMPORT
 
 // ============================================================================
 // TYPES
@@ -43,6 +44,7 @@ export type FitCalcField =
     };
 
 type Props = {
+  calculatorId: FitCalcId; // ✅ NEW: To identify which calculator
   title: string;
   description?: string;
   fields: FitCalcField[];
@@ -59,7 +61,7 @@ type Props = {
     line2?: string;
     line3?: string;
   };
-  sleepTimerSection?: React.ReactNode; // ✅ NEW: Optional sleep timer UI
+  sleepTimerSection?: React.ReactNode;
 };
 
 // ============================================================================
@@ -223,6 +225,7 @@ HistoryCard.displayName = 'HistoryCard';
 // ============================================================================
 
 export const FitCalcCard = memo(function FitCalcCard({
+  calculatorId, // ✅ NEW
   title,
   description,
   fields,
@@ -235,7 +238,7 @@ export const FitCalcCard = memo(function FitCalcCard({
   onSave,
   onDeleteHistory,
   renderHistoryRow,
-  sleepTimerSection, // ✅ NEW: Accept sleep timer section
+  sleepTimerSection,
 }: Props) {
   const hasResult = !!resultNode;
 
@@ -284,6 +287,50 @@ export const FitCalcCard = memo(function FitCalcCard({
     [inputs, handleFieldChange]
   );
 
+  // ✅ NEW: Get button config based on calculator type
+  const getButtonConfig = () => {
+    switch (calculatorId) {
+      case 'sleepgraph':
+        return {
+          icon: 'stats-chart' as const,
+          text: 'Load Sleep Data',
+        };
+      default:
+        return {
+          icon: 'calculator-outline' as const,
+          text: 'Calculate',
+        };
+    }
+  };
+
+  const buttonConfig = getButtonConfig();
+
+  // ✅ NEW: Render special info section for sleepgraph
+  const renderSleepGraphInfo = () => {
+    if (calculatorId !== 'sleepgraph') return null;
+
+    return (
+      <View style={styles.infoSection}>
+        <View style={styles.infoBox}>
+          <Ionicons name="information-circle" size={20} color={Colors.light.primary} />
+          <View style={styles.infoTextContainer}>
+            <Text style={styles.infoTitle}>Sleep History Tracker</Text>
+            <Text style={styles.infoText}>
+              View your sleep patterns from the last 30 days. This automatically pulls data from your sleep tracking sessions.
+            </Text>
+          </View>
+        </View>
+        <View style={styles.quickTipsBox}>
+          <Text style={styles.quickTipsTitle}>📊 What you'll see:</Text>
+          <Text style={styles.quickTip}>• Average sleep duration</Text>
+          <Text style={styles.quickTip}>• Sleep consistency score</Text>
+          <Text style={styles.quickTip}>• Weekly trends and patterns</Text>
+          <Text style={styles.quickTip}>• Longest & shortest sessions</Text>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.card}>
       {/* Input Section */}
@@ -291,8 +338,11 @@ export const FitCalcCard = memo(function FitCalcCard({
         <Text style={styles.title}>{title}</Text>
         {description && <Text style={styles.description}>{description}</Text>}
 
-        {/* ✅ NEW: Render Sleep Timer Section (if provided) */}
+        {/* Sleep Timer Section */}
         {sleepTimerSection && sleepTimerSection}
+
+        {/* Sleep Graph Info Section */}
+        {renderSleepGraphInfo()}
 
         {/* Fields */}
         {fields.map(renderField)}
@@ -303,8 +353,8 @@ export const FitCalcCard = memo(function FitCalcCard({
           onPress={onCalculate}
           activeOpacity={0.8}
         >
-          <Ionicons name="calculator-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-          <Text style={styles.buttonText}>Calculate</Text>
+          <Ionicons name={buttonConfig.icon} size={18} color="#fff" style={{ marginRight: 6 }} />
+          <Text style={styles.buttonText}>{buttonConfig.text}</Text>
         </TouchableOpacity>
 
         {/* Result Section */}
@@ -394,6 +444,55 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     lineHeight: 18,
   },
+  
+  // ✅ NEW: Info Section Styles
+  infoSection: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: Colors.light.primary + '10',
+    padding: 14,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.light.primary,
+    gap: 12,
+  },
+  infoTextContainer: {
+    flex: 1,
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 6,
+  },
+  infoText: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    lineHeight: 18,
+  },
+  quickTipsBox: {
+    backgroundColor: Colors.light.background,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  quickTipsTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 10,
+  },
+  quickTip: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  
   field: {
     marginBottom: 14,
   },

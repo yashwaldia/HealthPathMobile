@@ -1,37 +1,37 @@
 // app/(tabs)/profile.tsx
 
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  RefreshControl,
-  Alert,
-  ActivityIndicator,
-  Animated,
-  Switch,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../../context/AuthContext';
-import { Colors } from '../../constants/colors';
-import { profileService } from '../../services/profileService';
-import { logOut } from '../../services/authService';
-import { storageService } from '../../services/storageService';
-import { UserProfile } from '../../types/profile';
-import EditProfileModal from '../../components/profile/EditProfileModal';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import EditProfileModal from '../../components/profile/EditProfileModal';
+import { Colors } from '../../constants/colors';
+import { useAuth } from '../../context/AuthContext';
+import { logOut } from '../../services/authService';
+import {
+  cancelAllMedicationReminders,
   checkNotificationPermissions,
+  getAllScheduledNotifications,
   requestNotificationPermissions,
   scheduleAllMedicationReminders,
-  cancelAllMedicationReminders,
   sendTestNotification,
-  getAllScheduledNotifications,
 } from '../../services/notificationService';
+import { profileService } from '../../services/profileService';
+import { storageService } from '../../services/storageService';
+import { PeriodCycleResult, UserProfile } from '../../types/profile';
 
 export default function ProfileScreen() {
   const { user } = useAuth();
@@ -45,6 +45,9 @@ export default function ProfileScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [hasPermission, setHasPermission] = useState(false);
   const [scheduledCount, setScheduledCount] = useState(0);
+  
+  // ✅ NEW: Period cycle predictions state
+  const [periodCycle, setPeriodCycle] = useState<PeriodCycleResult | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -89,9 +92,21 @@ export default function ProfileScreen() {
 
         const newProfile = await profileService.getProfile(user.uid);
         setProfile(newProfile);
+        
+        // ✅ Calculate period cycle for new profile
+        if (newProfile?.profile?.gender === 'Female') {
+          const cycle = profileService.calculatePeriodCycle(newProfile.profile);
+          setPeriodCycle(cycle);
+        }
       } else {
         setProfile(userProfile);
         setNotificationsEnabled(userProfile?.profile?.notificationsEnabled ?? true);
+        
+        // ✅ Calculate period cycle if user is female
+        if (userProfile?.profile?.gender === 'Female') {
+          const cycle = profileService.calculatePeriodCycle(userProfile.profile);
+          setPeriodCycle(cycle);
+        }
       }
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -467,45 +482,140 @@ export default function ProfileScreen() {
 
           {/* ✅ PERIOD TRACKING SECTION - Only show if gender is Female */}
           {profile?.profile?.gender === 'Female' && (
-            <View style={styles.section}>
-              <View style={styles.periodTrackingHeader}>
-                <Ionicons name="water" size={22} color={Colors.light.primary} />
-                <Text style={styles.sectionTitle}>Period Tracking</Text>
+            <>
+              <View style={styles.section}>
+                <View style={styles.periodTrackingHeader}>
+                  <Ionicons name="water" size={22} color={Colors.light.primary} />
+                  <Text style={styles.sectionTitle}>Period Tracking</Text>
+                </View>
+
+                <InfoCard
+                  icon="calendar-outline"
+                  label="Last Period Start"
+                  value={
+                    profile?.profile?.periodStartDate
+                      ? profileService.formatDate(profile.profile.periodStartDate)
+                      : 'Not tracked'
+                  }
+                />
+                <InfoCard
+                  icon="calendar-outline"
+                  label="Last Period End"
+                  value={
+                    profile?.profile?.periodEndDate
+                      ? profileService.formatDate(profile.profile.periodEndDate)
+                      : 'Not tracked'
+                  }
+                />
+                <InfoCard
+                  icon="time-outline"
+                  label="Average Cycle Length"
+                  value={
+                    profile?.profile?.averageCycleLength
+                      ? `${profile.profile.averageCycleLength} days`
+                      : 'Not set'
+                  }
+                />
+                <InfoCard
+                  icon="pulse-outline"
+                  label="Flow Intensity"
+                  value={getProfileValue('flowIntensity', 'Not tracked')}
+                />
               </View>
 
-              <InfoCard
-                icon="calendar-outline"
-                label="Last Period Start"
-                value={
-                  profile?.profile?.periodStartDate
-                    ? profileService.formatDate(profile.profile.periodStartDate)
-                    : 'Not tracked'
-                }
-              />
-              <InfoCard
-                icon="calendar-outline"
-                label="Last Period End"
-                value={
-                  profile?.profile?.periodEndDate
-                    ? profileService.formatDate(profile.profile.periodEndDate)
-                    : 'Not tracked'
-                }
-              />
-              <InfoCard
-                icon="time-outline"
-                label="Average Cycle Length"
-                value={
-                  profile?.profile?.averageCycleLength
-                    ? `${profile.profile.averageCycleLength} days`
-                    : 'Not set'
-                }
-              />
-              <InfoCard
-                icon="pulse-outline"
-                label="Flow Intensity"
-                value={getProfileValue('flowIntensity', 'Not tracked')}
-              />
-            </View>
+              {/* ✅ NEW: PERIOD PREDICTIONS SECTION */}
+              {periodCycle?.hasSufficientData && (
+                <View style={styles.section}>
+                  <View style={styles.periodPredictionsHeader}>
+                    <Ionicons name="analytics" size={22} color="#FF6B9D" />
+                    <Text style={styles.sectionTitle}>Period Predictions</Text>
+                  </View>
+
+                  {/* Current Status Card - Highlighted */}
+                  <View style={styles.highlightCard}>
+                    <View style={styles.highlightCardHeader}>
+                      <Ionicons name="today" size={24} color="#FF6B9D" />
+                      <View style={styles.highlightCardContent}>
+                        <Text style={styles.highlightCardTitle}>Current Status</Text>
+                        <Text style={styles.highlightCardValue}>
+                          Day {periodCycle.cycleDay} of {periodCycle.cycleLength}
+                        </Text>
+                        <Text style={styles.highlightCardSubtext}>
+                          {periodCycle.currentPhase} Phase
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Next Period Card - Highlighted */}
+                  <View style={styles.highlightCard}>
+                    <View style={styles.highlightCardHeader}>
+                      <Ionicons name="calendar" size={24} color="#FF6B9D" />
+                      <View style={styles.highlightCardContent}>
+                        <Text style={styles.highlightCardTitle}>Next Period</Text>
+                        <Text style={styles.highlightCardValue}>
+                          {periodCycle.nextPeriodStart
+                            ? profileService.formatDate(periodCycle.nextPeriodStart)
+                            : 'Not available'}
+                        </Text>
+                        <Text style={styles.highlightCardSubtext}>
+                          {periodCycle.daysUntilNextPeriod !== undefined &&
+                          periodCycle.daysUntilNextPeriod >= 0
+                            ? `In ${periodCycle.daysUntilNextPeriod} days`
+                            : 'Date may have passed'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Additional Predictions */}
+                  <InfoCard
+                    icon="heart-outline"
+                    label="Ovulation Date"
+                    value={
+                      periodCycle.ovulationDate
+                        ? profileService.formatDate(periodCycle.ovulationDate)
+                        : 'Not available'
+                    }
+                  />
+                  
+                  <InfoCard
+                    icon="flower-outline"
+                    label="Fertile Window"
+                    value={
+                      periodCycle.fertileWindowStart && periodCycle.fertileWindowEnd
+                        ? `${new Date(periodCycle.fertileWindowStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(periodCycle.fertileWindowEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                        : 'Not available'
+                    }
+                  />
+
+                  {/* Warning/Notes if any */}
+                  {periodCycle.notes && (
+                    <View style={styles.periodNotesCard}>
+                      <Ionicons name="information-circle" size={20} color="#FF9500" />
+                      <Text style={styles.periodNotesText}>{periodCycle.notes}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Show message if insufficient data */}
+              {periodCycle && !periodCycle.hasSufficientData && (
+                <View style={styles.section}>
+                  <View style={styles.periodPredictionsHeader}>
+                    <Ionicons name="analytics" size={22} color="#FF6B9D" />
+                    <Text style={styles.sectionTitle}>Period Predictions</Text>
+                  </View>
+
+                  <View style={styles.periodNotesCard}>
+                    <Ionicons name="information-circle" size={20} color="#FF9500" />
+                    <Text style={styles.periodNotesText}>
+                      {periodCycle.notes || 'Add your period data to see predictions'}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </>
           )}
 
           <View style={styles.section}>
@@ -733,12 +843,71 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     marginBottom: 12,
   },
-  // ✅ NEW: Period tracking header with icon
+  // Period tracking header with icon
   periodTrackingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 12,
+  },
+  // ✅ NEW: Period predictions header
+  periodPredictionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  // ✅ NEW: Highlighted card for important predictions
+  highlightCard: {
+    backgroundColor: '#FF6B9D15',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#FF6B9D40',
+  },
+  highlightCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  highlightCardContent: {
+    flex: 1,
+  },
+  highlightCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+    marginBottom: 4,
+  },
+  highlightCardValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FF6B9D',
+    marginBottom: 2,
+  },
+  highlightCardSubtext: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.light.text,
+  },
+  // ✅ NEW: Period notes/warning card
+  periodNotesCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FF950015',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#FF950050',
+  },
+  periodNotesText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#FF9500',
+    lineHeight: 18,
   },
   infoCard: {
     flexDirection: 'row',

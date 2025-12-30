@@ -12,7 +12,7 @@ export type FitCalcConfigEntry = {
   description?: string;
   fields: FitCalcField[];
   category: CategoryId;
-  icon: string; // Ionicons name
+  icon: string;
 };
 
 // ============================================================================
@@ -20,7 +20,7 @@ export type FitCalcConfigEntry = {
 // ============================================================================
 
 export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
-  // ========== FITNESS CATEGORY ========== (UNCHANGED)
+  // ========== FITNESS CATEGORY ==========
   
   bmi: {
     title: 'BMI',
@@ -39,27 +39,11 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     category: 'fitness',
     icon: 'flame-outline',
     fields: [
-      {
-        key: 'gender',
-        label: 'Gender',
-        type: 'chips',
-        options: [
-          { value: 'male', label: 'Male' },
-          { value: 'female', label: 'Female' },
-        ],
-      },
+      { key: 'gender', label: 'Gender', type: 'chips', options: [{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }] },
       { key: 'age', label: 'Age (years)', type: 'number', keyboardType: 'numeric' },
       { key: 'height', label: 'Height (cm)', type: 'number', keyboardType: 'numeric' },
       { key: 'weight', label: 'Weight (kg)', type: 'number', keyboardType: 'numeric' },
-      {
-        key: 'formula',
-        label: 'Formula',
-        type: 'chips',
-        options: [
-          { value: 'mifflin', label: 'Mifflin-St Jeor' },
-          { value: 'harris', label: 'Harris-Benedict' },
-        ],
-      },
+      { key: 'formula', label: 'Formula', type: 'chips', options: [{ value: 'mifflin', label: 'Mifflin-St Jeor' }, { value: 'harris', label: 'Harris-Benedict' }] },
     ],
   },
   
@@ -70,28 +54,8 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     icon: 'speedometer-outline',
     fields: [
       { key: 'bmr', label: 'BMR (kcal/day)', type: 'number', keyboardType: 'numeric' },
-      {
-        key: 'activity',
-        label: 'Activity level',
-        type: 'chips',
-        options: [
-          { value: '1.2', label: 'Sedentary' },
-          { value: '1.375', label: 'Light' },
-          { value: '1.55', label: 'Moderate' },
-          { value: '1.725', label: 'Very Active' },
-          { value: '1.9', label: 'Extreme' },
-        ],
-      },
-      {
-        key: 'goal',
-        label: 'Goal',
-        type: 'chips',
-        options: [
-          { value: 'maintain', label: 'Maintain' },
-          { value: 'lose', label: 'Lose Weight' },
-          { value: 'gain', label: 'Gain Weight' },
-        ],
-      },
+      { key: 'activity', label: 'Activity level', type: 'chips', options: [{ value: '1.2', label: 'Sedentary' }, { value: '1.375', label: 'Light' }, { value: '1.55', label: 'Moderate' }, { value: '1.725', label: 'Very Active' }, { value: '1.9', label: 'Extreme' }] },
+      { key: 'goal', label: 'Goal', type: 'chips', options: [{ value: 'maintain', label: 'Maintain' }, { value: 'lose', label: 'Lose Weight' }, { value: 'gain', label: 'Gain Weight' }] },
     ],
   },
   
@@ -101,23 +65,8 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     category: 'fitness',
     icon: 'restaurant-outline',
     fields: [
-      {
-        key: 'calories',
-        label: 'Goal calories (kcal/day)',
-        type: 'number',
-        keyboardType: 'numeric',
-      },
-      {
-        key: 'preset',
-        label: 'Macro preset',
-        type: 'chips',
-        options: [
-          { value: 'balanced', label: 'Balanced' },
-          { value: 'keto', label: 'Ketogenic' },
-          { value: 'highp', label: 'High Protein' },
-          { value: 'lowcarb', label: 'Low Carb' },
-        ],
-      },
+      { key: 'calories', label: 'Goal calories (kcal/day)', type: 'number', keyboardType: 'numeric' },
+      { key: 'preset', label: 'Macro preset', type: 'chips', options: [{ value: 'balanced', label: 'Balanced' }, { value: 'keto', label: 'Ketogenic' }, { value: 'highp', label: 'High Protein' }, { value: 'lowcarb', label: 'Low Carb' }] },
     ],
   },
   
@@ -127,28 +76,9 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     category: 'fitness',
     icon: 'barbell-outline',
     fields: [
-      {
-        key: 'weight',
-        label: 'Weight lifted (kg)',
-        type: 'number',
-        keyboardType: 'numeric',
-      },
-      {
-        key: 'reps',
-        label: 'Repetitions (1–10)',
-        type: 'number',
-        keyboardType: 'numeric',
-      },
-      {
-        key: 'formula',
-        label: 'Formula',
-        type: 'chips',
-        options: [
-          { value: 'epley', label: 'Epley' },
-          { value: 'brzycki', label: 'Brzycki' },
-          { value: 'lombardi', label: 'Lombardi' },
-        ],
-      },
+      { key: 'weight', label: 'Weight lifted (kg)', type: 'number', keyboardType: 'numeric' },
+      { key: 'reps', label: 'Repetitions (1–10)', type: 'number', keyboardType: 'numeric' },
+      { key: 'formula', label: 'Formula', type: 'chips', options: [{ value: 'epley', label: 'Epley' }, { value: 'brzycki', label: 'Brzycki' }, { value: 'lombardi', label: 'Lombardi' }] },
     ],
   },
   
@@ -158,15 +88,7 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     category: 'fitness',
     icon: 'scale-outline',
     fields: [
-      {
-        key: 'gender',
-        label: 'Gender',
-        type: 'chips',
-        options: [
-          { value: 'male', label: 'Male' },
-          { value: 'female', label: 'Female' },
-        ],
-      },
+      { key: 'gender', label: 'Gender', type: 'chips', options: [{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }] },
       { key: 'height', label: 'Height (cm)', type: 'number', keyboardType: 'numeric' },
       { key: 'waist', label: 'Waist (cm)', type: 'number', keyboardType: 'numeric' },
       { key: 'neck', label: 'Neck (cm)', type: 'number', keyboardType: 'numeric' },
@@ -180,20 +102,12 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     category: 'fitness',
     icon: 'accessibility-outline',
     fields: [
-      {
-        key: 'gender',
-        label: 'Gender',
-        type: 'chips',
-        options: [
-          { value: 'male', label: 'Male' },
-          { value: 'female', label: 'Female' },
-        ],
-      },
+      { key: 'gender', label: 'Gender', type: 'chips', options: [{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }] },
       { key: 'height', label: 'Height (cm)', type: 'number', keyboardType: 'numeric' },
     ],
   },
   
-  // ========== HEART CATEGORY ========== (UNCHANGED)
+  // ========== HEART CATEGORY ==========
   
   hrzones: {
     title: 'HR Zones',
@@ -202,12 +116,7 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     icon: 'pulse-outline',
     fields: [
       { key: 'age', label: 'Age (years)', type: 'number', keyboardType: 'numeric' },
-      {
-        key: 'resting',
-        label: 'Resting HR (bpm, optional)',
-        type: 'number',
-        keyboardType: 'numeric',
-      },
+      { key: 'resting', label: 'Resting HR (bpm, optional)', type: 'number', keyboardType: 'numeric' },
     ],
   },
   
@@ -217,17 +126,11 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     category: 'heart',
     icon: 'trail-sign-outline',
     fields: [
-      {
-        key: 'time',
-        label: '1.5 mile time (mm:ss)',
-        type: 'text',
-        keyboardType: 'default',
-        helperText: 'e.g., 12:30',
-      },
+      { key: 'time', label: '1.5 mile time (mm:ss)', type: 'text', keyboardType: 'default', helperText: 'e.g., 12:30' },
     ],
   },
   
-  // ========== DAILY HEALTH CATEGORY ========== (UNCHANGED)
+  // ========== DAILY HEALTH CATEGORY ==========
   
   water: {
     title: 'Water',
@@ -236,17 +139,7 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     icon: 'water-outline',
     fields: [
       { key: 'weight', label: 'Weight (kg)', type: 'number', keyboardType: 'numeric' },
-      {
-        key: 'activity',
-        label: 'Activity level',
-        type: 'chips',
-        options: [
-          { value: 'sedentary', label: 'Sedentary' },
-          { value: 'lightly', label: 'Light' },
-          { value: 'moderately', label: 'Moderate' },
-          { value: 'very', label: 'Very Active' },
-        ],
-      },
+      { key: 'activity', label: 'Activity level', type: 'chips', options: [{ value: 'sedentary', label: 'Sedentary' }, { value: 'lightly', label: 'Light' }, { value: 'moderately', label: 'Moderate' }, { value: 'very', label: 'Very Active' }] },
     ],
   },
   
@@ -257,28 +150,8 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     icon: 'fitness-outline',
     fields: [
       { key: 'weight', label: 'Weight (kg)', type: 'number', keyboardType: 'numeric' },
-      {
-        key: 'activity',
-        label: 'Activity level',
-        type: 'chips',
-        options: [
-          { value: 'sedentary', label: 'Sedentary' },
-          { value: 'lightly', label: 'Light' },
-          { value: 'moderately', label: 'Moderate' },
-          { value: 'very', label: 'Very Active' },
-          { value: 'athlete', label: 'Athlete' },
-        ],
-      },
-      {
-        key: 'goal',
-        label: 'Goal',
-        type: 'chips',
-        options: [
-          { value: 'maintain', label: 'Maintain' },
-          { value: 'lose', label: 'Fat Loss' },
-          { value: 'gain', label: 'Muscle Gain' },
-        ],
-      },
+      { key: 'activity', label: 'Activity level', type: 'chips', options: [{ value: 'sedentary', label: 'Sedentary' }, { value: 'lightly', label: 'Light' }, { value: 'moderately', label: 'Moderate' }, { value: 'very', label: 'Very Active' }, { value: 'athlete', label: 'Athlete' }] },
+      { key: 'goal', label: 'Goal', type: 'chips', options: [{ value: 'maintain', label: 'Maintain' }, { value: 'lose', label: 'Fat Loss' }, { value: 'gain', label: 'Muscle Gain' }] },
     ],
   },
   
@@ -288,34 +161,9 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     category: 'dailyhealth',
     icon: 'walk-outline',
     fields: [
-      {
-        key: 'type',
-        label: 'Activity type',
-        type: 'chips',
-        options: [
-          { value: 'walking', label: 'Walking' },
-          { value: 'running', label: 'Running' },
-          { value: 'cycling', label: 'Cycling' },
-          { value: 'swimming', label: 'Swimming' },
-          { value: 'weightlifting', label: 'Lifting' },
-        ],
-      },
-      {
-        key: 'intensity',
-        label: 'Intensity',
-        type: 'chips',
-        options: [
-          { value: 'light', label: 'Light' },
-          { value: 'moderate', label: 'Moderate' },
-          { value: 'vigorous', label: 'Vigorous' },
-        ],
-      },
-      {
-        key: 'duration',
-        label: 'Duration (minutes)',
-        type: 'number',
-        keyboardType: 'numeric',
-      },
+      { key: 'type', label: 'Activity type', type: 'chips', options: [{ value: 'walking', label: 'Walking' }, { value: 'running', label: 'Running' }, { value: 'cycling', label: 'Cycling' }, { value: 'swimming', label: 'Swimming' }, { value: 'weightlifting', label: 'Lifting' }] },
+      { key: 'intensity', label: 'Intensity', type: 'chips', options: [{ value: 'light', label: 'Light' }, { value: 'moderate', label: 'Moderate' }, { value: 'vigorous', label: 'Vigorous' }] },
+      { key: 'duration', label: 'Duration (minutes)', type: 'number', keyboardType: 'numeric' },
       { key: 'weight', label: 'Weight (kg)', type: 'number', keyboardType: 'numeric' },
     ],
   },
@@ -327,13 +175,7 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     icon: 'footsteps-outline',
     fields: [
       { key: 'distance', label: 'Distance (km)', type: 'number', keyboardType: 'numeric' },
-      {
-        key: 'time',
-        label: 'Time (hh:mm:ss)',
-        type: 'text',
-        keyboardType: 'default',
-        helperText: 'e.g., 00:45:30',
-      },
+      { key: 'time', label: 'Time (hh:mm:ss)', type: 'text', keyboardType: 'default', helperText: 'e.g., 00:45:30' },
     ],
   },
   
@@ -349,7 +191,7 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     ],
   },
 
-  // ========== BIOHACKING CATEGORY ========== ✅ COMPLETELY SIMPLIFIED
+  // ========== BIOHACKING CATEGORY ==========
   
   hrv: {
     title: 'Heart Health Score',
@@ -357,41 +199,10 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     category: 'biohacking',
     icon: 'heart-circle-outline',
     fields: [
-      { 
-        key: 'age', 
-        label: 'Your age', 
-        type: 'number', 
-        keyboardType: 'numeric' 
-      },
-      {
-        key: 'energyLevel',
-        label: 'Energy level today',
-        type: 'slider',
-        min: 1,
-        max: 10,
-        step: 1,
-        helperText: 'Low energy (1) to High energy (10)',
-      },
-      {
-        key: 'stressLevel',
-        label: 'Stress level today',
-        type: 'slider',
-        min: 1,
-        max: 10,
-        step: 1,
-        helperText: 'Relaxed (1) to Very stressed (10)',
-      },
-      {
-        key: 'exerciseFrequency',
-        label: 'How often do you exercise?',
-        type: 'chips',
-        options: [
-          { value: 'rarely', label: 'Rarely' },
-          { value: 'sometimes', label: '1-2 times/week' },
-          { value: 'often', label: '3-4 times/week' },
-          { value: 'daily', label: 'Daily' },
-        ],
-      },
+      { key: 'age', label: 'Your age', type: 'number', keyboardType: 'numeric' },
+      { key: 'energyLevel', label: 'Energy level today', type: 'slider', min: 1, max: 10, step: 1, helperText: 'Low energy (1) to High energy (10)' },
+      { key: 'stressLevel', label: 'Stress level today', type: 'slider', min: 1, max: 10, step: 1, helperText: 'Relaxed (1) to Very stressed (10)' },
+      { key: 'exerciseFrequency', label: 'How often do you exercise?', type: 'chips', options: [{ value: 'rarely', label: 'Rarely' }, { value: 'sometimes', label: '1-2 times/week' }, { value: 'often', label: '3-4 times/week' }, { value: 'daily', label: 'Daily' }] },
     ],
   },
   
@@ -401,42 +212,10 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     category: 'biohacking',
     icon: 'refresh-outline',
     fields: [
-      {
-        key: 'sleepHours',
-        label: 'Hours of sleep last night',
-        type: 'number',
-        keyboardType: 'numeric',
-        helperText: 'e.g., 7.5',
-      },
-      {
-        key: 'sleepQualityRating',
-        label: 'Sleep quality',
-        type: 'slider',
-        min: 1,
-        max: 10,
-        step: 1,
-        helperText: 'Poor (1) to Excellent (10)',
-      },
-      {
-        key: 'morningFeeling',
-        label: 'How do you feel this morning?',
-        type: 'slider',
-        min: 1,
-        max: 10,
-        step: 1,
-        helperText: 'Exhausted (1) to Energized (10)',
-      },
-      {
-        key: 'muscleSoreness',
-        label: 'Muscle soreness',
-        type: 'chips',
-        options: [
-          { value: 'none', label: 'None' },
-          { value: 'light', label: 'Light' },
-          { value: 'moderate', label: 'Moderate' },
-          { value: 'severe', label: 'Severe' },
-        ],
-      },
+      { key: 'sleepHours', label: 'Hours of sleep last night', type: 'number', keyboardType: 'numeric', helperText: 'e.g., 7.5' },
+      { key: 'sleepQualityRating', label: 'Sleep quality', type: 'slider', min: 1, max: 10, step: 1, helperText: 'Poor (1) to Excellent (10)' },
+      { key: 'morningFeeling', label: 'How do you feel this morning?', type: 'slider', min: 1, max: 10, step: 1, helperText: 'Exhausted (1) to Energized (10)' },
+      { key: 'muscleSoreness', label: 'Muscle soreness', type: 'chips', options: [{ value: 'none', label: 'None' }, { value: 'light', label: 'Light' }, { value: 'moderate', label: 'Moderate' }, { value: 'severe', label: 'Severe' }] },
     ],
   },
   
@@ -446,43 +225,20 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     category: 'biohacking',
     icon: 'moon-outline',
     fields: [
-      {
-        key: 'duration',
-        label: 'Total sleep time (hours)',
-        type: 'number',
-        keyboardType: 'numeric',
-        helperText: 'e.g., 7.5',
-      },
-      {
-        key: 'sleepQualityRating',
-        label: 'How well did you sleep?',
-        type: 'slider',
-        min: 1,
-        max: 10,
-        step: 1,
-        helperText: 'Terrible (1) to Perfect (10)',
-      },
-      {
-        key: 'wakeUps',
-        label: 'Times you woke up',
-        type: 'chips',
-        options: [
-          { value: 'none', label: 'None' },
-          { value: 'once', label: 'Once' },
-          { value: 'few', label: '2-3 times' },
-          { value: 'many', label: 'Many times' },
-        ],
-      },
-      {
-        key: 'morningMood',
-        label: 'Morning mood',
-        type: 'slider',
-        min: 1,
-        max: 10,
-        step: 1,
-        helperText: 'Groggy (1) to Refreshed (10)',
-      },
+      { key: 'duration', label: 'Total sleep time (hours)', type: 'number', keyboardType: 'numeric', helperText: 'e.g., 7.5' },
+      { key: 'sleepQualityRating', label: 'How well did you sleep?', type: 'slider', min: 1, max: 10, step: 1, helperText: 'Terrible (1) to Perfect (10)' },
+      { key: 'wakeUps', label: 'Times you woke up', type: 'chips', options: [{ value: 'none', label: 'None' }, { value: 'once', label: 'Once' }, { value: 'few', label: '2-3 times' }, { value: 'many', label: 'Many times' }] },
+      { key: 'morningMood', label: 'Morning mood', type: 'slider', min: 1, max: 10, step: 1, helperText: 'Groggy (1) to Refreshed (10)' },
     ],
+  },
+
+  // ✅ NEW: Sleep Graph Calculator
+  sleepgraph: {
+    title: 'Sleep Graph',
+    description: 'Track your sleep history and patterns over time.',
+    category: 'biohacking',
+    icon: 'analytics-outline',
+    fields: [], // No inputs - automatically loads from Firebase
   },
   
   stress: {
@@ -491,46 +247,10 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
     category: 'biohacking',
     icon: 'alert-circle-outline',
     fields: [
-      {
-        key: 'stressRating',
-        label: 'How stressed do you feel?',
-        type: 'slider',
-        min: 1,
-        max: 10,
-        step: 1,
-        helperText: 'Calm (1) to Overwhelmed (10)',
-      },
-      {
-        key: 'sleepQualityLast',
-        label: 'Sleep quality last night',
-        type: 'slider',
-        min: 1,
-        max: 10,
-        step: 1,
-        helperText: 'Poor (1) to Excellent (10)',
-      },
-      {
-        key: 'workload',
-        label: 'Current workload',
-        type: 'chips',
-        options: [
-          { value: 'light', label: 'Light' },
-          { value: 'normal', label: 'Normal' },
-          { value: 'heavy', label: 'Heavy' },
-          { value: 'overwhelming', label: 'Overwhelming' },
-        ],
-      },
-      {
-        key: 'physicalActivity',
-        label: 'Physical activity today',
-        type: 'chips',
-        options: [
-          { value: 'none', label: 'None' },
-          { value: 'light', label: 'Light walk' },
-          { value: 'moderate', label: 'Moderate' },
-          { value: 'intense', label: 'Intense' },
-        ],
-      },
+      { key: 'stressRating', label: 'How stressed do you feel?', type: 'slider', min: 1, max: 10, step: 1, helperText: 'Calm (1) to Overwhelmed (10)' },
+      { key: 'sleepQualityLast', label: 'Sleep quality last night', type: 'slider', min: 1, max: 10, step: 1, helperText: 'Poor (1) to Excellent (10)' },
+      { key: 'workload', label: 'Current workload', type: 'chips', options: [{ value: 'light', label: 'Light' }, { value: 'normal', label: 'Normal' }, { value: 'heavy', label: 'Heavy' }, { value: 'overwhelming', label: 'Overwhelming' }] },
+      { key: 'physicalActivity', label: 'Physical activity today', type: 'chips', options: [{ value: 'none', label: 'None' }, { value: 'light', label: 'Light walk' }, { value: 'moderate', label: 'Moderate' }, { value: 'intense', label: 'Intense' }] },
     ],
   },
 };
@@ -539,39 +259,22 @@ export const FITCALC_CONFIG: Record<FitCalcId, FitCalcConfigEntry> = {
 // HELPER FUNCTIONS
 // ============================================================================
 
-/**
- * Get all calculators for a specific category
- */
 export function getCalculatorsByCategory(categoryId: CategoryId): FitCalcId[] {
-  return (Object.keys(FITCALC_CONFIG) as FitCalcId[]).filter(
-    (calcId) => FITCALC_CONFIG[calcId].category === categoryId
-  );
+  return (Object.keys(FITCALC_CONFIG) as FitCalcId[]).filter(c => FITCALC_CONFIG[c].category === categoryId);
 }
 
-/**
- * Get calculator config by ID
- */
 export function getCalculatorConfig(calcId: FitCalcId): FitCalcConfigEntry {
   return FITCALC_CONFIG[calcId];
 }
 
-/**
- * Get calculator title by ID
- */
 export function getCalculatorTitle(calcId: FitCalcId): string {
   return FITCALC_CONFIG[calcId].title;
 }
 
-/**
- * Get calculator category by ID
- */
 export function getCalculatorCategory(calcId: FitCalcId): CategoryId {
   return FITCALC_CONFIG[calcId].category;
 }
 
-/**
- * Check if calculator exists
- */
 export function isValidCalculator(calcId: string): calcId is FitCalcId {
   return calcId in FITCALC_CONFIG;
 }
@@ -581,53 +284,22 @@ export function isValidCalculator(calcId: string): calcId is FitCalcId {
 // ============================================================================
 
 export const CATEGORIES = [
-  {
-    id: 'fitness' as CategoryId,
-    label: 'Fitness',
-    icon: 'barbell-outline',
-    calculators: getCalculatorsByCategory('fitness'),
-  },
-  {
-    id: 'heart' as CategoryId,
-    label: 'Heart',
-    icon: 'heart-outline',
-    calculators: getCalculatorsByCategory('heart'),
-  },
-  {
-    id: 'dailyhealth' as CategoryId,
-    label: 'Daily Health',
-    icon: 'fitness-outline',
-    calculators: getCalculatorsByCategory('dailyhealth'),
-  },
-  {
-    id: 'biohacking' as CategoryId,
-    label: 'Biohacking',
-    icon: 'flash-outline',
-    calculators: getCalculatorsByCategory('biohacking'),
-  },
+  { id: 'fitness' as CategoryId, label: 'Fitness', icon: 'barbell-outline', calculators: getCalculatorsByCategory('fitness') },
+  { id: 'heart' as CategoryId, label: 'Heart', icon: 'heart-outline', calculators: getCalculatorsByCategory('heart') },
+  { id: 'dailyhealth' as CategoryId, label: 'Daily Health', icon: 'fitness-outline', calculators: getCalculatorsByCategory('dailyhealth') },
+  { id: 'biohacking' as CategoryId, label: 'Biohacking', icon: 'flash-outline', calculators: getCalculatorsByCategory('biohacking') },
 ] as const;
 
 // ============================================================================
 // VALIDATION
 // ============================================================================
 
-/**
- * Validate that all calculators are assigned to a category
- */
 function validateConfig() {
   const allCalcIds = Object.keys(FITCALC_CONFIG) as FitCalcId[];
   const categorizedCalcs = CATEGORIES.flatMap(cat => cat.calculators);
-  
   const uncategorized = allCalcIds.filter(id => !categorizedCalcs.includes(id));
-  
-  if (uncategorized.length > 0) {
-    console.warn('Uncategorized calculators:', uncategorized);
-  }
-  
+  if (uncategorized.length > 0) console.warn('Uncategorized calculators:', uncategorized);
   return uncategorized.length === 0;
 }
 
-// Run validation in development
-if (__DEV__) {
-  validateConfig();
-}
+if (__DEV__) validateConfig();

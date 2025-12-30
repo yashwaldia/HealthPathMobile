@@ -3,10 +3,10 @@
 /**
  * FitCalc - Fitness Calculator Types
  * 
- * This file contains all TypeScript types and interfaces for the 18 fitness calculators
+ * This file contains all TypeScript types and interfaces for the 19 fitness calculators
  * organized into four categories: Fitness, Heart, Daily Health, and Biohacking
  * 
- * Updated: December 26, 2025 - Simplified biohacking calculator inputs
+ * Updated: December 29, 2025 - Added Sleep Graph calculator
  */
 
 // ============================================================================
@@ -31,6 +31,7 @@ export type FitCalcId =
   | 'hrv'          // Heart Health Score (formerly HRV)
   | 'recovery'     // Recovery Score
   | 'sleepquality' // Sleep Quality Score
+  | 'sleepgraph'   // Sleep History Graph ✅ NEW
   | 'stress';      // Stress Level Analysis
 
 // ============================================================================
@@ -317,6 +318,26 @@ export type SleepQualityResult = {
   improvements: string[]; // Array of improvement tips
 };
 
+// ---- Sleep Graph (NEW) ✅ ----
+
+export type SleepGraphInputs = {
+  // No user inputs needed - automatically fetches from Firebase
+};
+
+export type SleepGraphResult = {
+  totalSessions: number;   // Total number of sleep sessions tracked
+  averageDuration: number; // Average sleep duration in hours
+  longestSleep: number;    // Longest session in hours
+  shortestSleep: number;   // Shortest session in hours
+  last7DaysAvg: number;    // Last 7 days average (hours)
+  last30DaysAvg: number;   // Last 30 days average (hours)
+  consistency: number;     // Sleep consistency score (0-100)
+  sessions: Array<{
+    date: string;          // ISO date string (YYYY-MM-DD)
+    hours: number;         // Duration in hours
+  }>;
+};
+
 // ---- Stress Level (SIMPLIFIED) ----
 
 export type StressInputs = {
@@ -358,6 +379,7 @@ export type FitCalcInputs = {
   hrv?: HrvInputs;
   recovery?: RecoveryInputs;
   sleepquality?: SleepQualityInputs;
+  sleepgraph?: SleepGraphInputs; // ✅ NEW
   stress?: StressInputs;
 };
 
@@ -383,6 +405,7 @@ export type FitCalcResults = {
   hrv?: HrvResult;
   recovery?: RecoveryResult;
   sleepquality?: SleepQualityResult;
+  sleepgraph?: SleepGraphResult; // ✅ NEW
   stress?: StressResult;
 };
 
@@ -411,6 +434,7 @@ export type GetCalcInputs<T extends FitCalcId> =
   T extends 'hrv' ? HrvInputs :
   T extends 'recovery' ? RecoveryInputs :
   T extends 'sleepquality' ? SleepQualityInputs :
+  T extends 'sleepgraph' ? SleepGraphInputs : // ✅ NEW
   T extends 'stress' ? StressInputs :
   never;
 
@@ -435,6 +459,7 @@ export type GetCalcResult<T extends FitCalcId> =
   T extends 'hrv' ? HrvResult :
   T extends 'recovery' ? RecoveryResult :
   T extends 'sleepquality' ? SleepQualityResult :
+  T extends 'sleepgraph' ? SleepGraphResult : // ✅ NEW
   T extends 'stress' ? StressResult :
   never;
 
@@ -446,7 +471,7 @@ export function isValidFitCalcId(id: string): id is FitCalcId {
   const validIds: FitCalcId[] = [
     'bmi', 'bmr', 'tdee', 'macros', 'onerm', 'bodyfat', 'idealweight',
     'hrzones', 'vo2max', 'water', 'protein', 'activity', 'running', 'ratios',
-    'hrv', 'recovery', 'sleepquality', 'stress'
+    'hrv', 'recovery', 'sleepquality', 'sleepgraph', 'stress' // ✅ Added sleepgraph
   ];
   return validIds.includes(id as FitCalcId);
 }
