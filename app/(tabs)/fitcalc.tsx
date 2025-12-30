@@ -981,35 +981,110 @@ const handleCalculate = useCallback(async () => {
     );
   }, [activeCalculator, results, inputs, renderChart]);
   
-  const renderHistoryRow = useCallback((entry: FitCalcHistoryEntry) => {
-    const dateStr = entry.savedAt?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) ?? '';
-    
-    const formatters: any = {
-      bmi: (e: any) => {
-        const i = e.inputs as BmiInputs;
-        const r = e.result as BmiResult;
-        return { line1: dateStr, line2: `Height: ${i?.height ?? '-'} cm, Weight: ${i?.weight ?? '-'} kg`, line3: `BMI: ${r?.value ?? '-'} â€¢ ${r?.category ?? '-'}` };
-      },
-      bmr: (e: any) => {
-        const i = e.inputs as BmrInputs;
-        const r = e.result as BmrResult;
-        return { line1: dateStr, line2: `${i?.gender ?? '-'}, Age: ${i?.age ?? '-'}, ${i?.formula ?? '-'}`, line3: `BMR: ${r?.value ?? '-'} kcal/day` };
-      },
-      tdee: (e: any) => {
-        const i = e.inputs as TdeeInputs;
-        const r = e.result as TdeeResult;
-        return { line1: dateStr, line2: `BMR: ${i?.bmr ?? '-'}, Activity: ${i?.activity ?? '-'}`, line3: `TDEE: ${r?.tdee ?? '-'} â€¢ Goal: ${r?.target ?? '-'} kcal` };
-      },
-      macros: (e: any) => {
-        const i = e.inputs as MacrosInputs;
-        const r = e.result as MacrosResult;
-        const preset = MACRO_PRESETS[(i?.preset ?? 'balanced') as keyof typeof MACRO_PRESETS];
-        return { line1: dateStr, line2: `Goal: ${i?.calories ?? '-'} kcal â€¢ Preset: ${preset?.label ?? '-'}`, line3: `P ${r?.protein ?? '-'}g â€¢ C ${r?.carbs ?? '-'}g â€¢ F ${r?.fat ?? '-'}g` };
-      }
-    };
-    
-    return formatters[activeCalculator]?.(entry) || { line1: dateStr, line2: JSON.stringify(entry.inputs ?? {}), line3: JSON.stringify(entry.result ?? {}) };
-  }, [activeCalculator]);
+const renderHistoryRow = useCallback((entry: FitCalcHistoryEntry) => {
+  const dateStr = entry.savedAt?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) ?? '';
+  
+  const formatters: any = {
+    bmi: (e: any) => {
+      const i = e.inputs as BmiInputs;
+      const r = e.result as BmiResult;
+      return { line1: dateStr, line2: `Height: ${i?.height ?? '-'} cm, Weight: ${i?.weight ?? '-'} kg`, line3: `BMI: ${r?.value ?? '-'} • ${r?.category ?? '-'}` };
+    },
+    bmr: (e: any) => {
+      const i = e.inputs as BmrInputs;
+      const r = e.result as BmrResult;
+      return { line1: dateStr, line2: `${i?.gender ?? '-'}, Age: ${i?.age ?? '-'}, ${i?.formula ?? '-'}`, line3: `BMR: ${r?.value ?? '-'} kcal/day` };
+    },
+    tdee: (e: any) => {
+      const i = e.inputs as TdeeInputs;
+      const r = e.result as TdeeResult;
+      return { line1: dateStr, line2: `BMR: ${i?.bmr ?? '-'}, Activity: ${i?.activity ?? '-'}`, line3: `TDEE: ${r?.tdee ?? '-'} • Goal: ${r?.target ?? '-'} kcal` };
+    },
+    macros: (e: any) => {
+      const i = e.inputs as MacrosInputs;
+      const r = e.result as MacrosResult;
+      const preset = MACRO_PRESETS[(i?.preset ?? 'balanced') as keyof typeof MACRO_PRESETS];
+      return { line1: dateStr, line2: `Goal: ${i?.calories ?? '-'} kcal • Preset: ${preset?.label ?? '-'}`, line3: `P ${r?.protein ?? '-'}g • C ${r?.carbs ?? '-'}g • F ${r?.fat ?? '-'}g` };
+    },
+    onerm: (e: any) => {
+      const i = e.inputs as OneRmInputs;
+      const r = e.result as OneRmResult;
+      return { line1: dateStr, line2: `Weight: ${i?.weight ?? '-'} kg, Reps: ${i?.reps ?? '-'}`, line3: `1RM: ${r?.value ?? '-'} kg` };
+    },
+    bodyfat: (e: any) => {
+      const i = e.inputs as BodyFatInputs;
+      const r = e.result as BodyFatResult;
+      return { line1: dateStr, line2: `${i?.gender ?? '-'}, Waist: ${i?.waist ?? '-'}cm, Neck: ${i?.neck ?? '-'}cm`, line3: `Body Fat: ${r?.value ?? '-'}%` };
+    },
+    idealweight: (e: any) => {
+      const i = e.inputs as IdealWeightInputs;
+      const r = e.result as IdealWeightResult;
+      return { line1: dateStr, line2: `${i?.gender ?? '-'}, Height: ${i?.height ?? '-'} cm`, line3: `Devine: ${r?.devine ?? '-'}kg • Robinson: ${r?.robinson ?? '-'}kg` };
+    },
+    hrzones: (e: any) => {
+      const i = e.inputs as HrZonesInputs;
+      const r = e.result as HrZonesResult;
+      return { line1: dateStr, line2: `Age: ${i?.age ?? '-'} years`, line3: `Max HR: ${r?.maxHR ?? '-'} bpm` };
+    },
+    vo2max: (e: any) => {
+      const i = e.inputs as Vo2maxInputs;
+      const r = e.result as Vo2maxResult;
+      return { line1: dateStr, line2: `1.5 mile time: ${i?.time ?? '-'}`, line3: `VO₂max: ${r?.value ?? '-'} ml/kg/min` };
+    },
+    water: (e: any) => {
+      const i = e.inputs as WaterInputs;
+      const r = e.result as WaterResult;
+      return { line1: dateStr, line2: `Weight: ${i?.weight ?? '-'} kg, Activity: ${i?.activity ?? '-'}`, line3: `Daily water: ${r?.value ?? '-'} L` };
+    },
+    protein: (e: any) => {
+      const i = e.inputs as ProteinInputs;
+      const r = e.result as ProteinResult;
+      return { line1: dateStr, line2: `Weight: ${i?.weight ?? '-'}kg, Activity: ${i?.activity ?? '-'}`, line3: `Daily protein: ${r?.value ?? '-'} g` };
+    },
+    activity: (e: any) => {
+      const i = e.inputs as ActivityInputs;
+      const r = e.result as ActivityResult;
+      return { line1: dateStr, line2: `${i?.type ?? '-'}, ${i?.intensity ?? '-'}, ${i?.duration ?? '-'} min`, line3: `Calories burned: ${r?.value ?? '-'} kcal` };
+    },
+    running: (e: any) => {
+      const i = e.inputs as RunningInputs;
+      const r = e.result as RunningResult;
+      return { line1: dateStr, line2: `Distance: ${i?.distance ?? '-'} km, Time: ${i?.time ?? '-'}`, line3: `Pace: ${r?.pace ?? '-'}/km • Speed: ${r?.speed ?? '-'} km/h` };
+    },
+    ratios: (e: any) => {
+      const i = e.inputs as RatiosInputs;
+      const r = e.result as RatiosResult;
+      return { line1: dateStr, line2: `Waist: ${i?.waist ?? '-'}cm, Hip: ${i?.hip ?? '-'}cm`, line3: `WHtR: ${r?.whtr ?? '-'} • WHR: ${r?.whr ?? '-'}` };
+    },
+    hrv: (e: any) => {
+      const i = e.inputs as HrvInputs;
+      const r = e.result as HrvResult;
+      return { line1: dateStr, line2: `Age: ${i?.age ?? '-'}, Energy: ${i?.energyLevel ?? '-'}/10`, line3: `HRV Score: ${r?.score ?? '-'}/100 • ${r?.category ?? '-'}` };
+    },
+    recovery: (e: any) => {
+      const i = e.inputs as RecoveryInputs;
+      const r = e.result as RecoveryResult;
+      return { line1: dateStr, line2: `Sleep: ${i?.sleepHours ?? '-'}h, Quality: ${i?.sleepQualityRating ?? '-'}/10`, line3: `Recovery: ${r?.score ?? '-'}/100 • ${r?.category ?? '-'}` };
+    },
+    sleepquality: (e: any) => {
+      const i = e.inputs as SleepQualityInputs;
+      const r = e.result as SleepQualityResult;
+      return { line1: dateStr, line2: `Duration: ${i?.duration ?? '-'}h, Quality: ${i?.sleepQualityRating ?? '-'}/10`, line3: `Score: ${r?.score ?? '-'}/100 • ${r?.quality ?? '-'}` };
+    },
+    stress: (e: any) => {
+      const i = e.inputs as StressInputs;
+      const r = e.result as StressResult;
+      return { line1: dateStr, line2: `Stress: ${i?.stressRating ?? '-'}/10, Sleep: ${i?.sleepQualityLast ?? '-'}/10`, line3: `Stress Level: ${r?.level ?? '-'}/100 • ${r?.category ?? '-'}` };
+    },
+    sleepgraph: (e: any) => {
+      const r = e.result as SleepGraphResult;
+      return { line1: dateStr, line2: `${r?.totalSessions ?? 0} sessions tracked`, line3: `Avg: ${r?.averageDuration ?? '-'}h • Consistency: ${r?.consistency ?? '-'}%` };
+    },
+  };
+  
+  return formatters[activeCalculator]?.(entry) || { line1: dateStr, line2: 'Past calculation', line3: 'View details' };
+}, [activeCalculator]);
+
   
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { FitCalcHistoryEntry } from '../../services/fitCalcService';
-import { FitCalcId } from '../../types/fitcalc'; // ✅ NEW IMPORT
+import { FitCalcId } from '../../types/fitcalc';
 
 // ============================================================================
 // TYPES
@@ -44,7 +44,7 @@ export type FitCalcField =
     };
 
 type Props = {
-  calculatorId: FitCalcId; // ✅ NEW: To identify which calculator
+  calculatorId: FitCalcId;
   title: string;
   description?: string;
   fields: FitCalcField[];
@@ -211,7 +211,11 @@ const HistoryCard = memo(
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           activeOpacity={0.6}
         >
-          <Ionicons name="trash-outline" size={18} color={Colors.light.error} />
+          <Ionicons 
+            name="trash-outline" 
+            size={18} 
+            color={Colors.light.error}
+          />
         </TouchableOpacity>
       </View>
     );
@@ -225,7 +229,7 @@ HistoryCard.displayName = 'HistoryCard';
 // ============================================================================
 
 export const FitCalcCard = memo(function FitCalcCard({
-  calculatorId, // ✅ NEW
+  calculatorId,
   title,
   description,
   fields,
@@ -287,12 +291,11 @@ export const FitCalcCard = memo(function FitCalcCard({
     [inputs, handleFieldChange]
   );
 
-  // ✅ NEW: Get button config based on calculator type
   const getButtonConfig = () => {
     switch (calculatorId) {
       case 'sleepgraph':
         return {
-          icon: 'stats-chart' as const,
+          icon: 'stats-chart-outline' as const,
           text: 'Load Sleep Data',
         };
       default:
@@ -305,14 +308,17 @@ export const FitCalcCard = memo(function FitCalcCard({
 
   const buttonConfig = getButtonConfig();
 
-  // ✅ NEW: Render special info section for sleepgraph
   const renderSleepGraphInfo = () => {
     if (calculatorId !== 'sleepgraph') return null;
 
     return (
       <View style={styles.infoSection}>
         <View style={styles.infoBox}>
-          <Ionicons name="information-circle" size={20} color={Colors.light.primary} />
+          <Ionicons 
+            name="information-circle" 
+            size={22} 
+            color={Colors.light.primary} 
+          />
           <View style={styles.infoTextContainer}>
             <Text style={styles.infoTitle}>Sleep History Tracker</Text>
             <Text style={styles.infoText}>
@@ -333,50 +339,56 @@ export const FitCalcCard = memo(function FitCalcCard({
 
   return (
     <View style={styles.card}>
-      {/* Input Section */}
       <View style={styles.inputSection}>
         <Text style={styles.title}>{title}</Text>
         {description && <Text style={styles.description}>{description}</Text>}
 
-        {/* Sleep Timer Section */}
         {sleepTimerSection && sleepTimerSection}
 
-        {/* Sleep Graph Info Section */}
         {renderSleepGraphInfo()}
 
-        {/* Fields */}
         {fields.map(renderField)}
 
-        {/* Calculate Button */}
         <TouchableOpacity
           style={styles.button}
           onPress={onCalculate}
           activeOpacity={0.8}
         >
-          <Ionicons name={buttonConfig.icon} size={18} color="#fff" style={{ marginRight: 6 }} />
+          <Ionicons 
+            name={buttonConfig.icon} 
+            size={20} 
+            color="#FFFFFF" 
+            style={styles.buttonIcon}
+          />
           <Text style={styles.buttonText}>{buttonConfig.text}</Text>
         </TouchableOpacity>
 
-        {/* Result Section */}
         {hasResult && (
           <View style={styles.resultContainer}>
             {resultNode}
             
-            {/* Save/Saved Status */}
             {resultSaved === false && (
               <TouchableOpacity
                 style={styles.saveButton}
                 onPress={onSave}
                 activeOpacity={0.8}
               >
-                <Ionicons name="bookmark-outline" size={16} color="#fff" />
+                <Ionicons 
+                  name="bookmark-outline" 
+                  size={18} 
+                  color="#FFFFFF" 
+                />
                 <Text style={styles.saveButtonText}>Save Result</Text>
               </TouchableOpacity>
             )}
             
             {resultSaved === true && (
               <View style={styles.savedBadge}>
-                <Ionicons name="checkmark-circle" size={16} color={Colors.light.success} />
+                <Ionicons 
+                  name="checkmark-circle" 
+                  size={18} 
+                  color={Colors.light.success} 
+                />
                 <Text style={styles.savedText}>Saved to History</Text>
               </View>
             )}
@@ -384,11 +396,14 @@ export const FitCalcCard = memo(function FitCalcCard({
         )}
       </View>
 
-      {/* History Section */}
       {history.length > 0 && (
         <View style={styles.historySection}>
           <View style={styles.historyHeader}>
-            <Ionicons name="time-outline" size={18} color={Colors.light.text} />
+            <Ionicons 
+              name="time-outline" 
+              size={20} 
+              color={Colors.light.text} 
+            />
             <Text style={styles.historyTitle}>Past Calculations</Text>
           </View>
           <ScrollView
@@ -445,7 +460,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   
-  // ✅ NEW: Info Section Styles
   infoSection: {
     gap: 12,
     marginBottom: 16,
@@ -539,7 +553,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Slider styles
   sliderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -597,6 +610,9 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  buttonIcon: {
+    marginRight: 8,
+  },
   buttonText: {
     color: '#FFFFFF',
     fontWeight: '700',
@@ -613,10 +629,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.primary,
     paddingVertical: 10,
     borderRadius: 10,
-    gap: 6,
+    gap: 8,
   },
   saveButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 13,
   },
@@ -625,7 +641,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
     paddingVertical: 8,
     backgroundColor: Colors.light.success + '10',
     borderRadius: 8,

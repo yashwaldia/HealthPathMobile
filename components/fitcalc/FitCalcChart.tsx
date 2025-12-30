@@ -1,9 +1,9 @@
 // components/fitcalc/FitCalcChart.tsx
 
-
 import React, { useMemo } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
-import { BarChart, PieChart } from 'react-native-chart-kit';
+import { BarChart, LineChart, PieChart } from 'react-native-chart-kit';
+import { ScrollView } from 'react-native';
 import { Colors } from '../../constants/colors';
 import {
   ActivityInputs, ActivityResult, BmiInputs, BmiResult, BmrResult,
@@ -11,11 +11,9 @@ import {
   IdealWeightResult, MacrosResult, OneRmResult, ProteinInputs,
   ProteinResult, RatiosResult, RecoveryResult, RunningResult,
   SleepGraphResult,
-  SleepQualityResult, // ✅ ADD THIS
+  SleepQualityResult,
   StressResult, TdeeInputs, TdeeResult, Vo2maxResult, WaterResult,
 } from '../../types/fitcalc';
-
-
 
 type ChartProps =
   | { type: 'bmi'; data: BmiResult; inputs?: BmiInputs }
@@ -35,12 +33,10 @@ type ChartProps =
   | { type: 'hrv'; data: HrvResult }
   | { type: 'recovery'; data: RecoveryResult }
   | { type: 'sleepquality'; data: SleepQualityResult }
-  | { type: 'sleepgraph'; data: SleepGraphResult } // ✅ ADD THIS
+  | { type: 'sleepgraph'; data: SleepGraphResult }
   | { type: 'stress'; data: StressResult };
 
-
 type MarkingItem = { label: string; value: string };
-
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CHART_WIDTH = SCREEN_WIDTH - 105;
@@ -56,13 +52,11 @@ const CHART_CONFIG = {
   propsForLabels: { fontSize: 9, fontWeight: '600' as const },
 };
 
-
 const COLORS = {
   primary: '#4361EE', success: '#55EFC4', warning: '#FFEAA7',
   danger: '#FF7675', info: '#4CC9F0', purple: '#3A0CA3',
   orange: '#FAB1A0', green: '#00B894', lightBlue: '#74B9FF',
 };
-
 
 const MealMarkingGrid: React.FC<{ items: MarkingItem[] }> = ({ items }) => {
   const renderItem = (item: MarkingItem, idx: number) => (
@@ -71,7 +65,6 @@ const MealMarkingGrid: React.FC<{ items: MarkingItem[] }> = ({ items }) => {
       <Text style={s.markingValue}>{item.value}</Text>
     </View>
   );
-
 
   if (items.length === 1) return <View style={s.markingGrid}><View style={s.rowCenter}>{renderItem(items[0], 0)}</View></View>;
   if (items.length === 2) return <View style={s.markingGrid}><View style={s.row}>{items.map(renderItem)}</View></View>;
@@ -97,7 +90,6 @@ const MealMarkingGrid: React.FC<{ items: MarkingItem[] }> = ({ items }) => {
   return <View style={s.markingGrid}><View style={s.rowWrap}>{items.map(renderItem)}</View></View>;
 };
 
-
 export const FitCalcChart = React.memo<ChartProps>((props) => {
   const chartComponent = useMemo(() => {
     switch (props.type) {
@@ -118,7 +110,7 @@ export const FitCalcChart = React.memo<ChartProps>((props) => {
       case 'hrv': return <HrvChart data={props.data} />;
       case 'recovery': return <RecoveryChart data={props.data} />;
       case 'sleepquality': return <SleepQualityChart data={props.data} />;
-      case 'sleepgraph': return <SleepGraphChart data={props.data} />; // ✅ ADD THIS
+      case 'sleepgraph': return <SleepGraphChart data={props.data} />;
       case 'stress': return <StressChart data={props.data} />;
       default: return null;
     }
@@ -126,9 +118,7 @@ export const FitCalcChart = React.memo<ChartProps>((props) => {
   return <View style={s.container}>{chartComponent}</View>;
 });
 
-
 FitCalcChart.displayName = 'FitCalcChart';
-
 
 const BmiChart: React.FC<{ data: BmiResult }> = ({ data }) => {
   const bmi = parseFloat(data.value);
@@ -138,7 +128,6 @@ const BmiChart: React.FC<{ data: BmiResult }> = ({ data }) => {
     if (bmi < 30) return 50 + ((bmi - 25) / 5) * 25;
     return 75 + Math.min(((bmi - 30) / 10) * 25, 25);
   };
-
 
   return (
     <View style={s.bmiCon}>
@@ -161,7 +150,6 @@ const BmiChart: React.FC<{ data: BmiResult }> = ({ data }) => {
   );
 };
 
-
 const BmrChart: React.FC<{ data: BmrResult }> = () => (
   <View style={s.pieCon}>
     <Text style={s.title}>Energy Expenditure Breakdown</Text>
@@ -180,7 +168,6 @@ const BmrChart: React.FC<{ data: BmrResult }> = () => (
   </View>
 );
 
-
 const TdeeChart: React.FC<{ data: TdeeResult; inputs?: TdeeInputs }> = ({ data, inputs }) => {
   const mults = [1.2, 1.375, 1.55, 1.725, 1.9];
   const curr = parseFloat(inputs?.activity || '1.55');
@@ -191,7 +178,6 @@ const TdeeChart: React.FC<{ data: TdeeResult; inputs?: TdeeInputs }> = ({ data, 
       colors: mults.map(m => () => m === curr ? COLORS.primary : COLORS.info + '40'),
     }],
   };
-
 
   return (
     <View style={s.barCon}>
@@ -215,7 +201,6 @@ const TdeeChart: React.FC<{ data: TdeeResult; inputs?: TdeeInputs }> = ({ data, 
   );
 };
 
-
 const MacrosChart: React.FC<{ data: MacrosResult }> = ({ data }) => (
   <View style={s.pieCon}>
     <Text style={s.title}>Macro Distribution</Text>
@@ -238,12 +223,10 @@ const MacrosChart: React.FC<{ data: MacrosResult }> = ({ data }) => (
   </View>
 );
 
-
 const OneRmChart: React.FC<{ data: OneRmResult }> = ({ data }) => {
   const percs = [100, 90, 80, 70, 60];
   const reps = ['1 rep', '2-3 reps', '4-6 reps', '8-10 reps', '12-15 reps'];
   const colors = [COLORS.danger, COLORS.orange, COLORS.warning, COLORS.info, COLORS.success];
-
 
   return (
     <View style={s.oneRmCon}>
@@ -261,7 +244,6 @@ const OneRmChart: React.FC<{ data: OneRmResult }> = ({ data }) => {
     </View>
   );
 };
-
 
 const BodyFatChart: React.FC<{ data: BodyFatResult; inputs?: BodyFatInputs }> = ({ data, inputs }) => {
   const bf = parseFloat(data.value);
@@ -285,20 +267,15 @@ const BodyFatChart: React.FC<{ data: BodyFatResult; inputs?: BodyFatInputs }> = 
   const curr = ranges.find(r => bf >= r.min && bf < r.max) || ranges[ranges.length - 1];
   const maxBf = ranges[ranges.length - 1].max;
   
-  // Calculate pointer position (percentage from bottom)
   const getPointerPosition = () => {
     return Math.min((bf / maxBf) * 100, 100);
   };
-
 
   return (
     <View style={s.bfCon}>
       <Text style={s.title}>Body Fat Category ({gender})</Text>
       
-      {/* Main vertical bar container */}
       <View style={s.bfVerticalContainer}>
-        
-        {/* Vertical thermometer bar */}
         <View style={s.bfVerticalBar}>
           {ranges.slice().reverse().map((r, i) => {
             const active = r.label === curr?.label;
@@ -320,7 +297,6 @@ const BodyFatChart: React.FC<{ data: BodyFatResult; inputs?: BodyFatInputs }> = 
           })}
         </View>
         
-        {/* Pointer/Arrow indicator */}
         <View style={[s.bfPointer, { bottom: `${getPointerPosition()}%` }]}>
           <View style={s.bfPointerTriangle} />
           <View style={s.bfPointerLine} />
@@ -329,7 +305,6 @@ const BodyFatChart: React.FC<{ data: BodyFatResult; inputs?: BodyFatInputs }> = 
           </View>
         </View>
         
-        {/* Labels on the right side */}
         <View style={s.bfLabelsContainer}>
           {ranges.slice().reverse().map((r, i) => {
             const active = r.label === curr?.label;
@@ -363,7 +338,6 @@ const BodyFatChart: React.FC<{ data: BodyFatResult; inputs?: BodyFatInputs }> = 
         </View>
       </View>
       
-      {/* Bottom indicator */}
       <View style={s.bfBottomInd}>
         <Text style={s.bfValue}>Your Body Fat: {data.value}%</Text>
         <Text style={s.bfCat}>Category: {curr?.label}</Text>
@@ -372,13 +346,10 @@ const BodyFatChart: React.FC<{ data: BodyFatResult; inputs?: BodyFatInputs }> = 
   );
 };
 
-
-
 const IdealWeightChart: React.FC<{ data: IdealWeightResult }> = ({ data }) => {
   const weights = [data.devine, data.robinson, data.miller];
   const min = Math.min(...weights) - 5, max = Math.max(...weights) + 5, range = max - min;
   const getPos = (w: number) => ((w - min) / range) * 100;
-
 
   return (
     <View style={s.iwCon}>
@@ -411,7 +382,6 @@ const IdealWeightChart: React.FC<{ data: IdealWeightResult }> = ({ data }) => {
   );
 };
 
-
 const HrZonesChart: React.FC<{ data: HrZonesResult }> = ({ data }) => {
   const zones = [
     { name: 'Zone 1', value: data.zone1, color: COLORS.lightBlue, desc: 'Recovery' },
@@ -420,7 +390,6 @@ const HrZonesChart: React.FC<{ data: HrZonesResult }> = ({ data }) => {
     { name: 'Zone 4', value: data.zone4, color: COLORS.orange, desc: 'Threshold' },
     { name: 'Zone 5', value: data.zone5, color: COLORS.danger, desc: 'Max' },
   ];
-
 
   return (
     <View style={s.hrCon}>
@@ -446,7 +415,6 @@ const HrZonesChart: React.FC<{ data: HrZonesResult }> = ({ data }) => {
   );
 };
 
-
 const Vo2MaxChart: React.FC<{ data: Vo2maxResult }> = ({ data }) => {
   const vo2 = parseFloat(data.value);
   const levels = [
@@ -456,10 +424,9 @@ const Vo2MaxChart: React.FC<{ data: Vo2maxResult }> = ({ data }) => {
   ];
   const curr = levels.find(l => vo2 <= l.max);
 
-
   return (
     <View style={s.vo2Con}>
-      <Text style={s.title}>VOâ‚‚max Fitness Level</Text>
+      <Text style={s.title}>VO₂max Fitness Level</Text>
       <View style={s.vo2Scale}>
         {levels.map((l, i) => {
           const prev = i > 0 ? levels[i - 1].max : 0;
@@ -475,12 +442,11 @@ const Vo2MaxChart: React.FC<{ data: Vo2maxResult }> = ({ data }) => {
           );
         })}
       </View>
-      <Text style={s.vo2Value}>Your VOâ‚‚max: {data.value} ml/kg/min</Text>
+      <Text style={s.vo2Value}>Your VO₂max: {data.value} ml/kg/min</Text>
       <Text style={s.vo2Cat}>Category: {curr?.label}</Text>
     </View>
   );
 };
-
 
 const ActivityChart: React.FC<{ data: ActivityResult; inputs?: ActivityInputs }> = ({ data, inputs }) => {
   const acts = ['walking', 'running', 'cycling', 'swimming', 'weightlifting'];
@@ -494,7 +460,6 @@ const ActivityChart: React.FC<{ data: ActivityResult; inputs?: ActivityInputs }>
     }],
   };
 
-
   return (
     <View style={s.barCon}>
       <Text style={s.title}>Calories by Activity</Text>
@@ -507,14 +472,12 @@ const ActivityChart: React.FC<{ data: ActivityResult; inputs?: ActivityInputs }>
   );
 };
 
-
 const RatiosChart: React.FC<{ data: RatiosResult }> = ({ data }) => {
   const whtr = parseFloat(data.whtr), whr = parseFloat(data.whr);
   const whtrS = whtr < 0.5 ? 'Healthy' : whtr < 0.6 ? 'Caution' : 'Risk';
   const whrS = whr < 0.85 ? 'Low Risk' : whr < 0.95 ? 'Moderate' : 'High Risk';
   const whtrC = whtr < 0.5 ? COLORS.success : whtr < 0.6 ? COLORS.warning : COLORS.danger;
   const whrC = whr < 0.85 ? COLORS.success : whr < 0.95 ? COLORS.warning : COLORS.danger;
-
 
   return (
     <View style={s.ratioCon}>
@@ -542,15 +505,13 @@ const RatiosChart: React.FC<{ data: RatiosResult }> = ({ data }) => {
   );
 };
 
-
 const WaterChart: React.FC<{ data: WaterResult }> = ({ data }) => {
   const liters = parseFloat(data.value), glasses = Math.ceil(liters * 4);
   const items: MarkingItem[] = [
-    { label: 'Morning', value: `${Math.ceil(glasses * 0.3)}ðŸ¥›` },
-    { label: 'Afternoon', value: `${Math.ceil(glasses * 0.4)}ðŸ¥›` },
-    { label: 'Evening', value: `${Math.ceil(glasses * 0.3)}ðŸ¥›` },
+    { label: 'Morning', value: `${Math.ceil(glasses * 0.3)} 🥛` },
+    { label: 'Afternoon', value: `${Math.ceil(glasses * 0.4)} 🥛` },
+    { label: 'Evening', value: `${Math.ceil(glasses * 0.3)} 🥛` },
   ];
-
 
   return (
     <View style={s.waterCon}>
@@ -561,7 +522,7 @@ const WaterChart: React.FC<{ data: WaterResult }> = ({ data }) => {
         </View>
         <View style={s.waterLabels}>
           <Text style={s.waterAmt}>{data.value}L</Text>
-          <Text style={s.waterGls}>â‰ˆ {glasses} glasses</Text>
+          <Text style={s.waterGls}>≈ {glasses} glasses</Text>
           <Text style={s.waterNote}>(250ml each)</Text>
         </View>
       </View>
@@ -569,7 +530,6 @@ const WaterChart: React.FC<{ data: WaterResult }> = ({ data }) => {
     </View>
   );
 };
-
 
 const RunningChart: React.FC<{ data: RunningResult }> = ({ data }) => {
   const speed = parseFloat(data.speed);
@@ -580,7 +540,6 @@ const RunningChart: React.FC<{ data: RunningResult }> = ({ data }) => {
     { name: 'Interval', minSpeed: 15, maxSpeed: 20, color: COLORS.danger },
   ];
   const curr = zones.find(z => speed >= z.minSpeed && speed < z.maxSpeed);
-
 
   return (
     <View style={s.runCon}>
@@ -617,14 +576,12 @@ const RunningChart: React.FC<{ data: RunningResult }> = ({ data }) => {
   );
 };
 
-
 const ProteinChart: React.FC<{ data: ProteinResult; inputs?: ProteinInputs }> = ({ data, inputs }) => {
   const base = 50;
   const goal = inputs?.goal === 'gain' ? 20 : inputs?.goal === 'lose' ? 10 : 0;
   const act = data.value - base - goal;
   const perMeal = Math.round(data.value / 4);
   const items: MarkingItem[] = Array.from({ length: 4 }).map((_, i) => ({ label: `Meal ${i + 1}`, value: `~${perMeal}g` }));
-
 
   return (
     <View style={s.protCon}>
@@ -656,11 +613,9 @@ const ProteinChart: React.FC<{ data: ProteinResult; inputs?: ProteinInputs }> = 
   );
 };
 
-
 // ============================================================================
 // BIOHACKING CHARTS
 // ============================================================================
-
 
 const HrvChart: React.FC<{ data: HrvResult }> = ({ data }) => {
   const score = data.score;
@@ -673,9 +628,8 @@ const HrvChart: React.FC<{ data: HrvResult }> = ({ data }) => {
 
   return (
     <View style={s.bioHrvCon}>
-      <Text style={s.title}>HRV Recovery Score</Text>
+      <Text style={s.title}>Heart Health Score</Text>
       
-      {/* Circular gauge */}
       <View style={s.bioGaugeCon}>
         <View style={[s.bioGaugeCircle, { borderColor: getColor() }]}>
           <Text style={[s.bioGaugeScore, { color: getColor() }]}>{score}</Text>
@@ -683,20 +637,17 @@ const HrvChart: React.FC<{ data: HrvResult }> = ({ data }) => {
         </View>
       </View>
 
-      {/* Category badge */}
       <View style={[s.bioCategoryBadge, { backgroundColor: getColor() + '20', borderColor: getColor() }]}>
         <Text style={[s.bioCategoryText, { color: getColor() }]}>{data.category}</Text>
       </View>
 
-      {/* Recommendation */}
       <View style={s.bioRecommendBox}>
-        <Text style={s.bioRecommendTitle}>ðŸ’¡ Recommendation</Text>
+        <Text style={s.bioRecommendTitle}>💡 Recommendation</Text>
         <Text style={s.bioRecommendText}>{data.recommendation}</Text>
       </View>
     </View>
   );
 };
-
 
 const RecoveryChart: React.FC<{ data: RecoveryResult }> = ({ data }) => {
   const score = data.score;
@@ -707,18 +658,16 @@ const RecoveryChart: React.FC<{ data: RecoveryResult }> = ({ data }) => {
     return COLORS.danger;
   };
 
-  // Recovery components breakdown
   const components = [
-    { label: 'HRV', value: 40, color: COLORS.primary },
-    { label: 'Sleep', value: 35, color: COLORS.info },
-    { label: 'Resting HR', value: 25, color: COLORS.purple },
+    { label: 'Sleep Quality', value: 40, color: COLORS.primary },
+    { label: 'Sleep Duration', value: 35, color: COLORS.info },
+    { label: 'Morning Feel', value: 25, color: COLORS.purple },
   ];
 
   return (
     <View style={s.bioRecoveryCon}>
       <Text style={s.title}>Recovery Analysis</Text>
       
-      {/* Main score with radial progress */}
       <View style={s.bioRadialCon}>
         <View style={[s.bioRadialOuter, { borderColor: getColor() }]}>
           <View style={[s.bioRadialInner, { borderColor: getColor() + '40' }]}>
@@ -728,7 +677,6 @@ const RecoveryChart: React.FC<{ data: RecoveryResult }> = ({ data }) => {
         </View>
       </View>
 
-      {/* Component breakdown */}
       <View style={s.bioComponentsCon}>
         <Text style={s.bioComponentsTitle}>Score Breakdown</Text>
         {components.map((comp, i) => (
@@ -740,14 +688,12 @@ const RecoveryChart: React.FC<{ data: RecoveryResult }> = ({ data }) => {
         ))}
       </View>
 
-      {/* Advice */}
       <View style={[s.bioAdviceBox, { backgroundColor: getColor() + '10', borderLeftColor: getColor() }]}>
         <Text style={s.bioAdviceText}>{data.advice}</Text>
       </View>
     </View>
   );
 };
-
 
 const SleepQualityChart: React.FC<{ data: SleepQualityResult }> = ({ data }) => {
   const score = data.score;
@@ -762,26 +708,23 @@ const SleepQualityChart: React.FC<{ data: SleepQualityResult }> = ({ data }) => 
     <View style={s.bioSleepCon}>
       <Text style={s.title}>Sleep Quality Score</Text>
       
-      {/* Score display */}
       <View style={s.bioScoreDisplay}>
         <Text style={[s.bioScoreValue, { color: getColor() }]}>{score}</Text>
         <Text style={s.bioScoreMax}>/ 100</Text>
         <Text style={[s.bioScoreQuality, { color: getColor() }]}>{data.quality}</Text>
       </View>
 
-      {/* Progress bar */}
       <View style={s.bioProgressBarCon}>
         <View style={s.bioProgressBarBg}>
           <View style={[s.bioProgressBarFill, { width: `${score}%`, backgroundColor: getColor() }]} />
         </View>
       </View>
 
-      {/* Improvements list */}
       <View style={s.bioImprovementsCon}>
-        <Text style={s.bioImprovementsTitle}>âœ¨ Improvements</Text>
+        <Text style={s.bioImprovementsTitle}>✨ Improvements</Text>
         {data.improvements.map((tip, i) => (
           <View key={i} style={s.bioImprovementItem}>
-            <Text style={s.bioImprovementBullet}>â€¢</Text>
+            <Text style={s.bioImprovementBullet}>{'\u2022'}</Text>
             <Text style={s.bioImprovementText}>{tip}</Text>
           </View>
         ))}
@@ -789,11 +732,11 @@ const SleepQualityChart: React.FC<{ data: SleepQualityResult }> = ({ data }) => 
     </View>
   );
 };
-// ✅ NEW: Sleep Graph Chart - Line chart showing sleep history
+
 const SleepGraphChart: React.FC<{ data: SleepGraphResult }> = ({ data }) => {
   if (data.totalSessions === 0) {
     return (
-      <View style={s.bioSleepGraphCon}>
+      <View style={s.container}>
         <Text style={s.title}>Sleep History (30 Days)</Text>
         <View style={s.emptyStateBox}>
           <Text style={s.emptyStateEmoji}>😴</Text>
@@ -804,16 +747,19 @@ const SleepGraphChart: React.FC<{ data: SleepGraphResult }> = ({ data }) => {
     );
   }
 
-  // Prepare data for line chart
+  const displaySessions = data.sessions.slice(-14);
+  const pointSpacing = 50;
+  const dynamicChartWidth = Math.max(CHART_WIDTH, displaySessions.length * pointSpacing);
+
   const chartData = {
-    labels: data.sessions.slice(-7).map(s => {
+    labels: displaySessions.map(s => {
       const date = new Date(s.date);
-      return `${date.getMonth() + 1}/${date.getDate()}`;
+      return date.getDate().toString();
     }),
     datasets: [{
-      data: data.sessions.slice(-7).map(s => s.hours),
+      data: displaySessions.map(s => s.hours),
       color: (opacity = 1) => `rgba(67, 97, 238, ${opacity})`,
-      strokeWidth: 3,
+      strokeWidth: 2.5,
     }],
   };
 
@@ -827,64 +773,102 @@ const SleepGraphChart: React.FC<{ data: SleepGraphResult }> = ({ data }) => {
   const consistencyColor = data.consistency >= 70 ? COLORS.success : data.consistency >= 50 ? COLORS.info : COLORS.warning;
 
   return (
-    <View style={s.bioSleepGraphCon}>
-      <Text style={s.title}>Sleep History (Last 30 Days)</Text>
+    <View style={s.container}>
+      <Text style={s.title}>Sleep History (Last {displaySessions.length} Days)</Text>
 
-      {/* Summary Cards */}
       <View style={s.sleepSummaryRow}>
-        <View style={[s.sleepSummaryCard, { backgroundColor: avgColor + '20', borderColor: avgColor }]}>
+        <View style={[s.sleepSummaryCard, { borderColor: avgColor }]}>
           <Text style={[s.sleepSummaryValue, { color: avgColor }]}>{data.averageDuration}h</Text>
           <Text style={s.sleepSummaryLabel}>Average</Text>
         </View>
-        <View style={[s.sleepSummaryCard, { backgroundColor: consistencyColor + '20', borderColor: consistencyColor }]}>
+        
+        <View style={[s.sleepSummaryCard, { borderColor: consistencyColor }]}>
           <Text style={[s.sleepSummaryValue, { color: consistencyColor }]}>{data.consistency}%</Text>
           <Text style={s.sleepSummaryLabel}>Consistency</Text>
         </View>
-        <View style={[s.sleepSummaryCard, { backgroundColor: COLORS.primary + '20', borderColor: COLORS.primary }]}>
+        
+        <View style={[s.sleepSummaryCard, { borderColor: COLORS.primary }]}>
           <Text style={[s.sleepSummaryValue, { color: COLORS.primary }]}>{data.totalSessions}</Text>
           <Text style={s.sleepSummaryLabel}>Sessions</Text>
         </View>
       </View>
 
-      {/* Line Chart */}
-      {data.sessions.length >= 2 && (
-        <View style={s.chartWrap}>
-          <BarChart
+      {displaySessions.length >= 2 && (
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingRight: 20 }}
+          style={{ marginVertical: 12 }}
+        >
+          <LineChart
             data={chartData}
-            width={SCREEN_WIDTH - 100}
-            height={160}
+            width={dynamicChartWidth}
+            height={200}
             chartConfig={{
-              ...CHART_CONFIG,
+              backgroundColor: Colors.light.cardBackground,
+              backgroundGradientFrom: Colors.light.cardBackground,
+              backgroundGradientTo: Colors.light.cardBackground,
               decimalPlaces: 1,
+              color: (opacity = 1) => `rgba(67, 97, 238, ${opacity})`,
+              labelColor: (opacity = 1) => `rgba(100, 116, 139, ${opacity})`,
+              style: { borderRadius: 12 },
+              propsForBackgroundLines: {
+                strokeDasharray: '',
+                stroke: Colors.light.border,
+                strokeWidth: 0.5,
+              },
+              propsForLabels: {
+                fontSize: 10,
+                fontWeight: '600' as const,
+              },
+              propsForDots: {
+                r: '4',
+                strokeWidth: '2',
+                stroke: COLORS.primary,
+              },
             }}
-            fromZero
-            showValuesOnTopOfBars
+            bezier
+            style={{
+              marginVertical: 8,
+              borderRadius: 12,
+            }}
             withInnerLines={true}
+            withOuterLines={false}
+            withVerticalLines={false}
+            withHorizontalLines={true}
+            withVerticalLabels={true}
+            withHorizontalLabels={true}
+            fromZero={false}
             yAxisLabel=""
             yAxisSuffix="h"
+            segments={4}
           />
-        </View>
+        </ScrollView>
       )}
 
-      {/* Stats Grid */}
+      <Text style={s.subtitle}>Swipe left/right to see more data</Text>
+
       <View style={s.sleepStatsGrid}>
         <View style={s.sleepStatItem}>
           <Text style={s.sleepStatLabel}>Last 7 Days</Text>
-          <Text style={s.sleepStatValue}>{data.last7DaysAvg}h avg</Text>
+          <Text style={s.sleepStatValue}>{data.last7DaysAvg}h</Text>
         </View>
+        
         <View style={s.sleepStatDivider} />
+        
         <View style={s.sleepStatItem}>
           <Text style={s.sleepStatLabel}>Longest</Text>
           <Text style={s.sleepStatValue}>{data.longestSleep}h</Text>
         </View>
+        
         <View style={s.sleepStatDivider} />
+        
         <View style={s.sleepStatItem}>
           <Text style={s.sleepStatLabel}>Shortest</Text>
           <Text style={s.sleepStatValue}>{data.shortestSleep}h</Text>
         </View>
       </View>
 
-      {/* Insights */}
       <View style={s.sleepInsightBox}>
         <Text style={s.sleepInsightTitle}>💡 Insights</Text>
         {data.averageDuration >= 7 && data.averageDuration <= 9 ? (
@@ -900,6 +884,7 @@ const SleepGraphChart: React.FC<{ data: SleepGraphResult }> = ({ data }) => {
             You're sleeping over 9 hours on average. Ensure the quality of your sleep is good.
           </Text>
         )}
+        
         {data.consistency < 50 && (
           <Text style={[s.sleepInsightText, { marginTop: 8 }]}>
             💤 Your sleep schedule is inconsistent. Try going to bed and waking up at the same time daily.
@@ -909,7 +894,6 @@ const SleepGraphChart: React.FC<{ data: SleepGraphResult }> = ({ data }) => {
     </View>
   );
 };
-
 
 const StressChart: React.FC<{ data: StressResult }> = ({ data }) => {
   const level = data.level;
@@ -921,27 +905,24 @@ const StressChart: React.FC<{ data: StressResult }> = ({ data }) => {
   };
 
   const getEmoji = () => {
-    if (level < 30) return 'ðŸ˜Œ';
-    if (level < 50) return 'ðŸ™‚';
-    if (level < 70) return 'ðŸ˜°';
-    return 'ðŸ˜«';
+    if (level < 30) return '😌';
+    if (level < 50) return '🙂';
+    if (level < 70) return '😰';
+    return '😫';
   };
 
   return (
     <View style={s.bioStressCon}>
       <Text style={s.title}>Stress Level Analysis</Text>
       
-      {/* Stress meter */}
       <View style={s.bioStressMeterCon}>
         <View style={s.bioStressMeter}>
-          {/* Zones background */}
           <View style={s.bioStressZones}>
             <View style={[s.bioStressZone, { backgroundColor: COLORS.success + '40' }]} />
             <View style={[s.bioStressZone, { backgroundColor: COLORS.info + '40' }]} />
             <View style={[s.bioStressZone, { backgroundColor: COLORS.warning + '40' }]} />
             <View style={[s.bioStressZone, { backgroundColor: COLORS.danger + '40' }]} />
           </View>
-          {/* Indicator needle */}
           <View style={[s.bioStressNeedle, { left: `${level}%`, backgroundColor: getColor() }]}>
             <Text style={s.bioStressEmoji}>{getEmoji()}</Text>
           </View>
@@ -954,19 +935,17 @@ const StressChart: React.FC<{ data: StressResult }> = ({ data }) => {
         </View>
       </View>
 
-      {/* Category */}
       <View style={[s.bioStressCategoryBox, { backgroundColor: getColor() + '20', borderColor: getColor() }]}>
         <Text style={[s.bioStressCategoryText, { color: getColor() }]}>
-          {data.category} Stress â€¢ {level}/100
+          {data.category} Stress {'\u2022'} {level}/100
         </Text>
       </View>
 
-      {/* Tips */}
       <View style={s.bioTipsCon}>
-        <Text style={s.bioTipsTitle}>ðŸ§˜ Management Tips</Text>
+        <Text style={s.bioTipsTitle}>🧘 Management Tips</Text>
         {data.tips.map((tip, i) => (
           <View key={i} style={s.bioTipItem}>
-            <Text style={s.bioTipBullet}>â€¢</Text>
+            <Text style={s.bioTipBullet}>{'\u2022'}</Text>
             <Text style={s.bioTipText}>{tip}</Text>
           </View>
         ))}
@@ -975,9 +954,8 @@ const StressChart: React.FC<{ data: StressResult }> = ({ data }) => {
   );
 };
 
-
 const s = StyleSheet.create({
-  container: { marginTop: 16, marginBottom: 8, paddingHorizontal: 16 },
+  container: { marginTop: 16, marginBottom: 8, paddingHorizontal: 9 },
   title: { fontSize: 11, fontWeight: '600', color: Colors.light.text, marginBottom: 10, textAlign: 'center' },
   subtitle: { fontSize: 10, color: Colors.light.textSecondary, marginBottom: 8, textAlign: 'center' },
   note: { fontSize: 9, color: Colors.light.textSecondary, marginTop: 8, textAlign: 'center', fontStyle: 'italic' },
@@ -992,7 +970,6 @@ const s = StyleSheet.create({
   markingLabel: { fontSize: 9, color: Colors.light.textSecondary, marginBottom: 4 },
   markingValue: { fontSize: 12, fontWeight: '700', color: Colors.light.text },
 
-
   // BMI
   bmiCon: { paddingVertical: 16 },
   bmiScale: { flexDirection: 'row', height: 40, borderRadius: 8, overflow: 'hidden', marginBottom: 32 },
@@ -1005,7 +982,6 @@ const s = StyleSheet.create({
   bmiRanges: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 4 },
   bmiRange: { fontSize: 9, color: Colors.light.textSecondary },
 
-
   // Pie & Bar
   pieCon: { alignItems: 'center', paddingVertical: 8 },
   barCon: { paddingVertical: 8 },
@@ -1017,7 +993,6 @@ const s = StyleSheet.create({
   tdeeValue: { fontSize: 14, fontWeight: '700', color: Colors.light.text },
   divider: { width: 1, height: 40, backgroundColor: Colors.light.border },
 
-
   // OneRM
   oneRmCon: { paddingVertical: 8 },
   oneRmRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
@@ -1027,50 +1002,38 @@ const s = StyleSheet.create({
   oneRmWeight: { fontSize: 11, fontWeight: '700', color: Colors.light.text, width: 45 },
   oneRmReps: { fontSize: 9, color: Colors.light.textSecondary, width: 65 },
 
-
-// Body Fat (NEW - vertical thermometer)
-bfCon: { paddingVertical: 12, alignItems: 'center' },
-bfVerticalContainer: { flexDirection: 'row', height: 220, width: '100%', marginVertical: 16, position: 'relative' },
-bfVerticalBar: { width: 60, height: '100%', borderRadius: 8, overflow: 'hidden', marginLeft: 20 },
-bfVerticalZone: { width: '100%' },
-
-
-// Pointer styles
-bfPointer: { position: 'absolute', left: 85, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
-bfPointerTriangle: { 
-  width: 0, height: 0, 
-  borderTopWidth: 8, borderTopColor: 'transparent',
-  borderBottomWidth: 8, borderBottomColor: 'transparent',
-  borderLeftWidth: 12, borderLeftColor: Colors.light.primary,
-},
-bfPointerLine: { width: 8, height: 2, backgroundColor: Colors.light.primary },
-bfPointerValueBox: { 
-  backgroundColor: Colors.light.primary, 
-  paddingHorizontal: 8, 
-  paddingVertical: 4, 
-  borderRadius: 6,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.2,
-  shadowRadius: 3,
-  elevation: 4,
-},
-bfPointerValue: { fontSize: 12, fontWeight: '700', color: '#FFF' },
-
-
-// Labels on right
-bfLabelsContainer: { flex: 1, height: '100%', marginLeft: 12, position: 'relative' },
-bfLabelItem: { position: 'absolute', width: '100%', justifyContent: 'center' },
-bfLabelText: { fontSize: 11, marginBottom: 2 },
-bfLabelRange: { fontSize: 9 },
-
-
-// Bottom indicator
-bfBottomInd: { alignItems: 'center', marginTop: 12 },
-bfValue: { fontSize: 14, fontWeight: '700', color: Colors.light.primary },
-bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
-
-
+  // Body Fat
+  bfCon: { paddingVertical: 12, alignItems: 'center' },
+  bfVerticalContainer: { flexDirection: 'row', height: 220, width: '100%', marginVertical: 16, position: 'relative' },
+  bfVerticalBar: { width: 60, height: '100%', borderRadius: 8, overflow: 'hidden', marginLeft: 20 },
+  bfVerticalZone: { width: '100%' },
+  bfPointer: { position: 'absolute', left: 85, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
+  bfPointerTriangle: { 
+    width: 0, height: 0, 
+    borderTopWidth: 8, borderTopColor: 'transparent',
+    borderBottomWidth: 8, borderBottomColor: 'transparent',
+    borderLeftWidth: 12, borderLeftColor: Colors.light.primary,
+  },
+  bfPointerLine: { width: 8, height: 2, backgroundColor: Colors.light.primary },
+  bfPointerValueBox: { 
+    backgroundColor: Colors.light.primary, 
+    paddingHorizontal: 8, 
+    paddingVertical: 4, 
+    borderRadius: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  bfPointerValue: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  bfLabelsContainer: { flex: 1, height: '100%', marginLeft: 12, position: 'relative' },
+  bfLabelItem: { position: 'absolute', width: '100%', justifyContent: 'center' },
+  bfLabelText: { fontSize: 11, marginBottom: 2 },
+  bfLabelRange: { fontSize: 9 },
+  bfBottomInd: { alignItems: 'center', marginTop: 12 },
+  bfValue: { fontSize: 14, fontWeight: '700', color: Colors.light.primary },
+  bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
 
   // Ideal Weight
   iwCon: { paddingVertical: 8 },
@@ -1086,7 +1049,6 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   legendDot: { width: 11, height: 11, borderRadius: 6 },
   legendText: { fontSize: 10, color: Colors.light.text },
 
-
   // HR Zones
   hrCon: { paddingVertical: 8 },
   hrBar: { flexDirection: 'row', height: 40, marginBottom: 16, overflow: 'hidden' },
@@ -1101,7 +1063,6 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   hrDesc: { fontSize: 9, color: Colors.light.textSecondary },
   hrValue: { fontSize: 11, fontWeight: '700', color: Colors.light.text },
 
-
   // VO2Max
   vo2Con: { paddingVertical: 8 },
   vo2Scale: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
@@ -1110,7 +1071,6 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   vo2Range: { fontSize: 8, color: '#FFF', marginTop: 2 },
   vo2Value: { fontSize: 13, fontWeight: '700', color: Colors.light.primary, textAlign: 'center', marginTop: 8 },
   vo2Cat: { fontSize: 11, color: Colors.light.textSecondary, textAlign: 'center', marginTop: 4 },
-
 
   // Ratios
   ratioCon: { paddingVertical: 8 },
@@ -1125,7 +1085,6 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   ratioScaleText: { fontSize: 8, color: Colors.light.textSecondary },
   ratioStat: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
 
-
   // Water
   waterCon: { paddingVertical: 8, alignItems: 'center' },
   waterGlassCon: { flexDirection: 'row', alignItems: 'center', gap: 20, marginVertical: 16 },
@@ -1135,7 +1094,6 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   waterAmt: { fontSize: 20, fontWeight: '700', color: COLORS.info },
   waterGls: { fontSize: 14, color: Colors.light.text, marginTop: 4 },
   waterNote: { fontSize: 9, color: Colors.light.textSecondary },
-
 
   // Running
   runCon: { paddingVertical: 8 },
@@ -1149,7 +1107,6 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   runZoneName: { fontSize: 11, fontWeight: '600', color: Colors.light.text },
   runZoneRange: { fontSize: 9, color: Colors.light.textSecondary },
   runCurrZone: { fontSize: 10, color: Colors.light.text, textAlign: 'center', marginTop: 12 },
-
 
   // Protein
   protCon: { paddingVertical: 8 },
@@ -1300,45 +1257,54 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   bioTipItem: { flexDirection: 'row', marginBottom: 10, paddingRight: 8 },
   bioTipBullet: { fontSize: 14, color: Colors.light.primary, marginRight: 8, marginTop: -2 },  
   bioTipText: { flex: 1, fontSize: 11, color: Colors.light.textSecondary, lineHeight: 16 },
-  // Sleep Graph Chart
-  bioSleepGraphCon: { paddingVertical: 12, alignItems: 'center' },
-  
+
+  // Sleep Graph Chart - FIXED ALIGNMENT
   sleepSummaryRow: { 
     flexDirection: 'row', 
     width: '100%', 
     gap: 8, 
     marginTop: 12, 
-    marginBottom: 16 
+    marginBottom: 16,
+    alignItems: 'stretch'
   },
   sleepSummaryCard: { 
     flex: 1, 
-    padding: 12, 
+    paddingVertical: 12,
+    paddingHorizontal: 10,
     borderRadius: 10, 
     borderWidth: 2, 
-    alignItems: 'center' 
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   sleepSummaryValue: { 
-    fontSize: 20, 
-    fontWeight: '700' 
+    fontSize: 13, 
+    fontWeight: '700',
+    lineHeight: 18,
+    includeFontPadding: false,
+    textAlignVertical: 'center'
   },
   sleepSummaryLabel: { 
-    fontSize: 9, 
+    fontSize: 8, 
     color: Colors.light.textSecondary, 
-    marginTop: 4 
+    marginTop: 4,
+    lineHeight: 12,
+    includeFontPadding: false,
+    textAlignVertical: 'center'
   },
-  
   sleepStatsGrid: { 
     flexDirection: 'row', 
     width: '100%', 
     backgroundColor: Colors.light.background, 
     borderRadius: 10, 
-    padding: 14, 
-    marginTop: 16,
-    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    marginTop: 16, 
+    alignItems: 'center'
   },
   sleepStatItem: { 
     flex: 1, 
-    alignItems: 'center' 
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   sleepStatDivider: { 
     width: 1, 
@@ -1348,14 +1314,21 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
   sleepStatLabel: { 
     fontSize: 9, 
     color: Colors.light.textSecondary, 
-    marginBottom: 6 
+    marginBottom: 6,
+    lineHeight: 12,
+    textAlign: 'center',
+    includeFontPadding: false,
+    textAlignVertical: 'center'
   },
   sleepStatValue: { 
     fontSize: 14, 
     fontWeight: '700', 
-    color: Colors.light.text 
+    color: Colors.light.text,
+    lineHeight: 20,
+    textAlign: 'center',
+    includeFontPadding: false,
+    textAlignVertical: 'center'
   },
-  
   sleepInsightBox: { 
     marginTop: 16, 
     backgroundColor: Colors.light.background, 
@@ -1375,8 +1348,7 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
     fontSize: 11, 
     color: Colors.light.textSecondary, 
     lineHeight: 16 
-  },
-  
+  },  
   emptyStateBox: { 
     alignItems: 'center', 
     paddingVertical: 40 
@@ -1395,8 +1367,6 @@ bfCat: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 4 },
     fontSize: 11, 
     color: Colors.light.textSecondary 
   },
-
 });
-
 
 export default FitCalcChart;
