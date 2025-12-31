@@ -1,9 +1,10 @@
 // components/radiology/RadiologyStatsBar.tsx
 
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../../constants/colors';
-import { RadiologyAnalysis } from '../../types/radiology';
+import { RadiologyAnalysis, getUrgencyColor } from '../../types/radiology';
 
 type StatsBarProps = {
   analyses: RadiologyAnalysis[];
@@ -19,18 +20,40 @@ export function RadiologyStatsBar({ analyses }: StatsBarProps) {
   return (
     <View style={styles.statsContainer}>
       <View style={styles.statItem}>
+        <Ionicons 
+          name="document-text" 
+          size={20} 
+          color={Colors.light.primary} 
+          style={styles.statIcon}
+        />
         <Text style={styles.statValue}>{total}</Text>
         <Text style={styles.statLabel}>Total Scans</Text>
       </View>
       <View style={styles.statDivider} />
       <View style={styles.statItem}>
-        <Text style={styles.statValue}>{routine}</Text>
-        <Text style={styles.statLabel}>Routine</Text>
+        <Ionicons 
+          name="checkmark-circle" 
+          size={20} 
+          color={getUrgencyColor('routine')} 
+          style={styles.statIcon}
+        />
+        <Text style={[styles.statValue, { color: getUrgencyColor('routine') }]}>
+          {routine}
+        </Text>
+        <Text style={styles.statLabel}>Normal</Text>
       </View>
       <View style={styles.statDivider} />
       <View style={styles.statItem}>
-        <Text style={[styles.statValue, { color: '#FFA500' }]}>{followUp}</Text>
-        <Text style={styles.statLabel}>Follow-up</Text>
+        <Ionicons 
+          name="alert-circle" 
+          size={20} 
+          color={getUrgencyColor('follow-up-needed')} 
+          style={styles.statIcon}
+        />
+        <Text style={[styles.statValue, { color: getUrgencyColor('follow-up-needed') }]}>
+          {followUp}
+        </Text>
+        <Text style={styles.statLabel}>Needs Review</Text>
       </View>
     </View>
   );
@@ -53,6 +76,9 @@ const styles = StyleSheet.create({
   statItem: {
     flex: 1,
     alignItems: 'center',
+  },
+  statIcon: {
+    marginBottom: 6,
   },
   statValue: {
     fontSize: 24,

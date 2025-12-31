@@ -624,35 +624,41 @@ export default function FitCalcScreen() {
     }
   }, [activeCalculator, loadHistory, checkSleepTimer, results.bmr, inputs.tdee?.bmr]);
   
-  // âœ… Update timer display every minute + update notification
-  useEffect(() => {
-    if (!sleepTimerActive || !sleepTimerStart) return;
-    
-    const updateTimer = async () => {
-      const elapsed = calculateElapsedTime(sleepTimerStart);
-      setSleepTimerElapsed(elapsed.formatted);
-      await updateSleepTimerNotification();
-    };
-    
-    updateTimer(); // Initial update
-    const interval = setInterval(updateTimer, 60000); // Every minute
-    
-    return () => clearInterval(interval);
-  }, [sleepTimerActive, sleepTimerStart]);
+// ✅ FIXED: Update timer display every minute (UI only - no notification spam)
+useEffect(() => {
+  if (!sleepTimerActive || !sleepTimerStart) return;
   
-  // âœ… Update notification when app comes to foreground
+  const updateTimer = () => {
+    const elapsed = calculateElapsedTime(sleepTimerStart);
+    setSleepTimerElapsed(elapsed.formatted);
+    // ✅ REMOVED: await updateSleepTimerNotification() - No more notification spam!
+  };
+  
+  updateTimer(); // Initial update
+  const interval = setInterval(updateTimer, 60000); // Every minute
+  
+  return () => clearInterval(interval);
+}, [sleepTimerActive, sleepTimerStart]);
+
+  
+// ✅ FIXED: Only update notification when app comes to foreground (if timer is active)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (nextAppState === 'active') {
         await checkSleepTimer();
-        await updateSleepTimerNotification();
+        
+        // Only update notification if timer is actually running
+        if (sleepTimerActive) {
+          await updateSleepTimerNotification();
+        }
       }
     });
     
     return () => {
       subscription.remove();
     };
-  }, [checkSleepTimer]);
+  }, [checkSleepTimer, sleepTimerActive]);
+
   
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

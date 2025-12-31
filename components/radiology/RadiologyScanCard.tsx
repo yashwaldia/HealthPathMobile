@@ -1,10 +1,15 @@
 // components/radiology/RadiologyScanCard.tsx
 
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../../constants/colors';
-import { RadiologyAnalysis } from '../../types/radiology';
+import {
+  RadiologyAnalysis,
+  getUrgencyColor,
+  getUrgencyIcon,
+  getUrgencyLabel
+} from '../../types/radiology';
 
 type ScanCardProps = {
   analysis: RadiologyAnalysis;
@@ -62,11 +67,38 @@ export function RadiologyScanCard({
             color={Colors.light.primary}
           />
         </View>
+        
         <View style={styles.cardContent}>
-          <Text style={styles.examType}>{analysis.examType}</Text>
+          <View style={styles.examTypeRow}>
+            <Text style={styles.examType}>{analysis.examType}</Text>
+            {analysis.isFavorite && (
+              <Ionicons name="star" size={16} color="#FFD700" />
+            )}
+          </View>
           <Text style={styles.bodyPart}>{analysis.bodyPart || 'Unknown area'}</Text>
           <Text style={styles.scanDate}>{formatDate(analysis.uploadDate)}</Text>
         </View>
+
+        {/* Urgency Badge */}
+        <View
+          style={[
+            styles.urgencyBadge,
+            { 
+              backgroundColor: getUrgencyColor(analysis.urgencyLevel) + '20',
+              borderColor: getUrgencyColor(analysis.urgencyLevel) + '40',
+            },
+          ]}
+        >
+          <Ionicons
+            name={getUrgencyIcon(analysis.urgencyLevel) as any}
+            size={12}
+            color={getUrgencyColor(analysis.urgencyLevel)}
+          />
+          <Text style={[styles.urgencyText, { color: getUrgencyColor(analysis.urgencyLevel) }]}>
+            {getUrgencyLabel(analysis.urgencyLevel)}
+          </Text>
+        </View>
+
         <View style={styles.cardActionsRight}>
           <TouchableOpacity
             style={styles.iconButton}
@@ -117,7 +149,7 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
   cardIconContainer: {
@@ -131,11 +163,19 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     flex: 1,
+    marginRight: 8,
+  },
+  examTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
   },
   examType: {
     fontSize: 16,
     fontWeight: '700',
     color: Colors.light.text,
+    flex: 1,
   },
   bodyPart: {
     fontSize: 13,
@@ -147,10 +187,24 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     marginTop: 2,
   },
-  cardActionsRight: {
+  urgencyBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    minWidth: 80,
+    alignItems: 'center',
     flexDirection: 'row',
+    gap: 4,
+  },
+  urgencyText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  cardActionsRight: {
+    flexDirection: 'column',
     alignItems: 'flex-end',
-    gap: 8,
+    gap: 4,
   },
   iconButton: {
     padding: 4,

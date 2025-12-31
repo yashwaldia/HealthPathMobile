@@ -1,8 +1,9 @@
 // services/sleepTimerService.ts
+// ✅ FIXED: Silent notification updates (TypeScript error-free)
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import firestore from '@react-native-firebase/firestore'; // ✅ FIXED: React Native Firebase
+import firestore from '@react-native-firebase/firestore';
 import { SleepTimerState, SleepSession, SleepStats } from '../types/sleepTimer';
 
 // ============================================================================
@@ -34,19 +35,21 @@ export const startSleepTimer = async (userId: string): Promise<void> => {
     
     await AsyncStorage.setItem(SLEEP_TIMER_KEY, JSON.stringify(timerState));
     
+    // ✅ Create initial persistent notification (no sound on creation)
     await Notifications.scheduleNotificationAsync({
       identifier: SLEEP_TIMER_NOTIFICATION_ID,
       content: {
-        title: '😴 Sleep Timer Active',
+        title: '😴 Sleep Timer Running',
         body: 'Tracking your sleep. Tap "Stop" when you wake up.',
         data: {
           type: 'sleep-timer',
           startTime: startTime.toString(),
           userId,
         },
-        priority: Notifications.AndroidNotificationPriority.HIGH,
+        priority: Notifications.AndroidNotificationPriority.DEFAULT,
         sticky: true,
         categoryIdentifier: 'sleep-timer',
+        // ✅ FIXED: Don't include sound property for silent notification
       },
       trigger: null,
     });
@@ -88,13 +91,15 @@ export const stopSleepTimer = async (): Promise<SleepSession | null> => {
       createdAt: firestore.FieldValue.serverTimestamp(),
     };
     
-    // ✅ FIXED: React Native Firebase API
+    // Save to Firebase
     const docRef = await firestore()
       .collection('users')
       .doc(state.userId)
       .collection(SLEEP_SESSIONS_COLLECTION)
       .add(sleepSession);
     
+    // Clean up notification and storage
+    await Notifications.cancelScheduledNotificationAsync(SLEEP_TIMER_NOTIFICATION_ID).catch(() => {});
     await Notifications.dismissNotificationAsync(SLEEP_TIMER_NOTIFICATION_ID);
     await AsyncStorage.removeItem(SLEEP_TIMER_KEY);
     
@@ -154,8 +159,9 @@ export const getSleepTimerStatus = async (): Promise<SleepTimerState | null> => 
  */
 export const cancelSleepTimer = async (): Promise<void> => {
   try {
-    await AsyncStorage.removeItem(SLEEP_TIMER_KEY);
+    await Notifications.cancelScheduledNotificationAsync(SLEEP_TIMER_NOTIFICATION_ID).catch(() => {});
     await Notifications.dismissNotificationAsync(SLEEP_TIMER_NOTIFICATION_ID);
+    await AsyncStorage.removeItem(SLEEP_TIMER_KEY);
     console.log('✅ Sleep timer cancelled');
   } catch (error) {
     console.error('❌ Error cancelling sleep timer:', error);
@@ -168,25 +174,30 @@ export const cancelSleepTimer = async (): Promise<void> => {
 // ============================================================================
 
 /**
- * ✅ Update Sleep Timer Notification
- * Call this when app comes to foreground to update elapsed time
+ * ✅ FIXED: Update Sleep Timer Notification (SILENT - No Sound)
+ * Call this ONLY when app comes to foreground
+ * This updates the notification text WITHOUT creating a new notification popup
  */
 export const updateSleepTimerNotification = async (): Promise<void> => {
   try {
     const state = await getSleepTimerStatus();
     
     if (!state || !state.isRunning) {
+      console.log('⚠️ No active timer to update');
       return;
     }
     
     const elapsed = calculateElapsedTime(state.startTime);
     
-    await Notifications.dismissNotificationAsync(SLEEP_TIMER_NOTIFICATION_ID);
+    // ✅ Cancel scheduled (if any) and dismiss existing notification first
+    await Notifications.cancelScheduledNotificationAsync(SLEEP_TIMER_NOTIFICATION_ID).catch(() => {});
+    await Notifications.dismissNotificationAsync(SLEEP_TIMER_NOTIFICATION_ID).catch(() => {});
     
+    // ✅ FIXED: Recreate notification with silent settings (no sound property = silent)
     await Notifications.scheduleNotificationAsync({
       identifier: SLEEP_TIMER_NOTIFICATION_ID,
       content: {
-        title: '😴 Sleep Timer Active',
+        title: '😴 Sleep Timer Running',
         body: `Sleeping for: ${elapsed.formatted}`,
         data: {
           type: 'sleep-timer',
@@ -194,13 +205,15 @@ export const updateSleepTimerNotification = async (): Promise<void> => {
           userId: state.userId,
         },
         sticky: true,
-        priority: Notifications.AndroidNotificationPriority.HIGH,
+        priority: Notifications.AndroidNotificationPriority.DEFAULT,
         categoryIdentifier: 'sleep-timer',
+        // ✅ CRITICAL FIX: Don't include sound, vibrate, or badge properties
+        // Omitting them = silent notification update
       },
-      trigger: null,
+      trigger: null, // Show immediately
     });
     
-    console.log(`🔄 Sleep timer notification updated: ${elapsed.formatted}`);
+    console.log(`🔄 Sleep timer notification updated silently: ${elapsed.formatted}`);
   } catch (error) {
     console.error('❌ Error updating sleep timer notification:', error);
   }
@@ -259,7 +272,6 @@ export const getRecentSleepSessions = async (
   limitCount: number = 10
 ): Promise<SleepSession[]> => {
   try {
-    // ✅ FIXED: React Native Firebase API
     const snapshot = await firestore()
       .collection('users')
       .doc(userId)
@@ -349,7 +361,6 @@ export const updateSleepSessionQuality = async (
   notes?: string
 ): Promise<void> => {
   try {
-    // ✅ FIXED: React Native Firebase API
     await firestore()
       .collection('users')
       .doc(userId)

@@ -1,5 +1,3 @@
-// types/medication.ts
-
 /**
  * Core Medication Interface
  */
@@ -37,6 +35,10 @@ export interface Medication {
   refillDate?: string;
   refillsRemaining?: number;
   
+  // ✅ NEW: Notification Scheduling Tracking (Dec 31, 2025)
+  lastScheduledDate?: string; // ISO date when notifications were last scheduled
+  lastScheduledTimestamp?: Date; // Firestore timestamp for per-med tracking
+  
   // Media
   image?: string; // Firebase Storage URL or base64
   prescriptionImage?: string; // Original prescription photo
@@ -45,7 +47,6 @@ export interface Medication {
   createdAt: Date;
   updatedAt: Date;
 }
-
 
 /**
  * Dosage Form Types
@@ -63,7 +64,6 @@ export type DosageForm =
   | 'Suppository'
   | 'Other';
 
-
 /**
  * Frequency Types
  */
@@ -80,7 +80,6 @@ export type FrequencyType =
   | 'Weekly'
   | 'Custom';
 
-
 /**
  * Meal Relation Types
  */
@@ -90,7 +89,6 @@ export type MealRelation =
   | 'With meals' 
   | 'Empty stomach'
   | 'Any time';
-
 
 /**
  * Dose Log for tracking adherence
@@ -106,7 +104,6 @@ export interface DoseLog {
   createdAt: Date;
 }
 
-
 /**
  * Medication Reminder
  */
@@ -117,7 +114,6 @@ export interface MedicationReminder {
   enabled: boolean;
   daysOfWeek?: number[]; // 0-6 (Sunday-Saturday)
 }
-
 
 /**
  * Extracted Medication from AI (for Smart Import)
@@ -142,7 +138,6 @@ export interface ExtractedMedication {
   confidence?: number; // AI confidence score (0-100)
 }
 
-
 /**
  * AI Classification Result
  * Used for duplicate detection and merging
@@ -153,7 +148,6 @@ export interface AIClassificationResult {
   classification: string; // e.g., "Painkiller", "Antibiotic", "Antacid"
   confidence?: number;
 }
-
 
 /**
  * Merge Conflict Interface
@@ -167,7 +161,6 @@ export interface MergeConflict {
   };
 }
 
-
 /**
  * AI Medication Comparison Result
  * Suggestion from AI about whether to merge or keep separate
@@ -179,7 +172,6 @@ export interface MedicationComparisonResult {
   recommendedAction?: string;
 }
 
-
 /**
  * Smart Import Input
  * Input format for smart import feature
@@ -189,20 +181,17 @@ export interface SmartImportInput {
   images?: string[]; // base64 or URIs
 }
 
-
 /**
  * Smart Import Stage
  * Controls the flow of smart import modal
  */
 export type SmartImportStage = 'input' | 'review';
 
-
 /**
  * Smart Import Input Mode
  * Type of input for smart import
  */
 export type SmartImportInputMode = 'upload' | 'text';
-
 
 /**
  * Calendar Day Data
@@ -214,7 +203,6 @@ export interface CalendarDayData {
   hasDoses: boolean;
 }
 
-
 /**
  * Calendar Month Data
  * Complete data for calendar month view
@@ -225,7 +213,6 @@ export interface CalendarMonthData {
   monthName: string;
   days: (CalendarDayData | null)[]; // null for empty cells
 }
-
 
 /**
  * Medication Status
@@ -240,7 +227,6 @@ export interface MedicationStatus {
   daysRemaining?: number;
 }
 
-
 /**
  * Medication Statistics
  */
@@ -253,7 +239,6 @@ export interface MedicationStats {
   upcomingRefills: Medication[];
 }
 
-
 /**
  * Quick Add Medication (for simplified input)
  */
@@ -263,7 +248,6 @@ export interface QuickAddMedication {
   frequency: FrequencyType;
   startDate: string;
 }
-
 
 /**
  * Motivational Toast Type
@@ -275,7 +259,6 @@ export type MotivationalToastType =
   | 'streak'
   | 'reminder'
   | 'encouragement';
-
 
 /**
  * Motivational Toast Message

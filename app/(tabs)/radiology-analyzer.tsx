@@ -17,6 +17,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import RadiologyAnalysisModal from '../../components/radiology/RadiologyAnalysisModal';
+import { RadiologyEmptyState } from '../../components/radiology/RadiologyEmptyState';
+import { RadiologyScanCard } from '../../components/radiology/RadiologyScanCard';
+import { RadiologyStatsBar } from '../../components/radiology/RadiologyStatsBar';
+import { RadiologyUploadCard } from '../../components/radiology/RadiologyUploadCard';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import CustomToast from '../../components/ui/CustomToast';
 import { Colors } from '../../constants/colors';
@@ -27,17 +31,14 @@ import {
   deleteRadiologyAnalysis,
   getAllRadiologyAnalyses,
   saveRadiologyAnalysis,
+  toggleFavorite,
 } from '../../services/radiologyAnalysisService';
-import { uploadFileToStorage } from '../../services/uploadService';
-import { RadiologyAnalysis, RadiologyUploadProgress } from '../../types/radiology';
 import {
   generateRadiologyPDF,
   shareExportedFile,
 } from '../../services/reportExportService';
-import { RadiologyUploadCard } from '../../components/radiology/RadiologyUploadCard';
-import { RadiologyStatsBar } from '../../components/radiology/RadiologyStatsBar';
-import { RadiologyScanCard } from '../../components/radiology/RadiologyScanCard';
-import { RadiologyEmptyState } from '../../components/radiology/RadiologyEmptyState';
+import { uploadFileToStorage } from '../../services/uploadService';
+import { RadiologyAnalysis, RadiologyUploadProgress } from '../../types/radiology';
 
 export default function RadiologyAnalyzerScreen() {
   const router = useRouter();
@@ -311,6 +312,37 @@ export default function RadiologyAnalyzerScreen() {
     }
   };
 
+  // Toggle favorite
+  const handleToggleFavorite = async (analysisId: string, isFavorite: boolean) => {
+    if (!user?.uid) return;
+
+    try {
+      await toggleFavorite(user.uid, analysisId, isFavorite);
+
+      // Update local analyses state
+      setAnalyses((prevAnalyses) =>
+        prevAnalyses.map((analysis) =>
+          analysis.analysisId === analysisId
+            ? { ...analysis, isFavorite }
+            : analysis
+        )
+      );
+
+      // Update selected analysis if it's the one being toggled
+      if (selectedAnalysis?.analysisId === analysisId) {
+        setSelectedAnalysis({ ...selectedAnalysis, isFavorite });
+      }
+
+      showToast(
+        isFavorite ? 'Added to favorites' : 'Removed from favorites',
+        'success'
+      );
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      showToast('Failed to update favorite status', 'error');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <CustomToast
@@ -335,6 +367,7 @@ export default function RadiologyAnalyzerScreen() {
         visible={showAnalysisModal}
         analysis={selectedAnalysis}
         onClose={() => setShowAnalysisModal(false)}
+        onToggleFavorite={handleToggleFavorite}
       />
 
       <View style={styles.header}>

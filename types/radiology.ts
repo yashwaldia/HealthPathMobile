@@ -109,3 +109,61 @@ export interface RadiologyUploadProgress {
   currentFile?: string;
   error?: string;
 }
+
+/**
+ * Helper functions for urgency display
+ */
+
+/**
+ * Get user-friendly label for urgency level
+ */
+export function getUrgencyLabel(urgency: UrgencyLevel): string {
+  switch (urgency) {
+    case 'routine':
+      return 'Normal';
+    case 'follow-up-needed':
+      return 'Needs Review';
+    case 'urgent':
+      return 'Urgent';
+    case 'emergency':
+      return 'Emergency';
+    default:
+      return 'Unknown';
+  }
+}
+
+/**
+ * Get color code for urgency level
+ */
+export function getUrgencyColor(urgency: UrgencyLevel): string {
+  switch (urgency) {
+    case 'routine':
+      return '#10B981'; // Green
+    case 'follow-up-needed':
+      return '#F97316'; // Orange
+    case 'urgent':
+      return '#EF4444'; // Red
+    case 'emergency':
+      return '#DC2626'; // Dark Red
+    default:
+      return '#6B7280'; // Gray
+  }
+}
+
+/**
+ * Get icon name for urgency level (Ionicons)
+ */
+export function getUrgencyIcon(urgency: UrgencyLevel): string {
+  switch (urgency) {
+    case 'routine':
+      return 'checkmark-circle';
+    case 'follow-up-needed':
+      return 'alert-circle';
+    case 'urgent':
+      return 'warning';
+    case 'emergency':
+      return 'medical';
+    default:
+      return 'information-circle';
+  }
+}

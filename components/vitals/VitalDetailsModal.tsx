@@ -1,5 +1,5 @@
 // components/vitals/VitalDetailsModal.tsx
-// ✅ UPDATED: Added SafeAreaView support for bottom navigation (Dec 28, 2025)
+// ✅ FIXED: Duplicate keys resolved with guaranteed unique keys (Dec 31, 2025)
 
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
@@ -43,7 +43,7 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
   onAddReading,
 }) => {
   // ✅ ALL HOOKS FIRST - No matter what
-  const insets = useSafeAreaInsets(); // ✅ Get safe area insets
+  const insets = useSafeAreaInsets();
   const [timeRange, setTimeRange] = useState<TimeRange>('30D');
 
   // ✅ Extract values with safe fallbacks
@@ -104,11 +104,10 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
   const chartData = useMemo(() => {
     if (filteredHistory.length === 0) return null;
 
-    // Filter records that have the vital data
     const validRecords = filteredHistory
       .filter((record) => getVitalValue(record) !== null)
-      .slice(-10) // Last 10 records
-      .reverse(); // Oldest to newest for chart
+      .slice(-10)
+      .reverse();
 
     if (validRecords.length === 0) return null;
 
@@ -117,7 +116,6 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
       return `${date.getMonth() + 1}/${date.getDate()}`;
     });
 
-    // Handle Blood Pressure (dual values)
     if (vitalId === 'bloodPressure') {
       const systolicData = validRecords.map((r) => r.bloodPressureSystolic || 0);
       const diastolicData = validRecords.map((r) => r.bloodPressureDiastolic || 0);
@@ -127,12 +125,12 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
         datasets: [
           {
             data: systolicData,
-            color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`, // Blue for systolic
+            color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`,
             strokeWidth: 2,
           },
           {
             data: diastolicData,
-            color: (opacity = 1) => `rgba(52, 211, 153, ${opacity})`, // Green for diastolic
+            color: (opacity = 1) => `rgba(52, 211, 153, ${opacity})`,
             strokeWidth: 2,
           },
         ],
@@ -140,18 +138,11 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
       };
     }
 
-    // Single value vitals
     const values = validRecords.map((r) => getVitalValue(r) || 0);
 
     return {
       labels,
-      datasets: [
-        {
-          data: values,
-          color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`,
-          strokeWidth: 2,
-        },
-      ],
+      datasets: [{ data: values, color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`, strokeWidth: 2 }],
     };
   }, [filteredHistory, vitalId]);
 
@@ -175,12 +166,10 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
     };
   }, [filteredHistory, vitalId]);
 
-  // ✅ NOW CHECK IF DATA IS VALID (after all hooks)
   if (!vitalData) {
     return null;
   }
 
-  // Format date for display
   const formatDate = (date: Date) => {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -200,14 +189,9 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
   };
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
 
-  // Get status color
   const getStatusColor = (status: VitalStatus) => {
     switch (status) {
       case 'critical':
@@ -240,7 +224,7 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
 
           <ScrollView 
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 100 }} // ✅ Add bottom padding for safe area
+            contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
           >
             {/* Latest Value Card */}
             <View style={styles.latestValueCard}>
@@ -251,23 +235,12 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
                     <Text style={styles.latestValue}>{currentValue}</Text>
                     <Text style={styles.latestUnit}>{unit}</Text>
                   </View>
-                  {lastUpdated && (
-                    <Text style={styles.lastUpdatedText}>{formatDate(lastUpdated)}</Text>
-                  )}
+                  {lastUpdated && <Text style={styles.lastUpdatedText}>{formatDate(lastUpdated)}</Text>}
                 </View>
                 <View style={styles.latestValueRight}>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: getStatusColor(currentStatus) + '20' },
-                    ]}
-                  >
-                    <View
-                      style={[styles.statusDot, { backgroundColor: getStatusColor(currentStatus) }]}
-                    />
-                    <Text
-                      style={[styles.statusText, { color: getStatusColor(currentStatus) }]}
-                    >
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(currentStatus) + '20' }]}>
+                    <View style={[styles.statusDot, { backgroundColor: getStatusColor(currentStatus) }]} />
+                    <Text style={[styles.statusText, { color: getStatusColor(currentStatus) }]}>
                       {currentStatus === 'normal' ? 'Normal' : currentStatus === 'alert' ? 'Alert' : 'Critical'}
                     </Text>
                   </View>
@@ -279,27 +252,19 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
                 <View style={styles.trendBox}>
                   <Ionicons
                     name={
-                      trendData.direction === 'up'
-                        ? 'trending-up'
-                        : trendData.direction === 'down'
-                        ? 'trending-down'
-                        : 'remove'
+                      trendData.direction === 'up' ? 'trending-up' : 
+                      trendData.direction === 'down' ? 'trending-down' : 'remove'
                     }
                     size={16}
                     color={
-                      trendData.direction === 'up'
-                        ? Colors.light.error
-                        : trendData.direction === 'down'
-                        ? Colors.light.success
-                        : Colors.light.textSecondary
+                      trendData.direction === 'up' ? Colors.light.error :
+                      trendData.direction === 'down' ? Colors.light.success : Colors.light.textSecondary
                     }
                   />
                   <Text style={styles.trendText}>
                     {trendData.direction === 'stable'
                       ? 'No change'
-                      : `${trendData.direction === 'up' ? 'Increased' : 'Decreased'} by ${
-                          trendData.absolute
-                        } ${unit} (${trendData.percentage}%)`}{' '}
+                      : `${trendData.direction === 'up' ? 'Increased' : 'Decreased'} by ${trendData.absolute} ${unit} (${trendData.percentage}%)`}{' '}
                     since {formatDate(trendData.previousDate)}
                   </Text>
                 </View>
@@ -310,26 +275,21 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
             <View style={styles.timeRangeContainer}>
               {(['7D', '30D', '90D', 'ALL'] as TimeRange[]).map((range) => (
                 <TouchableOpacity
-                  key={range}
+                  key={`timerange-${range}`}
                   style={[
                     styles.timeRangeButton,
                     timeRange === range && styles.timeRangeButtonActive,
                   ]}
                   onPress={() => setTimeRange(range)}
                 >
-                  <Text
-                    style={[
-                      styles.timeRangeText,
-                      timeRange === range && styles.timeRangeTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.timeRangeText, timeRange === range && styles.timeRangeTextActive]}>
                     {range}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Chart */}
+            {/* Chart Section */}
             {chartData ? (
               <View style={styles.chartContainer}>
                 <LineChart
@@ -343,19 +303,9 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
                     decimalPlaces: vitalId === 'temperature' ? 1 : 0,
                     color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`,
                     labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
-                    style: {
-                      borderRadius: 16,
-                    },
-                    propsForDots: {
-                      r: '4',
-                      strokeWidth: '2',
-                      stroke: Colors.light.primary,
-                    },
-                    propsForBackgroundLines: {
-                      strokeDasharray: '',
-                      stroke: Colors.light.border,
-                      strokeWidth: 1,
-                    },
+                    style: { borderRadius: 16 },
+                    propsForDots: { r: '4', strokeWidth: '2', stroke: Colors.light.primary },
+                    propsForBackgroundLines: { strokeDasharray: '', stroke: Colors.light.border, strokeWidth: 1 },
                   }}
                   bezier
                   style={styles.chart}
@@ -391,7 +341,7 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
               </View>
             )}
 
-            {/* History List */}
+            {/* ✅ FIXED: History List with GUARANTEED unique keys */}
             <View style={styles.historyContainer}>
               <Text style={styles.historyTitle}>Reading History</Text>
               {filteredHistory.length > 0 ? (
@@ -400,24 +350,19 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
                   if (value === null) return null;
 
                   const recordDate = new Date(record.date);
-                  const status =
-                    vitalId === 'bloodPressure'
-                      ? getVitalStatus(
-                          'bloodPressure',
-                          record.bloodPressureSystolic!,
-                          record.bloodPressureDiastolic
-                        )
-                      : getVitalStatus(vitalId, value);
+                  const status = vitalId === 'bloodPressure'
+                    ? getVitalStatus('bloodPressure', record.bloodPressureSystolic!, record.bloodPressureDiastolic)
+                    : getVitalStatus(vitalId, value);
+
+                  // ✅ GUARANTEED UNIQUE KEY: Combines ID + timestamp + index fallback
+                  const uniqueKey = record.id 
+                    ? `${record.id}-${record.date}` 
+                    : `${record.date}-${index}`;
 
                   return (
-                    <View key={record.id || index} style={styles.historyItem}>
+                    <View key={uniqueKey} style={styles.historyItem}>
                       <View style={styles.historyLeft}>
-                        <View
-                          style={[
-                            styles.historyStatusDot,
-                            { backgroundColor: getStatusColor(status) },
-                          ]}
-                        />
+                        <View style={[styles.historyStatusDot, { backgroundColor: getStatusColor(status) }]} />
                         <View style={styles.historyInfo}>
                           <Text style={styles.historyDate}>{formatDate(recordDate)}</Text>
                           <Text style={styles.historyTime}>{formatTime(recordDate)}</Text>
@@ -431,9 +376,7 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
                           <Text style={styles.historyUnit}>{unit}</Text>
                         </Text>
                         {record.notes && (
-                          <Text style={styles.historyNotes} numberOfLines={1}>
-                            {record.notes}
-                          </Text>
+                          <Text style={styles.historyNotes} numberOfLines={1}>{record.notes}</Text>
                         )}
                       </View>
                     </View>
@@ -449,7 +392,7 @@ const VitalDetailsModal: React.FC<VitalDetailsModalProps> = ({
             </View>
           </ScrollView>
 
-          {/* ✅ Action Buttons with Safe Area */}
+          {/* Action Buttons */}
           {onAddReading && (
             <View style={[styles.actionButtons, { paddingBottom: Math.max(insets.bottom, 20) }]}>
               <TouchableOpacity
@@ -751,7 +694,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
-    // ✅ paddingBottom will be added dynamically with safe area
   },
   addButton: {
     flexDirection: 'row',

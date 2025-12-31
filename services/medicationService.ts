@@ -1,6 +1,6 @@
 // services/medicationService.ts
 // ✅ ENHANCED: Added batch save and merge helpers for Smart Import feature
-// ✅ FIXED: Optimized notification scheduling (Dec 27, 2025)
+// ✅ FIXED: IMMEDIATE notification scheduling on add/update (Dec 31, 2025)
 export { resolveConflictsAndSave, smartImportMedications } from './smartImportService';
 
 import firestore from '@react-native-firebase/firestore';
@@ -107,7 +107,7 @@ export const convertExtractedToMedication = (
 
 /**
  * Add a new medication
- * ✅ FIXED: Don't auto-schedule here, let initializeNotificationService handle daily scheduling
+ * ✅ FIXED: IMMEDIATE notification scheduling when medication is added
  */
 export const addMedication = async (
   userId: string,
@@ -136,9 +136,20 @@ export const addMedication = async (
     // Save to Firestore
     await newMedRef.set(cleanedMedication);
 
-    // ✅ FIXED: Don't schedule immediately - let daily initialization handle it
-    // This prevents accumulation of duplicate notifications
-    console.log('✅ Medication saved. Scheduling handled by daily notification service.');
+    // ✅ FIXED: Schedule notifications IMMEDIATELY for new medications
+    // User adds med at 2 PM → gets 9 PM reminder TODAY (not tomorrow!)
+    if (medication.isActive && medication.frequency !== 'As needed') {
+      try {
+        console.log(`📅 Scheduling notifications for new medication: ${medication.name}`);
+        await scheduleMedicationReminder(medication, userId);
+        console.log('✅ Medication saved AND notifications scheduled immediately');
+      } catch (notificationError) {
+        console.warn('⚠️ Medication saved successfully, but notification scheduling failed:', notificationError);
+        // Medication is still saved - user can manually refresh notifications
+      }
+    } else {
+      console.log('ℹ️ Medication saved (inactive or as-needed, no notifications scheduled)');
+    }
 
     return newMedRef.id;
   } catch (error) {
@@ -150,6 +161,7 @@ export const addMedication = async (
 /**
  * ✅ NEW: Batch add medications (for Smart Import feature)
  * Adds multiple medications at once with transaction support
+ * ✅ FIXED: Schedule notifications for each medication after batch save
  */
 export const batchAddMedications = async (
   userId: string,
@@ -160,6 +172,7 @@ export const batchAddMedications = async (
     
     const batch = firestore().batch();
     const medicationIds: string[] = [];
+    const medicationsToSchedule: Medication[] = [];
 
     for (const extracted of extractedMedications) {
       const newMedRef = firestore().collection(`users/${userId}/medications`).doc();
@@ -167,6 +180,7 @@ export const batchAddMedications = async (
       medicationIds.push(medicationId);
 
       const medication = convertExtractedToMedication(extracted, userId, medicationId);
+      medicationsToSchedule.push(medication);
       
       const cleanedMedication = cleanData({
         ...medication,
@@ -179,8 +193,22 @@ export const batchAddMedications = async (
 
     // Commit batch write
     await batch.commit();
-    console.log(`✅ ${extractedMedications.length} medications saved. Scheduling handled by daily notification service.`);
+    console.log(`✅ ${extractedMedications.length} medications saved`);
 
+    // ✅ NEW: Schedule notifications for each medication after batch save
+    let scheduledCount = 0;
+    for (const medication of medicationsToSchedule) {
+      if (medication.isActive && medication.frequency !== 'As needed') {
+        try {
+          await scheduleMedicationReminder(medication, userId);
+          scheduledCount++;
+        } catch (notificationError) {
+          console.warn(`⚠️ Failed to schedule notifications for ${medication.name}:`, notificationError);
+        }
+      }
+    }
+
+    console.log(`✅ Scheduled notifications for ${scheduledCount}/${medicationsToSchedule.length} medications`);
     return medicationIds;
   } catch (error) {
     console.error('Error batch adding medications:', error);
@@ -191,6 +219,7 @@ export const batchAddMedications = async (
 /**
  * ✅ NEW: Merge medications (update existing with new prescription details)
  * Used when user chooses to merge in conflict resolution
+ * ✅ FIXED: Reschedule notifications after merge
  */
 export const mergeMedication = async (
   userId: string,
@@ -231,7 +260,7 @@ export const mergeMedication = async (
     // Calculate end date
     if (updates.durationDays && updates.startDate) {
       const end = new Date(updates.startDate);
-      end.setDate(end.getDate() + updates.durationDays);
+      end.setDate(end.getDate() + (updates.durationDays as number));
       updates.endDate = end.toISOString().split('T')[0];
     }
 
@@ -362,7 +391,7 @@ export const getMedication = async (
 
 /**
  * Update medication
- * ✅ FIXED: Only reschedule if schedule-related fields changed
+ * ✅ IMPROVED: Reschedule notifications when schedule changes
  */
 export const updateMedication = async (
   userId: string,
@@ -381,13 +410,14 @@ export const updateMedication = async (
     // Update in Firestore
     await medRef.update(cleanedUpdates);
 
-    // ✅ FIXED: Only reschedule if schedule-related fields changed
+    // ✅ IMPROVED: Reschedule if schedule-related fields changed OR if medication became active
     const scheduleFieldsChanged = 
       updates.frequency !== undefined || 
       updates.reminderTimes !== undefined || 
       updates.isActive !== undefined ||
       updates.startDate !== undefined ||
-      updates.endDate !== undefined;
+      updates.endDate !== undefined ||
+      updates.durationDays !== undefined;
 
     if (scheduleFieldsChanged) {
       try {
@@ -400,7 +430,7 @@ export const updateMedication = async (
         const updatedMed = await getMedication(userId, medicationId);
         
         if (updatedMed && updatedMed.isActive && updatedMed.frequency !== 'As needed') {
-          // Schedule new reminders for today
+          // Schedule new reminders
           await scheduleMedicationReminder(updatedMed, userId);
           console.log('✅ Reminders updated successfully');
         } else {
@@ -461,14 +491,8 @@ export const deactivateMedication = async (
       isActive: false,
     });
 
-    // ✅ Cancel notification reminders
-    try {
-      console.log('🔕 Cancelling reminders for deactivated medication...');
-      await cancelMedicationReminder(medicationId);
-      console.log('✅ Reminders cancelled successfully');
-    } catch (notificationError) {
-      console.warn('⚠️ Failed to cancel notifications:', notificationError);
-    }
+    // ✅ Cancel notification reminders (handled by updateMedication)
+    console.log('🔕 Medication deactivated and reminders cancelled');
   } catch (error) {
     console.error('Error deactivating medication:', error);
     throw error;

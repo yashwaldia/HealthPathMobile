@@ -29,12 +29,17 @@ import {
   shareExportedFile,
   downloadFile,
 } from '../../services/reportExportService';
-import * as FileSystem from 'expo-file-system';
+import CustomToast from '../../components/ui/CustomToast';
+// Import Report Comparison Screen
+import ReportComparisonScreen from '../../components/reports/ReportComparisonScreen';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+// Mode type for tab switching
+export type ReportMode = 'reports' | 'compare';
 
 export default function AIReportScreen() {
   const router = useRouter();
@@ -53,9 +58,24 @@ export default function AIReportScreen() {
   const [exportedFilePath, setExportedFilePath] = useState<string>('');
   const [exportedFormat, setExportedFormat] = useState<string>('');
 
+  // Toast state
+  const [toast, setToast] = useState<{
+    visible: boolean;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({ visible: false, message: '', type: 'info' });
+
+  // Active mode for tab switching
+  const [activeMode, setActiveMode] = useState<ReportMode>('reports');
+
   useEffect(() => {
     loadReports();
   }, []);
+
+  const showToast = (
+    message: string,
+    type: 'success' | 'error' | 'info' | 'warning'
+  ) => setToast({ visible: true, message, type });
 
   const loadReports = async () => {
     if (!user?.uid) return;
@@ -66,7 +86,7 @@ export default function AIReportScreen() {
       setReports(data);
     } catch (error) {
       console.error('Error loading reports:', error);
-      Alert.alert('Error', 'Failed to load reports');
+      showToast('Failed to load reports', 'error');
     } finally {
       setLoading(false);
     }
@@ -134,10 +154,10 @@ export default function AIReportScreen() {
         return newSet;
       });
 
-      Alert.alert('Success', 'AI analysis completed!');
+      showToast('AI analysis completed!', 'success');
     } catch (error: any) {
       console.error('Error analyzing report:', error);
-      Alert.alert('Analysis Failed', error.message || 'Failed to analyze report. Please try again.');
+      showToast(error.message || 'Failed to analyze report. Please try again.', 'error');
     } finally {
       setAnalyzingId(null);
     }
@@ -161,7 +181,7 @@ export default function AIReportScreen() {
       setShowSuccessModal(true);
     } catch (error: any) {
       console.error('Error exporting report:', error);
-      Alert.alert('Error', error.message || 'Failed to export report.');
+      showToast(error.message || 'Failed to export report.', 'error');
     } finally {
       setExportingId(null);
     }
@@ -171,20 +191,9 @@ export default function AIReportScreen() {
     try {
       await downloadFile(exportedFilePath);
       setShowSuccessModal(false);
-      
-      // Show success and offer to share
-      Alert.alert(
-        'Download Complete',
-        `Report saved successfully as ${exportedFormat}. Would you like to share it?`,
-        [
-          {
-            text: 'Done',
-            style: 'cancel',
-          },
-        ]
-      );
+      showToast(`Report saved successfully as ${exportedFormat}`, 'success');
     } catch (error) {
-      Alert.alert('Error', 'Failed to save file.');
+      showToast('Failed to save file.', 'error');
     }
   };
 
@@ -193,7 +202,7 @@ export default function AIReportScreen() {
       setShowSuccessModal(false);
       await shareExportedFile(exportedFilePath);
     } catch (error) {
-      Alert.alert('Error', 'Failed to share file.');
+      showToast('Failed to share file.', 'error');
     }
   };
 
@@ -359,9 +368,46 @@ export default function AIReportScreen() {
     );
   };
 
+  // Render Reports List (existing behavior)
+  const renderReports = () => (
+    <FlatList
+      data={reports}
+      renderItem={renderReportCard}
+      keyExtractor={(item) => item.reportId}
+      contentContainerStyle={[
+        styles.listContent,
+        reports.length === 0 && styles.emptyListContent,
+      ]}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={Colors.light.primary}
+          colors={[Colors.light.primary]}
+        />
+      }
+      ListEmptyComponent={
+        <View style={styles.emptyContainer}>
+          <Ionicons name="document-text-outline" size={64} color={Colors.light.textLight} />
+          <Text style={styles.emptyTitle}>No Reports Found</Text>
+          <Text style={styles.emptyText}>Upload your medical reports to get AI analysis</Text>
+        </View>
+      }
+      showsVerticalScrollIndicator={false}
+    />
+  );
+
+  // Render Comparison Screen
+  const renderCompare = () => (
+    <ReportComparisonScreen
+      reports={reports}
+      onShowToast={(message, type) => setToast({ visible: true, message, type })}
+    />
+  );
+
   if (loading) {
     return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
@@ -379,6 +425,13 @@ export default function AIReportScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <CustomToast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -388,32 +441,51 @@ export default function AIReportScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* Reports List */}
-      <FlatList
-        data={reports}
-        renderItem={renderReportCard}
-        keyExtractor={(item) => item.reportId}
-        contentContainerStyle={[
-          styles.listContent,
-          reports.length === 0 && styles.emptyListContent,
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={Colors.light.primary}
-            colors={[Colors.light.primary]}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="document-text-outline" size={64} color={Colors.light.textLight} />
-            <Text style={styles.emptyTitle}>No Reports Found</Text>
-            <Text style={styles.emptyText}>Upload your medical reports to get AI analysis</Text>
-          </View>
-        }
-        showsVerticalScrollIndicator={false}
-      />
+      {/* Tab Switch Section */}
+      <View style={styles.tabSwitchContainer}>
+        <View style={styles.tabButtonsContainer}>
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              styles.tabButtonLeft,
+              activeMode === 'reports' && styles.tabButtonActive,
+            ]}
+            onPress={() => setActiveMode('reports')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.tabButtonText,
+                activeMode === 'reports' && styles.tabButtonTextActive,
+              ]}
+            >
+              Reports
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              styles.tabButtonRight,
+              activeMode === 'compare' && styles.tabButtonActive,
+            ]}
+            onPress={() => setActiveMode('compare')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.tabButtonText,
+                activeMode === 'compare' && styles.tabButtonTextActive,
+              ]}
+            >
+              Compare Reports
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Main content: switch by activeMode */}
+      {activeMode === 'reports' ? renderReports() : renderCompare()}
 
       {/* Export Format Selection Modal */}
       <Modal
@@ -537,6 +609,43 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     color: Colors.light.textSecondary,
+  },
+  // Tab Switch Styles
+  tabSwitchContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+    backgroundColor: Colors.light.background,
+  },
+  tabButtonsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 10,
+    padding: 4,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  tabButtonLeft: {
+    marginRight: 2,
+  },
+  tabButtonRight: {
+    marginLeft: 2,
+  },
+  tabButtonActive: {
+    backgroundColor: Colors.light.primary,
+  },
+  tabButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#718096',
+  },
+  tabButtonTextActive: {
+    color: '#FFFFFF',
   },
   listContent: {
     padding: 16,
