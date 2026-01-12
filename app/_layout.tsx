@@ -4,11 +4,13 @@
  * Root Layout - App Entry Point with Navigation & Auth
  * 
  * ✅ PHASE 2 P1: Enhanced navigation with profile existence checks
- * Fixed Edge Cases: 5.1, 5.3, 5.4, 7.1
+ * ✅ CRITICAL FIX: Infinite redirect loop resolved
+ * 
+ * Fixed Edge Cases: 5.1, 5.3, 5.4, 7.1, LOOP BUG
  * 
  * New Features:
  * - Profile existence validation before navigation
- * - Orphaned auth detection and recovery
+ * - Orphaned auth detection and recovery (LOOP FIXED)
  * - Network state awareness
  * - Deep link validation
  */
@@ -200,12 +202,14 @@ function NotificationInitializer() {
 
 /**
  * ✅ PHASE 2 P1: Enhanced AuthNavigator with profile existence validation
+ * ✅ CRITICAL FIX: Infinite redirect loop resolved
  * 
  * CRITICAL FIXES APPLIED:
  * - Edge Case 5.1: Validates profile exists before allowing navigation
  * - Edge Case 5.3: Validates profile on deep links
  * - Edge Case 5.4: Prevents navigation with cached deleted data
  * - Edge Case 7.1: Network state awareness
+ * - LOOP BUG: Added check to stay in auth when orphaned auth detected
  */
 function AuthNavigator({ children }: { children: React.ReactNode }) {
   // ✅ ENHANCED: Use new auth context features
@@ -269,7 +273,8 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
 
   /**
    * ✅ ENHANCED: Navigation logic with profile validation
-   * Edge Cases: 5.1, 5.3, 5.4, 7.1
+   * ✅ CRITICAL FIX: Infinite loop resolved
+   * Edge Cases: 5.1, 5.3, 5.4, 7.1, LOOP BUG
    */
   useEffect(() => {
     if (loading) return; // Don't navigate while checking auth state
@@ -289,10 +294,24 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
       inTabsGroup,
     });
 
-    // ✅ FIX 5.1: Handle orphaned auth (auth exists but no profile)
+    // ✅ FIX 5.1: Handle orphaned auth - redirect TO auth if not already there
     if (hasOrphanedAuth && !inAuthGroup) {
       console.error('🚨 Orphaned auth detected - redirecting to auth');
       router.replace('/(auth)/welcome');
+      return;
+    }
+
+    // ✅ CRITICAL FIX: STAY in auth screens when orphaned auth exists
+    // This prevents the infinite loop by not redirecting back to tabs
+    if (hasOrphanedAuth && inAuthGroup) {
+      console.log('⚠️ Orphaned auth detected - staying in auth for recovery');
+      console.log('💡 User should logout and re-authenticate');
+      return; // DO NOT redirect to tabs - user needs to recover account
+    }
+
+    // ✅ FIX 7.1: Offline handling - stay on current screen
+    if (!isOnline && (inAuthGroup || inTabsGroup)) {
+      console.log('📵 App is offline, staying on current screen');
       return;
     }
 
@@ -303,15 +322,17 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (user && inAuthGroup) {
-      // User is logged in but on auth screens, redirect to tabs
+    // ✅ UPDATED: Only redirect to tabs if NO orphaned auth
+    // This check now comes AFTER the orphaned auth checks above
+    if (user && inAuthGroup && !hasOrphanedAuth) {
+      // User is logged in with valid profile, redirect to tabs
       console.log('✅ User found on auth screen, redirecting to tabs...');
       router.replace('/(tabs)');
       return;
     }
 
     // ✅ NEW: Profile validation before allowing access to tabs
-    if (user && inTabsGroup && !profileValidated && !validatingProfile) {
+    if (user && inTabsGroup && !profileValidated && !validatingProfile && !hasOrphanedAuth) {
       console.log('🔍 User in tabs but profile not validated yet');
       
       setValidatingProfile(true);
@@ -358,7 +379,7 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
    * Edge Case 5.3: Validate profile when deep link opens
    */
   useEffect(() => {
-    if (user && segments.length > 0 && segments[0] === '(tabs)') {
+    if (user && segments.length > 0 && segments[0] === '(tabs)' && !hasOrphanedAuth) {
       console.log('🔗 Deep link detected, validating profile...');
       
       // Revalidate profile on deep link
