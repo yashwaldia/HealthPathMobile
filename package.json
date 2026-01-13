@@ -12,7 +12,7 @@
     "postinstall": "patch-package"
   },
   "engines": {
-    "node": ">=20.19.4"
+    "node": ">=20.19.2"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
