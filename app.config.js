@@ -77,7 +77,6 @@ module.exports = {
 
     experiments: {
       typedRoutes: true,
-      reactCompiler: true,
     },
 
     extra: {
