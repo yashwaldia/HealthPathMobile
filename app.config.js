@@ -27,7 +27,6 @@ module.exports = {
         backgroundColor: "#FFF5F0",
       },
       edgeToEdgeEnabled: true,
-      predictiveBackGestureEnabled: false,
       permissions: [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -47,6 +46,7 @@ module.exports = {
 
     plugins: [
       "expo-router",
+      "@react-native-firebase/auth",
       [
         "expo-build-properties",
         {
@@ -72,10 +72,8 @@ module.exports = {
       [
         "expo-image-picker",
         {
-          photosPermission:
-            "The app needs access to your photos to upload medical documents.",
-          cameraPermission:
-            "The app needs access to your camera to capture medical documents.",
+          photosPermission: "The app needs access to your photos.",
+          cameraPermission: "The app needs access to your camera.",
         },
       ],
       [
