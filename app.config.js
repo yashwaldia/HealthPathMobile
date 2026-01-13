@@ -48,6 +48,19 @@ module.exports = {
     plugins: [
       "expo-router",
       [
+        "expo-build-properties",
+        {
+          android: {
+            compileSdkVersion: 35,
+            targetSdkVersion: 35,
+            buildToolsVersion: "35.0.0"
+          },
+          ios: {
+            useFrameworks: "static"
+          }
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           image: "./assets/images/android-icon-512.png",
