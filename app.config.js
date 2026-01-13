@@ -7,7 +7,7 @@ module.exports = {
     icon: "./assets/images/android-icon-512.png",
     scheme: "healthpathmobile",
     userInterfaceStyle: "automatic",
-    newArchEnabled: false, // ⚠️ CHANGED: Temporarily disabled due to Firebase compatibility issues with RN 0.79
+    newArchEnabled: false,
 
     splash: {
       image: "./assets/images/android-icon-512.png",
@@ -68,14 +68,11 @@ module.exports = {
       ],
       "expo-font",
       "expo-web-browser",
-      // ✅ ADDED: Firebase plugins (these were missing from your config)
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth",
     ],
 
     experiments: {
       typedRoutes: true,
-      reactCompiler: true, // ✅ ADDED: Enables React Compiler optimizations (good for performance)
+      reactCompiler: true,
     },
 
     extra: {
