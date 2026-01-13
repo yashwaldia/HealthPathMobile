@@ -11,6 +11,9 @@
     "lint": "expo lint",
     "postinstall": "patch-package"
   },
+  "engines": {
+    "node": ">=20.19.4"
+  },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
     "@google/generative-ai": "^0.21.0",
