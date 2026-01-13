@@ -1,4 +1,3 @@
-/** @type {import('@expo/config').ExpoConfig} */
 module.exports = {
   expo: {
     name: "PI HEALTH",
@@ -10,25 +9,12 @@ module.exports = {
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
 
+
     splash: {
       image: "./assets/images/android-icon-512.png",
       resizeMode: "contain",
       backgroundColor: "#FFF5F0",
     },
-
-    // ios: {
-    //   supportsTablet: true,
-    //   infoPlist: {
-    //     NSPhotoLibraryUsageDescription:
-    //       "This app needs access to your photo library to upload medical documents.",
-    //     NSCameraUsageDescription:
-    //       "This app needs access to your camera to capture medical documents.",
-    //     NSPhotoLibraryAddUsageDescription:
-    //       "This app needs access to save processed medical documents.",
-    //   },
-    //   bundleIdentifier: "com.ab1224.HealthPathMobile",
-    //   googleServicesFile: process.env.GOOGLE_SERVICES_PLIST || "./GoogleService-Info.plist",
-    // },
 
     android: {
       package: "com.ab1224.HealthPathMobile",
@@ -51,10 +37,12 @@ module.exports = {
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
     },
 
+
     web: {
       output: "static",
       favicon: "./assets/images/android-icon-512.png",
     },
+
 
     plugins: [
       "expo-router",
@@ -84,13 +72,13 @@ module.exports = {
       ],
       "expo-font",
       "expo-web-browser",
-      // 🔴 IMPORTANT: no @react-native-firebase/* entries here
     ],
+
 
     experiments: {
       typedRoutes: true,
-      reactCompiler: true,
     },
+
 
     extra: {
       eas: {
