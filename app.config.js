@@ -15,6 +15,11 @@ module.exports = {
       backgroundColor: "#FFF5F0",
     },
 
+    ios: {
+      bundleIdentifier: "com.ab1224.HealthPathMobile",
+      supportsTablet: true,
+    },
+
     android: {
       package: "com.ab1224.HealthPathMobile",
       adaptiveIcon: {
