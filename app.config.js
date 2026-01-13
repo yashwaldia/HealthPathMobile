@@ -7,8 +7,7 @@ module.exports = {
     icon: "./assets/images/android-icon-512.png",
     scheme: "healthpathmobile",
     userInterfaceStyle: "automatic",
-    newArchEnabled: true,
-
+    newArchEnabled: false, // ⚠️ CHANGED: Temporarily disabled due to Firebase compatibility issues with RN 0.79
 
     splash: {
       image: "./assets/images/android-icon-512.png",
@@ -33,16 +32,13 @@ module.exports = {
         "android.permission.USE_EXACT_ALARM",
         "android.permission.RECORD_AUDIO",
       ],
-      // keep this – it wires google-services.json into native build
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
     },
-
 
     web: {
       output: "static",
       favicon: "./assets/images/android-icon-512.png",
     },
-
 
     plugins: [
       "expo-router",
@@ -72,13 +68,15 @@ module.exports = {
       ],
       "expo-font",
       "expo-web-browser",
+      // ✅ ADDED: Firebase plugins (these were missing from your config)
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
     ],
-
 
     experiments: {
       typedRoutes: true,
+      reactCompiler: true, // ✅ ADDED: Enables React Compiler optimizations (good for performance)
     },
-
 
     extra: {
       eas: {
