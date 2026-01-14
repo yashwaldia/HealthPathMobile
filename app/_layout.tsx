@@ -2,17 +2,13 @@
 
 /**
  * Root Layout - App Entry Point with Navigation & Auth
- * 
- * ✅ PHASE 2 P1: Enhanced navigation with profile existence checks
- * ✅ CRITICAL FIX: Infinite redirect loop resolved
- * 
- * Fixed Edge Cases: 5.1, 5.3, 5.4, 7.1, LOOP BUG
- * 
- * New Features:
- * - Profile existence validation before navigation
- * - Orphaned auth detection and recovery (LOOP FIXED)
- * - Network state awareness
- * - Deep link validation
+ * * ✅ PHASE 3: FINAL STABILITY FIX
+ * ✅ Fixed "Force Logout" loop preventing Self-Healing
+ * ✅ Prevents background services from running during recovery
+ * * Critical Fixes:
+ * - Removed aggressive logout on profile validation failure
+ * - Added checks to stop NotificationService from running on orphaned accounts
+ * - Ensures AuthContext has time to "Self-Heal" broken profiles
  */
 
 import { Buffer } from 'buffer';
@@ -51,23 +47,25 @@ if (typeof global.Buffer === 'undefined') {
  * - Listens to notification responses
  */
 function NotificationInitializer() {
-  const { user } = useAuth();
+  const { user, hasOrphanedAuth } = useAuth(); // ✅ FIX: Get orphaned status
   const router = useRouter();
 
   // Initialize local notification service when user logs in
   useEffect(() => {
-    if (user?.uid) {
+    // ✅ FIX: Don't initialize if account is broken/orphaned
+    if (user?.uid && !hasOrphanedAuth) {
       console.log('🔔 Initializing notifications for user:', user.uid);
       initializeNotificationService(user.uid).catch(error => {
         console.error('Failed to initialize notifications:', error);
       });
     }
-  }, [user?.uid]);
+  }, [user?.uid, hasOrphanedAuth]);
 
   // Request push permissions, get Expo push token, save timezone
   useEffect(() => {
     async function registerPushToken() {
-      if (!user?.uid) return;
+      // ✅ FIX: Skip if orphaned to prevent permission errors
+      if (!user?.uid || hasOrphanedAuth) return;
 
       if (!Device.isDevice) {
         console.warn('Must use physical device for push notifications');
@@ -110,17 +108,17 @@ function NotificationInitializer() {
     // Listen for expo push token refreshes (e.g., after reinstall)
     const subscription = Notifications.addPushTokenListener(async (tokenData) => {
       console.log('Push token refreshed:', tokenData.data);
-      if (user?.uid) {
+      if (user?.uid && !hasOrphanedAuth) {
         await profileService.updatePushToken(user.uid, tokenData.data);
       }
     });
 
     return () => subscription.remove();
-  }, [user?.uid]);
+  }, [user?.uid, hasOrphanedAuth]);
 
   // Enhanced "Take Now" handler with auto-completion + navigation
   const handleTakeNow = async (medicationId: string) => {
-    if (!user?.uid) return;
+    if (!user?.uid || hasOrphanedAuth) return;
 
     try {
       console.log('✅ Logging dose as taken for:', medicationId);
@@ -170,13 +168,13 @@ function NotificationInitializer() {
     });
 
     const localSubscription = Notifications.addNotificationResponseReceivedListener(response => {
-      if (!user?.uid) return;
+      if (!user?.uid || hasOrphanedAuth) return;
       
       handleNotificationResponse(response, handleTakeNow, handleSnooze);
     });
     
     return () => localSubscription.remove();
-  }, [user?.uid]);
+  }, [user?.uid, hasOrphanedAuth]);
 
   // Listen for push notification taps (deep linking for ALL types)
   useEffect(() => {
@@ -203,13 +201,6 @@ function NotificationInitializer() {
 /**
  * ✅ PHASE 2 P1: Enhanced AuthNavigator with profile existence validation
  * ✅ CRITICAL FIX: Infinite redirect loop resolved
- * 
- * CRITICAL FIXES APPLIED:
- * - Edge Case 5.1: Validates profile exists before allowing navigation
- * - Edge Case 5.3: Validates profile on deep links
- * - Edge Case 5.4: Prevents navigation with cached deleted data
- * - Edge Case 7.1: Network state awareness
- * - LOOP BUG: Added check to stay in auth when orphaned auth detected
  */
 function AuthNavigator({ children }: { children: React.ReactNode }) {
   // ✅ ENHANCED: Use new auth context features
@@ -230,7 +221,6 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
 
   /**
    * ✅ NEW: Validate profile exists in Firestore
-   * Edge Case 5.1, 5.3, 5.4: Ensure profile exists before navigation
    */
   const validateProfileExists = async (uid: string): Promise<boolean> => {
     try {
@@ -239,7 +229,7 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
       // ✅ FIX 7.1: Skip validation if offline
       if (!isOnline) {
         console.log('⚠️ Offline - skipping profile validation');
-        return true; // Allow navigation when offline, will be validated later
+        return true; 
       }
 
       const profile = await profileService.getProfile(uid);
@@ -256,76 +246,59 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
       
       // ✅ FIX 7.1: Treat network errors as temporary
       if (error?.message?.includes('network') || error?.code === 'unavailable') {
-        console.log('⚠️ Network error during validation - allowing navigation');
         return true;
       }
 
       // ✅ FIX 5.1: Treat permission/not-found errors as orphaned auth
       if (error?.code === 'permission-denied' || error?.code === 'not-found') {
-        console.error('🚨 Profile access denied - orphaned auth');
         return false;
       }
 
-      // Unknown error - deny access for safety
       return false;
     }
   };
 
   /**
    * ✅ ENHANCED: Navigation logic with profile validation
-   * ✅ CRITICAL FIX: Infinite loop resolved
-   * Edge Cases: 5.1, 5.3, 5.4, 7.1, LOOP BUG
    */
   useEffect(() => {
-    if (loading) return; // Don't navigate while checking auth state
+    if (loading) return; 
 
     const inAuthGroup = segments[0] === '(auth)';
     const inTabsGroup = segments[0] === '(tabs)';
 
     console.log('📍 Navigation check:', {
       user: user?.uid || 'none',
-      loading,
-      validatingProfile,
-      profileValidated,
-      hasOrphanedAuth,
-      isOnline,
       currentSegment: segments[0],
-      inAuthGroup,
-      inTabsGroup,
+      hasOrphanedAuth
     });
 
     // ✅ FIX 5.1: Handle orphaned auth - redirect TO auth if not already there
     if (hasOrphanedAuth && !inAuthGroup) {
-      console.error('🚨 Orphaned auth detected - redirecting to auth');
+      console.error('🚨 Orphaned auth detected - redirecting to auth for recovery');
       router.replace('/(auth)/welcome');
       return;
     }
 
     // ✅ CRITICAL FIX: STAY in auth screens when orphaned auth exists
-    // This prevents the infinite loop by not redirecting back to tabs
     if (hasOrphanedAuth && inAuthGroup) {
-      console.log('⚠️ Orphaned auth detected - staying in auth for recovery');
-      console.log('💡 User should logout and re-authenticate');
-      return; // DO NOT redirect to tabs - user needs to recover account
+      console.log('⚠️ Orphaned auth detected - staying in auth for self-healing');
+      return; 
     }
 
-    // ✅ FIX 7.1: Offline handling - stay on current screen
+    // ✅ FIX 7.1: Offline handling
     if (!isOnline && (inAuthGroup || inTabsGroup)) {
-      console.log('📵 App is offline, staying on current screen');
       return;
     }
 
     if (!user && !inAuthGroup) {
-      // User is not logged in, redirect to auth
       console.log('🔐 No user found, redirecting to auth...');
       router.replace('/(auth)/welcome');
       return;
     }
 
     // ✅ UPDATED: Only redirect to tabs if NO orphaned auth
-    // This check now comes AFTER the orphaned auth checks above
     if (user && inAuthGroup && !hasOrphanedAuth) {
-      // User is logged in with valid profile, redirect to tabs
       console.log('✅ User found on auth screen, redirecting to tabs...');
       router.replace('/(tabs)');
       return;
@@ -341,31 +314,25 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
         setValidatingProfile(false);
         
         if (!isValid) {
-          // ✅ FIX 5.1, 5.3: Profile doesn't exist - logout and redirect
-          console.error('🚨 Profile validation failed - forcing logout');
-          forceLogout().then(() => {
-            router.replace('/(auth)/welcome');
-          });
+          // 🛑 CRITICAL FIX: REMOVED forceLogout(). 
+          // Just redirect to auth so AuthContext can run Self-Healing.
+          console.warn('⚠️ Profile missing in tabs - redirecting to auth for self-healing...');
+          router.replace('/(auth)/welcome');
         } else {
-          // Profile exists - allow navigation
           setProfileValidated(true);
           console.log('✅ Profile validated - user can access tabs');
         }
       }).catch((error) => {
         console.error('❌ Profile validation error:', error);
         setValidatingProfile(false);
-        
-        // On error, force logout for safety
-        forceLogout().then(() => {
-          router.replace('/(auth)/welcome');
-        });
+        // Redirect to auth on error, do NOT force logout
+        router.replace('/(auth)/welcome');
       });
     }
   }, [user, loading, segments, hasOrphanedAuth, profileValidated, validatingProfile, isOnline]);
 
   /**
    * ✅ NEW: Reset validation state when user changes
-   * Edge Case 5.4: Prevent cached validation for different users
    */
   useEffect(() => {
     if (!user) {
@@ -376,20 +343,14 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
 
   /**
    * ✅ NEW: Deep link validation
-   * Edge Case 5.3: Validate profile when deep link opens
    */
   useEffect(() => {
     if (user && segments.length > 0 && segments[0] === '(tabs)' && !hasOrphanedAuth) {
-      console.log('🔗 Deep link detected, validating profile...');
-      
-      // Revalidate profile on deep link
       if (profileValidated && !validatingProfile) {
         validateProfileExists(user.uid).then((isValid) => {
           if (!isValid) {
             console.error('🚨 Profile no longer exists - deep link blocked');
-            forceLogout().then(() => {
-              router.replace('/(auth)/welcome');
-            });
+            router.replace('/(auth)/welcome'); // Redirect, don't logout
           }
         });
       }
@@ -398,7 +359,6 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
 
   /**
    * ✅ NEW: Loading screen while validating profile
-   * Edge Case 5.1: Show loading during profile validation
    */
   if (loading || validatingProfile) {
     return (
@@ -408,7 +368,6 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
           {loading ? 'Loading...' : 'Validating profile...'}
         </Text>
         
-        {/* ✅ NEW: Show offline indicator */}
         {!isOnline && (
           <View style={styles.offlineIndicator}>
             <Ionicons name="cloud-offline" size={20} color="#FF9500" />
@@ -416,7 +375,6 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
           </View>
         )}
 
-        {/* ✅ NEW: Show orphaned auth warning */}
         {hasOrphanedAuth && (
           <View style={styles.orphanedWarning}>
             <Ionicons name="warning" size={20} color="#FF3B30" />
@@ -429,17 +387,18 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
 
   /**
    * ✅ NEW: Orphaned auth recovery screen
-   * Edge Case 5.1: Show recovery UI for orphaned auth
+   * Shows when self-healing is in progress or failed
    */
   if (hasOrphanedAuth && user) {
     return (
       <View style={styles.errorContainer}>
-        <Ionicons name="alert-circle" size={80} color="#FF3B30" />
-        <Text style={styles.errorTitle}>Profile Not Found</Text>
+        <Ionicons name="construct" size={80} color={Colors.light.primary} />
+        <Text style={styles.errorTitle}>Restoring Profile</Text>
         <Text style={styles.errorMessage}>
-          Your account data could not be found. This may happen if your account was recently deleted.
+          We detected a missing profile and are attempting to restore it. Please wait...
         </Text>
         
+        {/* Manual option if automatic healing hangs */}
         <TouchableOpacity 
           style={styles.errorButton}
           onPress={async () => {
@@ -448,12 +407,8 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
           }}
         >
           <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
-          <Text style={styles.errorButtonText}>Logout & Start Fresh</Text>
+          <Text style={styles.errorButtonText}>Cancel & Logout</Text>
         </TouchableOpacity>
-
-        <Text style={styles.errorHint}>
-          Please contact support if this problem persists
-        </Text>
       </View>
     );
   }
@@ -479,9 +434,6 @@ export default function RootLayout() {
   );
 }
 
-/**
- * ✅ NEW: Styles for enhanced navigation UI
- */
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,

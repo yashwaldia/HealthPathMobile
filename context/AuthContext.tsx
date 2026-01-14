@@ -2,12 +2,10 @@
 
 /**
  * Auth Context - Firebase Authentication State Management
- * 
- * ✅ PHASE 1 P0: Enhanced authentication state management
+ * * ✅ PHASE 2 P0 FIX: Added Self-Healing Mechanism
  * Fixed Edge Cases: 1.1, 1.2, 1.3, 1.5, 5.1, 7.1
- * 
- * New Features:
- * - Orphaned auth detection (auth exists but no Firestore profile)
+ * * New Features:
+ * - Self-Healing Auth (Auto-recreates missing profiles)
  * - Network connectivity monitoring
  * - Stale session detection
  * - Auto-logout recovery mechanism
@@ -18,6 +16,7 @@ import auth from '@react-native-firebase/auth';
 import NetInfo from '@react-native-community/netinfo';
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { checkProfileCompleteness, getUserProfile } from '../services/authService';
+import { profileService } from '../services/profileService'; // ✅ Added Import
 
 interface AuthContextType {
   user: FirebaseAuthTypes.User | null;
@@ -27,14 +26,14 @@ interface AuthContextType {
   needsProfileSetup: boolean;
   refreshProfileStatus: () => Promise<void>;
   
-  // ✅ NEW: Orphaned auth detection (Edge Case 1.1, 1.3, 1.5, 5.1)
+  // Orphaned auth detection
   hasOrphanedAuth: boolean;
   forceLogout: () => Promise<void>;
   
-  // ✅ NEW: Network state monitoring (Edge Case 7.1)
+  // Network state monitoring
   isOnline: boolean;
   
-  // ✅ NEW: Session validation (Edge Case 1.2)
+  // Session validation
   isSessionStale: boolean;
   revalidateSession: () => Promise<void>;
 }
@@ -61,61 +60,79 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isNewUser, setIsNewUser] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
   
-  // ✅ NEW: Orphaned auth state (Edge Case 1.1, 1.3, 1.5, 5.1)
+  // Orphaned auth state
   const [hasOrphanedAuth, setHasOrphanedAuth] = useState(false);
   
-  // ✅ NEW: Network connectivity state (Edge Case 7.1)
+  // Network connectivity state
   const [isOnline, setIsOnline] = useState(true);
   
-  // ✅ NEW: Session staleness state (Edge Case 1.2)
+  // Session staleness state
   const [isSessionStale, setIsSessionStale] = useState(false);
 
   /**
-   * ✅ PHASE 1 P0: Enhanced profile status checking
-   * 
-   * CRITICAL FIXES:
-   * - Edge Case 1.1: Detects orphaned auth (auth exists, no profile)
-   * - Edge Case 1.5: Validates cached auth state
-   * - Edge Case 5.1: Prevents navigation to broken profile state
-   * - Edge Case 7.1: Handles offline scenarios gracefully
+   * ✅ PHASE 2 P0: Self-Healing Profile Check
+   * * CRITICAL FIXES:
+   * - Edge Case 1.1: If Profile is missing, RECREATE it instead of logging out.
+   * - Edge Case 7.1: Handles offline scenarios gracefully.
    */
   const checkUserProfileStatus = async (uid: string) => {
     try {
       console.log('🔍 Checking profile status for user:', uid);
       
-      // ✅ FIX 7.1: Check network connectivity first
+      // ✅ Check network connectivity first
       if (!isOnline) {
         console.log('⚠️ Offline - skipping profile check');
-        // Don't mark as orphaned when offline
         setHasOrphanedAuth(false);
         return;
       }
 
-      const userProfile = await getUserProfile(uid);
+      let userProfile = await getUserProfile(uid);
 
-      // ✅ FIX 1.1, 1.3, 1.5, 5.1: Detect orphaned auth
+      // ============================================================
+      // ✅ SELF-HEALING MECHANISM (Fix for your error)
+      // ============================================================
       if (!userProfile) {
-        console.error('🚨 ORPHANED AUTH DETECTED: Auth exists but Firestore profile missing!');
-        console.error('   User ID:', uid);
-        console.error('   This can happen if:');
-        console.error('   - Profile was deleted but auth still active');
-        console.error('   - Account deletion was interrupted');
-        console.error('   - User re-logged in after deletion');
-        
-        setHasOrphanedAuth(true);
-        setIsNewUser(true);
-        setIsProfileComplete(false);
-        
-        // Give user a chance to recover or logout
-        console.log('💡 User should logout and re-authenticate');
-        return;
+        console.warn('⚠️ ORPHANED AUTH DETECTED: Auth exists but Profile missing.');
+        console.log('🛠️ Attempting to self-heal profile...');
+
+        try {
+          // Get current auth details to repopulate profile
+          const currentUser = auth().currentUser;
+          
+          if (currentUser) {
+            // Attempt to recreate the profile immediately
+            // Note: profileService.createProfile handles 'undefined' checks internally
+            await profileService.createProfile(uid, {
+              email: currentUser.email,
+              displayName: currentUser.displayName,
+              photoURL: currentUser.photoURL
+            });
+            
+            console.log('✅ Profile successfully self-healed! Re-fetching...');
+            
+            // Re-fetch the profile after creation
+            userProfile = await getUserProfile(uid);
+          } else {
+             throw new Error('No current user found for self-healing');
+          }
+        } catch (healError) {
+          console.error('❌ Self-healing failed:', healError);
+          // Only trigger the "Orphaned" state if self-healing fails
+          setHasOrphanedAuth(true);
+          setIsNewUser(true);
+          setIsProfileComplete(false);
+          
+          console.log('💡 Self-healing failed. User must re-authenticate.');
+          return;
+        }
       }
 
-      // ✅ Profile exists - clear orphaned state
+      // ✅ Profile exists (either originally or healed) - clear orphaned state
       setHasOrphanedAuth(false);
 
-      const newUserStatus = userProfile.isNewUser ?? false;
-      const profileCompleteStatus = userProfile.isProfileComplete ?? false;
+      // Use Optional Chaining in case self-healing returned a partial object
+      const newUserStatus = userProfile?.isNewUser ?? false;
+      const profileCompleteStatus = userProfile?.isProfileComplete ?? false;
 
       setIsNewUser(newUserStatus);
       setIsProfileComplete(profileCompleteStatus);
@@ -134,18 +151,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (error: any) {
       console.error('❌ Error checking profile status:', error);
       
-      // ✅ FIX 7.1: Handle network errors specifically
+      // ✅ Handle network errors specifically
       if (error?.message?.includes('network') || error?.code === 'unavailable') {
         console.log('⚠️ Network error during profile check - not marking as orphaned');
         setHasOrphanedAuth(false);
+      } else if (error?.code === 'permission-denied') {
+        // Permission denied usually means the doc doesn't exist AND we can't create it
+        // Check Firestore Rules if this persists
+        console.error('🚨 Profile access error - possible orphaned auth');
+        setHasOrphanedAuth(true);
       } else {
-        // ✅ FIX 1.1: If error is permission-denied or not-found, likely orphaned
-        if (error?.code === 'permission-denied' || error?.code === 'not-found') {
-          console.error('🚨 Profile access error - possible orphaned auth');
-          setHasOrphanedAuth(true);
-        }
-        
-        // Safe fallback
+        // Safe fallback for other errors
         setIsNewUser(false);
         setIsProfileComplete(true);
       }
@@ -153,8 +169,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   /**
-   * ✅ NEW: Session validation to detect stale tokens
-   * Edge Case 1.2: Auth token expired/stale detection
+   * ✅ Session validation to detect stale tokens
    */
   const revalidateSession = useCallback(async () => {
     if (!user) {
@@ -170,15 +185,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const authTime = new Date(tokenResult.authTime);
       const now = new Date();
       
-      // ✅ FIX 1.2: Session is stale if older than 1 hour
+      // Session is stale if older than 1 hour
       const sessionAgeMinutes = (now.getTime() - authTime.getTime()) / (1000 * 60);
       const isStale = sessionAgeMinutes > 60;
       
       setIsSessionStale(isStale);
       
       if (isStale) {
-        console.warn('⚠️ Session is stale (>1 hour old). Some operations may require re-authentication.');
-        console.log(`   Session age: ${Math.floor(sessionAgeMinutes)} minutes`);
+        console.warn('⚠️ Session is stale (>1 hour old).');
       } else {
         console.log('✅ Session is fresh');
       }
@@ -189,8 +203,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user]);
 
   /**
-   * ✅ NEW: Force logout for recovery from orphaned auth state
-   * Edge Cases 1.1, 1.3, 1.5, 5.1: Emergency escape hatch
+   * ✅ Force logout for recovery
    */
   const forceLogout = useCallback(async () => {
     try {
@@ -231,8 +244,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   /**
-   * ✅ NEW: Network state monitoring
-   * Edge Case 7.1: Track online/offline status
+   * ✅ Network state monitoring
    */
   useEffect(() => {
     console.log('🌐 Setting up network monitoring...');
@@ -255,7 +267,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   /**
-   * ✅ ENHANCED: Auth state listener with orphaned auth detection
+   * ✅ Auth state listener
    */
   useEffect(() => {
     let isMounted = true;
@@ -269,11 +281,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         if (firebaseUser) {
           console.log('✅ User authenticated:', firebaseUser.uid);
-          console.log('📱 Native auth persistence: Automatic');
           
           setUser(firebaseUser);
           
-          // ✅ FIX 1.1, 1.2, 1.3, 1.5, 5.1: Check profile AND session
+          // Check profile AND session with the new self-healing logic
           await checkUserProfileStatus(firebaseUser.uid);
           await revalidateSession();
         } else {
@@ -294,11 +305,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log('🔌 Cleaning up auth state listener');
       unsubscribe();
     };
-  }, [revalidateSession]); // Add revalidateSession as dependency
+  }, [revalidateSession]);
 
   /**
-   * ✅ NEW: Periodic session validation
-   * Edge Case 1.2: Check for stale sessions every 5 minutes
+   * ✅ Periodic session validation
    */
   useEffect(() => {
     if (!user) return;
@@ -321,8 +331,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user, revalidateSession]);
 
   /**
-   * ✅ ENHANCED: Needs profile setup detection
-   * Now includes orphaned auth check
+   * Needs profile setup detection
    */
   const needsProfileSetup = !!user && (isNewUser || !isProfileComplete || hasOrphanedAuth);
 

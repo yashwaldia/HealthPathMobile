@@ -1,13 +1,15 @@
+// services/profileService.ts
+
 /**
  * Profile Service - Firebase Firestore CRUD Operations
  * Firestore Path: users/{userId}
- * 
- * Modern React Native Firebase v23 Implementation
+ * * Modern React Native Firebase v23 Implementation
  * ✅ FIXED: Wellness collection bug
  * ✅ FIXED: Duplicate medication deletion
  * ✅ OPTIMIZED: Error handling and performance
  * ✅ PHASE 1 P0: Fixed undefined value handling in createProfile (Edge Cases 2.1-2.5, 13.1-13.2)
  * ✅ PHASE 2 P1: Added retry logic for network failures during deletion (Edge Cases 3.2, 3.3, 7.2)
+ * ✅ PHASE 3: Added deep sanitization to prevent "Unsupported field value: undefined" crashes
  */
 
 import type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
@@ -52,7 +54,7 @@ export const profileService = {
         .doc(userId)
         .get();
       
-      if (docSnap.exists()) {
+      if (docSnap.exists) {
         console.log('✅ Profile loaded successfully');
         const data = docSnap.data();
         
@@ -77,15 +79,10 @@ export const profileService = {
 
   /**
    * ✅ PHASE 1 P0 FIX: Create initial profile on signup
-   * 
-   * CRITICAL FIXES APPLIED:
+   * * CRITICAL FIXES APPLIED:
+   * - ✅ Edge Case 13.1: Recursively removes undefined values (Fixes crash)
    * - ✅ Edge Case 2.1: Handle undefined/null displayName with fallback
-   * - ✅ Edge Case 2.2: Handle undefined/null photoURL (use null, not undefined)
-   * - ✅ Edge Case 2.3: Email-only login - generate displayName from email
-   * - ✅ Edge Case 2.4: Phone-only login - validate required email field
    * - ✅ Edge Case 2.5: Added retry mechanism for network failures
-   * - ✅ Edge Case 13.1: Strict validation prevents undefined values reaching Firestore
-   * - ✅ Edge Case 13.2: Empty string validation for email field
    */
   async createProfile(
     userId: string, 
@@ -95,15 +92,14 @@ export const profileService = {
       photoURL?: string | null; 
     }
   ): Promise<void> {
-    // ✅ FIX 13.1: Validate and sanitize input data
+    // Validate and sanitize input data
     const sanitizedData = this._sanitizeProfileData(initialData);
     
-    // ✅ FIX 2.4, 13.2: Validate required email field
+    // Validate required email field
     if (!sanitizedData.email || sanitizedData.email.trim() === '') {
       throw new Error('Email is required to create a profile. Please ensure your authentication method provides an email address.');
     }
 
-    // ✅ FIX 2.5: Retry logic for network failures
     const maxRetries = 3;
     let lastError: Error | null = null;
 
@@ -119,8 +115,8 @@ export const profileService = {
           timezone = 'UTC';
         }
         
-        // ✅ FIX 2.1, 2.2, 2.3: Build profile with validated, non-undefined values
-        const newProfile: UserProfile = {
+        // Build raw profile
+        const rawProfile = {
           uid: userId,
           email: sanitizedData.email,
           displayName: sanitizedData.displayName,
@@ -132,13 +128,17 @@ export const profileService = {
           profile: getDefaultProfile(),
         };
 
-        // ✅ Final validation before Firestore write
-        this._validateProfileForFirestore(newProfile);
+        // ✅ CRITICAL FIX: Recursively remove undefined values
+        // This prevents the [Error: Unsupported field value: undefined] crash
+        const safeProfile = this._removeUndefined(rawProfile);
+
+        // Final validation
+        this._validateProfileForFirestore(safeProfile);
 
         await firestore()
           .collection('users')
           .doc(userId)
-          .set(newProfile);
+          .set(safeProfile);
           
         console.log('✅ Profile created successfully');
         return;
@@ -146,12 +146,10 @@ export const profileService = {
         lastError = error as Error;
         console.error(`❌ Profile creation attempt ${attempt} failed:`, error);
 
-        // Don't retry on validation errors
         if (error instanceof Error && error.message.includes('validation')) {
           throw error;
         }
 
-        // ✅ FIX 2.5: Exponential backoff for network retries
         if (attempt < maxRetries) {
           const delayMs = Math.pow(2, attempt) * 500;
           console.log(`⏳ Retrying in ${delayMs}ms...`);
@@ -160,7 +158,6 @@ export const profileService = {
       }
     }
 
-    // All retries exhausted
     console.error('❌ Profile creation failed after all retry attempts');
     throw new Error(`Failed to create profile after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
   },
@@ -199,31 +196,44 @@ export const profileService = {
   },
 
   /**
+   * ✅ NEW HELPER: Recursively remove undefined values
+   * Firestore crashes if any field (even nested ones) is undefined.
+   */
+  _removeUndefined(obj: any): any {
+    if (obj === null || typeof obj !== 'object') {
+      return obj;
+    }
+
+    if (obj instanceof Date) return obj;
+
+    // Handle Arrays
+    if (Array.isArray(obj)) {
+      return obj.map(v => this._removeUndefined(v));
+    }
+
+    // Handle Objects
+    const result: any = {};
+    Object.keys(obj).forEach(key => {
+      const value = obj[key];
+      if (value !== undefined) {
+        result[key] = this._removeUndefined(value);
+      }
+    });
+    return result;
+  },
+
+  /**
    * ✅ HELPER: Final validation before Firestore write
    */
   _validateProfileForFirestore(profile: UserProfile): void {
-    const hasUndefined = Object.entries(profile).some(([key, value]) => {
-      if (value === undefined) {
-        console.error(`❌ Validation failed: Field "${key}" is undefined`);
-        return true;
-      }
-      return false;
-    });
-
-    if (hasUndefined) {
-      throw new Error('Profile validation failed: Document contains undefined values');
-    }
-
+    // Note: We rely on _removeUndefined to strip undefineds, 
+    // so we just check required top-level fields here.
     if (!profile.uid || profile.uid.trim() === '') {
       throw new Error('Profile validation failed: uid is required');
     }
 
     if (!profile.email || profile.email.trim() === '') {
       throw new Error('Profile validation failed: email is required');
-    }
-
-    if (!profile.displayName || profile.displayName.trim() === '') {
-      throw new Error('Profile validation failed: displayName is required');
     }
 
     console.log('✅ Profile validation passed');
@@ -238,7 +248,6 @@ export const profileService = {
 
   /**
    * ✅ NEW: Check if error is network-related
-   * Edge Case 3.2, 3.3, 7.2: Categorize network errors for retry
    */
   _isNetworkError(error: any): boolean {
     if (!error) return false;
@@ -246,17 +255,9 @@ export const profileService = {
     const errorMessage = error?.message?.toLowerCase() || '';
     const errorCode = error?.code?.toLowerCase() || '';
     
-    // Common network error indicators
     const networkIndicators = [
-      'network',
-      'timeout',
-      'unavailable',
-      'failed to fetch',
-      'connection',
-      'offline',
-      'econnrefused',
-      'enotfound',
-      'etimedout',
+      'network', 'timeout', 'unavailable', 'failed to fetch',
+      'connection', 'offline', 'econnrefused', 'enotfound', 'etimedout',
     ];
     
     return networkIndicators.some(indicator => 
@@ -268,18 +269,12 @@ export const profileService = {
    * ✅ NEW: Check if error is retryable
    */
   _isRetryableError(error: any): boolean {
-    // Network errors are always retryable
     if (this._isNetworkError(error)) {
       return true;
     }
     
-    // Specific Firestore error codes that are retryable
     const retryableCodes = [
-      'unavailable',
-      'deadline-exceeded',
-      'resource-exhausted',
-      'aborted',
-      'internal',
+      'unavailable', 'deadline-exceeded', 'resource-exhausted', 'aborted', 'internal',
     ];
     
     return retryableCodes.includes(error?.code);
@@ -302,10 +297,13 @@ export const profileService = {
         }
       }
 
+      // ✅ FIX: Clean undefined values before update
+      const safeUpdateData = this._removeUndefined(updateData);
+
       await firestore()
         .collection('users')
         .doc(userId)
-        .update(updateData);
+        .update(safeUpdateData);
         
       console.log('✅ Profile updated successfully');
     } catch (error) {
@@ -323,13 +321,18 @@ export const profileService = {
       
       if (!currentProfile) throw new Error('Profile not found');
 
+      const updatePayload = {
+        profile: { ...currentProfile.profile, ...profileData },
+        lastActive: new Date().toISOString(),
+      };
+
+      // ✅ FIX: Clean undefined values before update
+      const safePayload = this._removeUndefined(updatePayload);
+
       await firestore()
         .collection('users')
         .doc(userId)
-        .update({
-          profile: { ...currentProfile.profile, ...profileData },
-          lastActive: new Date().toISOString(),
-        });
+        .update(safePayload);
 
       console.log('✅ Profile data updated successfully');
     } catch (error) {
@@ -548,7 +551,7 @@ export const profileService = {
       .doc(userId)
       .onSnapshot(
         (docSnap) => {
-          if (docSnap.exists()) {
+          if (docSnap.exists) {
             const data = docSnap.data();
             const profile: UserProfile = {
               ...data,
@@ -575,21 +578,8 @@ export const profileService = {
 
   /**
    * ✅ PHASE 2 P1: Enhanced delete user profile with retry logic
-   * 
-   * CRITICAL FIXES APPLIED:
-   * - ✅ Edge Case 3.2: Network failure during Storage deletion (handled by caller)
-   * - ✅ Edge Case 3.3: Network failure during Firestore deletion (retry mechanism)
-   * - ✅ Edge Case 7.2: Intermittent connection drops (exponential backoff)
-   * 
-   * NEW FEATURES:
-   * - Retry mechanism with exponential backoff
-   * - Checkpoint system for progress tracking
-   * - Network error detection and handling
-   * - Progress callbacks for UI updates
-   * 
-   * @param userId - The user ID whose data should be deleted
+   * * @param userId - The user ID whose data should be deleted
    * @param onProgress - Optional callback for progress updates
-   * @throws Error if deletion fails after all retries
    */
   async deleteUserProfile(
     userId: string,
@@ -725,7 +715,6 @@ export const profileService = {
 
   /**
    * ✅ NEW: Delete collection with retry logic
-   * Edge Case 3.3, 7.2: Handles network failures with exponential backoff
    */
   async _deleteCollectionWithRetry(
     userId: string,
@@ -742,22 +731,18 @@ export const profileService = {
         lastError = error;
         console.error(`❌ Attempt ${attempt}/${maxRetries} failed for ${collectionName}:`, error);
 
-        // ✅ Check if error is retryable
         if (!this._isRetryableError(error)) {
           console.log(`⚠️ Non-retryable error for ${collectionName}, skipping...`);
-          return; // Don't retry, but don't fail the whole operation
+          return;
         }
 
-        // ✅ Retry with exponential backoff
         if (attempt < maxRetries) {
-          const delayMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+          const delayMs = Math.pow(2, attempt) * 1000;
           console.log(`⏳ Retrying ${collectionName} in ${delayMs}ms...`);
           await this._delay(delayMs);
         }
       }
     }
-
-    // All retries exhausted - log warning but don't throw
     console.warn(`⚠️ Failed to delete ${collectionName} after ${maxRetries} attempts:`, lastError);
   },
 
@@ -787,7 +772,6 @@ export const profileService = {
         }
       }
     }
-
     console.warn(`⚠️ Failed to delete medications after ${maxRetries} attempts:`, lastError);
   },
 
@@ -817,7 +801,6 @@ export const profileService = {
         }
       }
     }
-
     console.warn(`⚠️ Failed to delete wellness after ${maxRetries} attempts:`, lastError);
   },
 
@@ -847,7 +830,6 @@ export const profileService = {
         }
       }
     }
-
     console.warn(`⚠️ Failed to delete child profiles after ${maxRetries} attempts:`, lastError);
   },
 
@@ -881,8 +863,6 @@ export const profileService = {
         }
       }
     }
-
-    // Main document deletion is critical - throw if all retries fail
     throw new Error(`Failed to delete main user document after ${maxRetries} attempts: ${lastError?.message}`);
   },
 
@@ -927,7 +907,7 @@ export const profileService = {
       console.log(`✅ Deleted ${collectionName}`);
     } catch (error) {
       console.error(`❌ Error deleting ${collectionName}:`, error);
-      throw error; // Throw to allow retry logic
+      throw error;
     }
   },
 

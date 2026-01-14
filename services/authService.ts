@@ -1,8 +1,18 @@
 // services/authService.ts
 
+/**
+ * Authentication Service
+ * Handles Firebase Auth operations (Login, Signup, OTP, Password Reset)
+ * * ✅ PHASE 2 P2: Integration with Profile Service
+ * - Connects Auth creation with Firestore Profile creation
+ * - Uses profileService for safe database writes
+ * - Robust error handling for "Orphaned Auth" prevention
+ */
+
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import { profileService } from './profileService'; // ✅ Import profileService
 
 // ============================================
 // INTERFACES & TYPES
@@ -12,12 +22,14 @@ export interface UserProfile {
   uid: string;
   email: string | null;
   displayName: string;
-  createdAt: Date;
+  createdAt: string; // Changed to string to match Firestore ISO format
   photoURL?: string | null;
   phoneNumber?: string | null;
   isProfileComplete: boolean;
   isNewUser?: boolean;
   hasPassword?: boolean;
+  // Add other profile fields as needed
+  profile?: any;
 }
 
 export interface ProfileSetupData {
@@ -82,8 +94,8 @@ export const checkProfileCompleteness = async (uid: string): Promise<boolean> =>
   try {
     const userDoc = await firestore().collection('users').doc(uid).get();
 
-    // ✅ FIXED: .exists() is a method in React Native Firebase v20+
-    if (!userDoc.exists()) {
+    // ✅ FIXED: .exists is a property, not a function
+    if (!userDoc.exists) {
       return false;
     }
 
@@ -128,19 +140,24 @@ export const completeProfileSetup = async (
   profileData: ProfileSetupData
 ): Promise<void> => {
   try {
-    await firestore().collection('users').doc(uid).update({
+    // Clean undefined values before update
+    const updateData: any = {
       displayName: profileData.displayName,
       email: profileData.email,
-      dateOfBirth: profileData.dateOfBirth ?? null,
-      age: profileData.age ?? null,
-      gender: profileData.gender ?? null,
-      bloodGroup: profileData.bloodGroup ?? null,
-      height: profileData.height ?? null,
-      weight: profileData.weight ?? null,
       isProfileComplete: true,
       isNewUser: false,
       updatedAt: firestore.FieldValue.serverTimestamp(),
-    });
+    };
+
+    // Add optional fields only if they exist
+    if (profileData.dateOfBirth) updateData.dateOfBirth = profileData.dateOfBirth;
+    if (profileData.age) updateData.age = profileData.age;
+    if (profileData.gender) updateData.gender = profileData.gender;
+    if (profileData.bloodGroup) updateData.bloodGroup = profileData.bloodGroup;
+    if (profileData.height) updateData.height = profileData.height;
+    if (profileData.weight) updateData.weight = profileData.weight;
+
+    await firestore().collection('users').doc(uid).update(updateData);
 
     // Update display name in Auth
     if (profileData.displayName) {
@@ -167,28 +184,29 @@ export const signUpWithEmail = async (
   displayName: string
 ): Promise<FirebaseAuthTypes.User> => {
   try {
+    // 1. Create Auth User
     const userCredential = await auth().createUserWithEmailAndPassword(email, password);
     const user = userCredential.user;
 
-    // Update display name
+    // 2. Update Auth Profile
     await user.updateProfile({ displayName });
 
-    // Create user document in Firestore
-    const userDoc = {
-      uid: user.uid,
-      email: user.email,
-      displayName,
-      createdAt: firestore.FieldValue.serverTimestamp(),
-      photoURL: null,
-      phoneNumber: null,
-      isNewUser: true,
-      isProfileComplete: false,
-      hasPassword: true,
-    };
+    // 3. Create Firestore Profile using ProfileService
+    // ✅ FIX: Use profileService to handle 'undefined' values safely and ensure consistency
+    console.log('📝 Creating Firestore profile for new email user...');
+    try {
+      await profileService.createProfile(user.uid, {
+        email: user.email,
+        displayName: displayName,
+        photoURL: null,
+      });
+      console.log('✅ Firestore profile created successfully');
+    } catch (profileError) {
+      // ⚠️ Critical: If this fails, AuthContext self-healing will catch it later.
+      // We do NOT want to throw an error here, because the Auth user IS created.
+      console.error('⚠️ Firestore profile creation failed (will attempt self-heal later):', profileError);
+    }
 
-    await firestore().collection('users').doc(user.uid).set(userDoc);
-
-    console.log('✅ Email signup successful');
     return user;
   } catch (error: any) {
     console.error('❌ Email sign up error:', error.code, error.message);
@@ -211,8 +229,7 @@ export const signInWithEmail = async (
     if (isComplete) {
       const userDoc = await firestore().collection('users').doc(user.uid).get();
 
-      // ✅ FIXED: .exists() is a method in React Native Firebase v20+
-      if (userDoc.exists() && userDoc.data()?.isProfileComplete !== true) {
+      if (userDoc.exists && userDoc.data()?.isProfileComplete !== true) {
         await firestore().collection('users').doc(user.uid).update({
           isProfileComplete: true,
           isNewUser: false,
@@ -282,22 +299,20 @@ export const verifyPhoneOTPForSignup = async (
     // Step 3: Update display name
     await phoneUser.updateProfile({ displayName: credentials.displayName });
 
-    // Step 4: Create user document in Firestore
-    const userDoc = {
-      uid: phoneUser.uid,
-      email: credentials.email,
-      displayName: credentials.displayName,
-      phoneNumber: phoneUser.phoneNumber,
-      createdAt: firestore.FieldValue.serverTimestamp(),
-      photoURL: null,
-      isNewUser: true,
-      isProfileComplete: false,
-      hasPassword: true,
-    };
+    // Step 4: Create Firestore Profile
+    // ✅ FIX: Use profileService to handle creation safely
+    console.log('📝 Creating Firestore profile for new phone user...');
+    try {
+      await profileService.createProfile(phoneUser.uid, {
+        email: credentials.email,
+        displayName: credentials.displayName,
+        photoURL: null,
+      });
+      console.log('✅ Firestore profile created successfully');
+    } catch (profileError) {
+      console.error('⚠️ Firestore profile creation failed (will attempt self-heal later):', profileError);
+    }
 
-    await firestore().collection('users').doc(phoneUser.uid).set(userDoc);
-
-    console.log('✅ Account created successfully');
     return phoneUser;
   } catch (error: any) {
     console.error('❌ Verify OTP for signup error:', error);
@@ -339,6 +354,10 @@ export const verifyPhoneOTPForLogin = async (
       .get();
 
     if (querySnapshot.empty) {
+      // Note: In some flows, this might be a new user via phone who needs profile creation.
+      // But for strict "Login" flow, we often expect them to exist.
+      // If your app supports auto-signup on login, remove this check.
+      // For now, keeping it consistent with your original logic.
       throw new Error('No account found with this phone number. Please sign up first.');
     }
 
@@ -466,18 +485,20 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
   try {
     const docSnap = await firestore().collection('users').doc(uid).get();
 
-    // ✅ FIXED: .exists() is a method in React Native Firebase v20+
-    if (docSnap.exists()) {
+    // ✅ FIXED: .exists is a property, not a function
+    if (docSnap.exists) {
       const data = docSnap.data();
       return {
         ...data,
-        createdAt: data?.createdAt?.toDate() || new Date(),
+        // Ensure date fields are converted to strings/dates as expected
+        createdAt: data?.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
       } as UserProfile;
     }
     return null;
   } catch (error: any) {
     console.error('❌ Get user profile error:', error.message);
-    throw new Error('Failed to load user profile.');
+    // Return null instead of throwing so AuthContext doesn't crash entirely
+    return null;
   }
 };
 

@@ -2,18 +2,19 @@
 
 /**
  * Profile Screen - User Profile Management & Account Deletion
- * 
- * ✅ PHASE 1 P0: Enhanced error handling and deletion flow
+ * * ✅ PHASE 1 P0: Enhanced error handling and deletion flow
  * Fixed Edge Cases: 1.1, 3.1, 3.4, 4.1, 4.2, 10.4, 11.1, 11.2
- * 
- * Critical Fixes:
+ * * Critical Fixes:
  * - Emergency logout for orphaned auth states
  * - Re-authentication flow for stale sessions
  * - Duplicate deletion prevention
  * - Auth deletion reordered to LAST step
+ * - ✅ ADDED: Pre-deletion Auth Check (Prevents Orphans)
+ * - ✅ ADDED: Custom UI Components (Toast & Dialog)
  */
 
 import { Ionicons } from '@expo/vector-icons';
+import auth from '@react-native-firebase/auth';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -32,8 +33,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+// ✅ Components
 import EditProfileModal from '../../components/profile/EditProfileModal';
 import DeleteAccountModal from '../../components/profile/DeleteAccountModal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog'; // ✅ ADDED
+import CustomToast from '../../components/ui/CustomToast';       // ✅ ADDED
+
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { logOut } from '../../services/authService';
@@ -48,7 +54,6 @@ import {
 import { profileService } from '../../services/profileService';
 import { storageService } from '../../services/storageService';
 import { PeriodCycleResult, UserProfile } from '../../types/profile';
-import auth from '@react-native-firebase/auth';
 
 /**
  * Deletion progress state interface
@@ -61,7 +66,6 @@ interface DeletionProgress {
 }
 
 export default function ProfileScreen() {
-  // ✅ ENHANCED: Use new auth context features
   const { 
     user, 
     hasOrphanedAuth, 
@@ -84,6 +88,28 @@ export default function ProfileScreen() {
   const [scheduledCount, setScheduledCount] = useState(0);
   const [periodCycle, setPeriodCycle] = useState<PeriodCycleResult | null>(null);
 
+  // ✅ UI State for Custom Components
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastConfig, setToastConfig] = useState({ message: '', type: 'info' as 'success' | 'error' | 'info' | 'warning' });
+  
+  const [confirmDialogVisible, setConfirmDialogVisible] = useState(false);
+  // Initialized with async function to prevent TS errors
+  const [confirmDialogConfig, setConfirmDialogConfig] = useState({
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    type: 'warning' as 'danger' | 'warning' | 'info',
+    onConfirm: async () => {}, 
+    onCancel: () => setConfirmDialogVisible(false),
+  });
+
+  // Helper to show toast
+  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setToastConfig({ message, type });
+    setToastVisible(true);
+  };
+
   // Deletion progress state
   const [deletionInProgress, setDeletionInProgress] = useState(false);
   const [deletionProgress, setDeletionProgress] = useState<DeletionProgress>({
@@ -92,12 +118,9 @@ export default function ProfileScreen() {
     currentTask: '',
   });
 
-  // ✅ NEW: Re-authentication state (Edge Case 3.1, 11.1, 11.2)
   const [reauthModalVisible, setReauthModalVisible] = useState(false);
   const [reauthPassword, setReauthPassword] = useState('');
   const [reauthenticating, setReauthenticating] = useState(false);
-
-  // ✅ NEW: Profile load error state (Edge Case 1.1, 10.4)
   const [profileLoadError, setProfileLoadError] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -127,10 +150,6 @@ export default function ProfileScreen() {
     }
   }, [loading, fadeAnim, slideAnim]);
 
-  /**
-   * ✅ PHASE 1 P0: Enhanced profile loading with orphaned auth detection
-   * Edge Case 1.1, 10.4: Emergency logout if profile fails to load
-   */
   const loadProfile = async () => {
     if (!user?.uid) return;
 
@@ -154,7 +173,6 @@ export default function ProfileScreen() {
           const newProfile = await profileService.getProfile(user.uid);
           
           if (!newProfile) {
-            // Still no profile after creation - this is orphaned auth
             console.error('🚨 Failed to create profile - orphaned auth detected');
             setProfileLoadError(true);
             setLoading(false);
@@ -184,11 +202,8 @@ export default function ProfileScreen() {
       }
     } catch (error: any) {
       console.error('❌ Error loading profile:', error);
-      
-      // ✅ FIX 1.1, 10.4: Set error state instead of just alert
       setProfileLoadError(true);
       
-      // Check if this is a permission/not-found error (orphaned auth)
       if (error?.code === 'permission-denied' || error?.code === 'not-found') {
         console.error('🚨 Profile access denied - likely orphaned auth');
       }
@@ -219,11 +234,7 @@ export default function ProfileScreen() {
         const permission = await requestNotificationPermissions();
 
         if (!permission) {
-          Alert.alert(
-            'Permission Required',
-            'Please enable notifications in your device settings to receive medication reminders.',
-            [{ text: 'OK' }]
-          );
+          showToast('Enable notifications in settings to receive reminders', 'warning');
           setNotificationsEnabled(false);
           return;
         }
@@ -239,48 +250,34 @@ export default function ProfileScreen() {
         });
 
         await checkNotificationStatus();
-
-        Alert.alert(
-          'Success',
-          'Medication reminders have been enabled! You will receive notifications at your medication times.',
-          [{ text: 'OK' }]
-        );
+        showToast('Medication reminders enabled', 'success');
       } else {
-        Alert.alert(
-          'Disable Notifications',
-          'This will cancel all medication reminders. Are you sure?',
-          [
-            {
-              text: 'Cancel',
-              style: 'cancel',
-              onPress: () => {
-                setNotificationsEnabled(true);
-              },
-            },
-            {
-              text: 'Disable',
-              style: 'destructive',
-              onPress: async () => {
-                await cancelAllMedicationReminders();
-                setNotificationsEnabled(false);
-
-                await profileService.updateProfile(user.uid, {
-                  profile: {
-                    notificationsEnabled: false,
-                  },
-                });
-
-                await checkNotificationStatus();
-
-                Alert.alert('Success', 'All medication reminders have been cancelled.');
-              },
-            },
-          ]
-        );
+        setConfirmDialogConfig({
+          title: 'Disable Notifications?',
+          message: 'This will cancel all medication reminders. Are you sure?',
+          confirmText: 'Disable',
+          cancelText: 'Cancel',
+          type: 'warning',
+          onConfirm: async () => {
+            setConfirmDialogVisible(false);
+            await cancelAllMedicationReminders();
+            setNotificationsEnabled(false);
+            await profileService.updateProfile(user.uid, {
+              profile: { notificationsEnabled: false },
+            });
+            await checkNotificationStatus();
+            showToast('Reminders cancelled', 'success');
+          },
+          onCancel: () => {
+            setConfirmDialogVisible(false);
+            setNotificationsEnabled(true);
+          }
+        });
+        setConfirmDialogVisible(true);
       }
     } catch (error) {
       console.error('Error toggling notifications:', error);
-      Alert.alert('Error', 'Failed to update notification settings');
+      showToast('Failed to update settings', 'error');
       setNotificationsEnabled(!value);
     }
   };
@@ -288,14 +285,10 @@ export default function ProfileScreen() {
   const handleTestNotification = async () => {
     try {
       await sendTestNotification();
-      Alert.alert(
-        'Test Notification Sent',
-        'You should receive a test notification in 2 seconds!',
-        [{ text: 'OK' }]
-      );
+      showToast('Test notification sent!', 'success');
     } catch (error) {
       console.error('Error sending test notification:', error);
-      Alert.alert('Error', 'Failed to send test notification');
+      showToast('Failed to send notification', 'error');
     }
   };
 
@@ -304,10 +297,7 @@ export default function ProfileScreen() {
       const notifications = await getAllScheduledNotifications();
 
       if (notifications.length === 0) {
-        Alert.alert(
-          'No Scheduled Notifications',
-          "You don't have any scheduled medication reminders."
-        );
+        showToast('No scheduled notifications', 'info');
         return;
       }
 
@@ -315,20 +305,20 @@ export default function ProfileScreen() {
         .map((n, index) => {
           const data = n.content.data as any;
           const trigger = n.trigger as any;
-          return `${index + 1}. ${data?.medicationName || 'Medication'}\n   Time: ${
+          return `${index + 1}. ${data?.medicationName || 'Medication'} at ${
             trigger?.hour || 'N/A'
           }:00`;
         })
-        .join('\n\n');
+        .join('\n');
 
       Alert.alert(
-        `Scheduled Notifications (${notifications.length})`,
+        `Scheduled (${notifications.length})`,
         notificationList,
         [{ text: 'OK' }]
       );
     } catch (error) {
       console.error('Error viewing notifications:', error);
-      Alert.alert('Error', 'Failed to load scheduled notifications');
+      showToast('Failed to load schedule', 'error');
     }
   };
 
@@ -361,111 +351,80 @@ export default function ProfileScreen() {
       });
 
       await loadProfile();
-
-      Alert.alert('Success', 'Profile photo updated successfully!');
+      showToast('Profile photo updated', 'success');
     } catch (error) {
       console.error('Error uploading photo:', error);
-      Alert.alert('Error', 'Failed to upload photo');
+      showToast('Failed to upload photo', 'error');
     } finally {
       setUploadingPhoto(false);
     }
   };
 
   const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await logOut();
-            router.replace('/(auth)/login');
-          } catch (error) {
-            console.error('Logout error:', error);
-            Alert.alert('Error', 'Failed to logout. Please try again.');
-          }
-        },
+    setConfirmDialogConfig({
+      title: 'Logout',
+      message: 'Are you sure you want to logout?',
+      confirmText: 'Logout',
+      cancelText: 'Cancel',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await logOut();
+          router.replace('/(auth)/login');
+        } catch (error) {
+          console.error('Logout error:', error);
+          showToast('Failed to logout', 'error');
+        }
       },
-    ]);
+      onCancel: () => setConfirmDialogVisible(false)
+    });
+    setConfirmDialogVisible(true);
   };
 
-  /**
-   * ✅ NEW: Emergency logout handler for orphaned auth
-   * Edge Case 1.1, 10.4: Force logout when profile cannot be loaded
-   */
   const handleEmergencyLogout = async () => {
-    Alert.alert(
-      'Logout Required',
-      'Your profile data could not be loaded. This may be due to account issues. Please logout and try logging in again.',
-      [
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await forceLogout();
-              router.replace('/(auth)/welcome');
-            } catch (error) {
-              console.error('Emergency logout error:', error);
-              // Even if logout fails, navigate away
-              router.replace('/(auth)/welcome');
-            }
-          },
-        },
-      ],
-      { cancelable: false }
-    );
+    try {
+      await forceLogout();
+      router.replace('/(auth)/welcome');
+    } catch (error) {
+      console.error('Emergency logout error:', error);
+      router.replace('/(auth)/welcome');
+    }
   };
 
-  /**
-   * Open delete account modal
-   */
   const handleDeleteAccount = () => {
-    // ✅ FIX 7.1: Check network connectivity
     if (!isOnline) {
-      Alert.alert(
-        'No Internet Connection',
-        'Account deletion requires an active internet connection. Please check your network and try again.',
-        [{ text: 'OK' }]
-      );
+      showToast('No internet connection', 'error');
       return;
     }
 
-    // ✅ FIX 3.1: Check if session is stale
     if (isSessionStale) {
-      Alert.alert(
-        'Re-authentication Required',
-        'For security, you need to re-enter your password before deleting your account.',
-        [
-          {
-            text: 'Re-authenticate',
-            onPress: () => setReauthModalVisible(true),
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-        ]
-      );
+      setConfirmDialogConfig({
+        title: 'Re-authentication Required',
+        message: 'For security, please re-authenticate before deleting your account.',
+        confirmText: 'Re-authenticate',
+        cancelText: 'Cancel',
+        type: 'warning',
+        onConfirm: async () => {
+          setConfirmDialogVisible(false);
+          setReauthModalVisible(true);
+        },
+        onCancel: () => setConfirmDialogVisible(false)
+      });
+      setConfirmDialogVisible(true);
       return;
     }
 
     setDeleteModalVisible(true);
   };
 
-  /**
-   * ✅ NEW: Handle re-authentication
-   * Edge Case 3.1, 11.1, 11.2: Re-authenticate before deletion
-   */
   const handleReauthenticate = async () => {
     if (!user?.email) {
-      Alert.alert('Error', 'Email not found. Please logout and login again.');
+      showToast('Email not found. Relogin required.', 'error');
       return;
     }
 
     if (!reauthPassword.trim()) {
-      Alert.alert('Error', 'Please enter your password');
+      showToast('Enter password', 'warning');
       return;
     }
 
@@ -478,47 +437,27 @@ export default function ProfileScreen() {
       );
 
       await user.reauthenticateWithCredential(credential);
-      
-      console.log('✅ Re-authentication successful');
-      
-      // Revalidate session
       await revalidateSession();
       
-      // Clear password and close modal
       setReauthPassword('');
       setReauthModalVisible(false);
       
-      // Show success and proceed to deletion
-      Alert.alert(
-        'Authentication Successful',
-        'You can now proceed with account deletion.',
-        [
-          {
-            text: 'Delete Account',
-            style: 'destructive',
-            onPress: () => setDeleteModalVisible(true),
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-        ]
-      );
+      setConfirmDialogConfig({
+        title: 'Success',
+        message: 'You can now proceed with account deletion.',
+        confirmText: 'Delete Account',
+        cancelText: 'Cancel',
+        type: 'danger',
+        onConfirm: async () => {
+          setConfirmDialogVisible(false);
+          setDeleteModalVisible(true);
+        },
+        onCancel: () => setConfirmDialogVisible(false)
+      });
+      setConfirmDialogVisible(true);
     } catch (error: any) {
       console.error('❌ Re-authentication failed:', error);
-      
-      if (error.code === 'auth/wrong-password') {
-        Alert.alert('Error', 'Incorrect password. Please try again.');
-      } else if (error.code === 'auth/too-many-requests') {
-        Alert.alert(
-          'Too Many Attempts',
-          'Too many failed attempts. Please try again later.'
-        );
-      } else if (error.code === 'auth/network-request-failed') {
-        Alert.alert('Error', 'Network error. Please check your connection.');
-      } else {
-        Alert.alert('Error', `Re-authentication failed: ${error.message}`);
-      }
+      showToast('Incorrect password', 'error');
     } finally {
       setReauthenticating(false);
     }
@@ -526,20 +465,13 @@ export default function ProfileScreen() {
 
   /**
    * ✅ PHASE 1 P0: Enhanced account deletion with all critical fixes
-   * 
-   * CRITICAL FIXES APPLIED:
-   * - Edge Case 3.4, 4.1: Auth deletion is LAST step (not first)
-   * - Edge Case 4.2: Prevents duplicate deletion requests
-   * - Edge Case 3.1: Re-authentication check before deletion
-   * - Edge Case 11.1, 11.2: Handles recent login requirement
-   * - Better error handling and recovery
+   * includes Pre-Check to prevent Orphans.
    */
   const handleConfirmDelete = async () => {
     if (!user?.uid) return;
 
-    // ✅ FIX 4.2: Prevent duplicate deletion requests
     if (deletionInProgress) {
-      console.warn('⚠️ Deletion already in progress');
+      showToast('Deletion already in progress', 'warning');
       return;
     }
 
@@ -547,153 +479,109 @@ export default function ProfileScreen() {
       console.log('🗑️ Starting account deletion process...');
 
       const currentUser = auth().currentUser;
+      if (!currentUser) throw new Error('No user is currently signed in.');
 
-      if (!currentUser) {
-        throw new Error('No user is currently signed in.');
+      // 🛑 CRITICAL FIX: Pre-validate Auth BEFORE deleting data
+      try {
+        await currentUser.reload();
+      } catch (authError: any) {
+        console.warn('⚠️ Pre-deletion auth check failed:', authError);
+        
+        if (authError.code === 'auth/requires-recent-login' || authError.code === 'auth/user-token-expired') {
+          setDeletionInProgress(false);
+          setConfirmDialogConfig({
+            title: 'Security Check Required',
+            message: 'Please re-authenticate before we delete your data.',
+            confirmText: 'Re-authenticate',
+            cancelText: 'Cancel',
+            type: 'warning',
+            onConfirm: async () => {
+              setConfirmDialogVisible(false);
+              setTimeout(() => setReauthModalVisible(true), 300);
+            },
+            onCancel: () => setConfirmDialogVisible(false),
+          });
+          setConfirmDialogVisible(true);
+          return; // ⛔ STOP HERE
+        }
+        
+        if (authError.code === 'auth/network-request-failed') {
+          showToast('Network error. Check connection.', 'error');
+          return; // ⛔ STOP HERE
+        }
+        throw authError; 
       }
 
-      // ✅ Show progress modal
+      // ✅ Auth is valid. Show progress modal and proceed.
       setDeletionInProgress(true);
-      setDeleteModalVisible(false); // Close confirmation modal
+      setDeleteModalVisible(false);
 
-      // ============================================
-      // STEP 1: Cancel all notifications
-      // ============================================
+      // STEP 1: Notifications
       setDeletionProgress({
         step: 1,
         totalSteps: 4,
         currentTask: 'Cancelling notifications',
         details: 'Removing medication reminders...',
       });
-
-      console.log('🗑️ Step 1: Cancelling notifications...');
-      try {
-        await cancelAllMedicationReminders();
-        console.log('✅ Notifications cancelled');
-      } catch (error) {
-        console.warn('⚠️ Notification cleanup failed, continuing...', error);
-      }
-
-      // Small delay for UX
+      await cancelAllMedicationReminders().catch(e => console.warn(e));
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // ============================================
-      // STEP 2: Delete all files from Storage
-      // ============================================
+      // STEP 2: Storage
       setDeletionProgress({
         step: 2,
         totalSteps: 4,
         currentTask: 'Deleting files',
         details: 'Removing photos and documents...',
       });
-
-      console.log('🗑️ Step 2: Deleting all files from Storage...');
-      try {
-        await storageService.deleteAllUserFiles(user.uid, (progress) => {
-          setDeletionProgress({
-            step: 2,
-            totalSteps: 4,
-            currentTask: 'Deleting files',
-            details: `Removing ${progress.currentPath}... (${progress.deletedCount}/${progress.totalCount})`,
-          });
-        });
-        console.log('✅ All files deleted from Storage');
-      } catch (error) {
-        console.warn('⚠️ Storage cleanup failed, continuing...', error);
-      }
-
+      await storageService.deleteAllUserFiles(user.uid, (progress) => {
+        setDeletionProgress(prev => ({
+          ...prev,
+          details: `Removing ${progress.currentPath}...`
+        }));
+      }).catch(e => console.warn(e));
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // ============================================
-      // STEP 3: Delete user data from Firestore
-      // ============================================
+      // STEP 3: Firestore
       setDeletionProgress({
         step: 3,
         totalSteps: 4,
         currentTask: 'Deleting profile data',
         details: 'Removing health records and settings...',
       });
-
-      console.log('🗑️ Step 3: Deleting all data from Firestore...');
       await profileService.deleteUserProfile(user.uid);
-      console.log('✅ All data deleted from Firestore');
-
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // ============================================
-      // ✅ FIX 3.4, 4.1: STEP 4 - Delete Firebase Auth account (LAST)
-      // Auth is deleted LAST to maintain authentication throughout cleanup
-      // This ensures Firestore security rules don't block deletion
-      // ============================================
+      // STEP 4: Auth (LAST)
       setDeletionProgress({
         step: 4,
         totalSteps: 4,
         currentTask: 'Removing account',
         details: 'Finalizing account deletion...',
       });
-
-      console.log('🗑️ Step 4 (FINAL): Deleting Firebase Auth account...');
       await currentUser.delete();
-      console.log('✅ Firebase Auth account deleted');
 
-      // ✅ Success - hide progress and show success message
       setDeletionInProgress(false);
 
-      setTimeout(() => {
-        Alert.alert(
-          'Account Deleted',
-          "Your account has been permanently deleted. We're sorry to see you go!",
-          [
-            {
-              text: 'OK',
-              onPress: () => router.replace('/(auth)/welcome'),
-            },
-          ],
-          { cancelable: false }
-        );
-      }, 300);
+      // Success UI
+      setConfirmDialogConfig({
+        title: 'Account Deleted',
+        message: "Your account has been permanently deleted. We're sorry to see you go!",
+        confirmText: 'Goodbye',
+        cancelText: '',
+        type: 'info',
+        onConfirm: async () => router.replace('/(auth)/welcome'),
+        onCancel: () => router.replace('/(auth)/welcome'),
+      });
+      setConfirmDialogVisible(true);
+
     } catch (error: any) {
       console.error('❌ Delete account error:', error);
-      
-      // ✅ FIX 4.2: Reset deletion lock
       setDeletionInProgress(false);
 
-      // ✅ FIX 3.1, 11.1, 11.2: Enhanced error handling with re-auth prompt
       if (error.code === 'auth/requires-recent-login') {
-        Alert.alert(
-          'Re-authentication Required',
-          'For security reasons, please re-enter your password to complete account deletion.',
-          [
-            {
-              text: 'Re-authenticate',
-              onPress: () => setReauthModalVisible(true),
-            },
-            {
-              text: 'Cancel',
-              style: 'cancel',
-            },
-          ]
-        );
-      } else if (error.code === 'auth/network-request-failed') {
-        Alert.alert(
-          'Network Error',
-          'Please check your internet connection and try again.',
-          [{ text: 'OK' }]
-        );
-      } else if (error.code === 'auth/too-many-requests') {
-        Alert.alert(
-          'Too Many Attempts',
-          'Please wait a few minutes before trying again.',
-          [{ text: 'OK' }]
-        );
+        setReauthModalVisible(true);
       } else {
-        Alert.alert(
-          'Error',
-          `Failed to delete account: ${
-            error.message || 'Unknown error'
-          }. Please try again or contact support.`,
-          [{ text: 'OK' }]
-        );
+        showToast(`Deletion failed: ${error.message || 'Unknown error'}`, 'error');
       }
     }
   };
@@ -706,18 +594,12 @@ export default function ProfileScreen() {
     await loadProfile();
   };
 
-  /**
-   * ✅ NEW: Loading with orphaned auth detection
-   * Edge Case 1.1, 10.4: Show emergency logout if profile load failed
-   */
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.light.primary} />
           <Text style={styles.loadingText}>Loading profile...</Text>
-          
-          {/* ✅ NEW: Show orphaned auth warning if detected */}
           {hasOrphanedAuth && (
             <View style={styles.orphanedAuthWarning}>
               <Ionicons name="warning" size={24} color="#FF9500" />
@@ -731,10 +613,6 @@ export default function ProfileScreen() {
     );
   }
 
-  /**
-   * ✅ NEW: Profile load error screen with emergency logout
-   * Edge Case 1.1, 10.4: Recovery UI for orphaned auth
-   */
   if (profileLoadError || hasOrphanedAuth) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -746,26 +624,14 @@ export default function ProfileScreen() {
               ? 'Your account data could not be found. This may happen if your account was recently deleted or there was a synchronization issue.'
               : 'Unable to load your profile data. This could be due to network issues or account problems.'}
           </Text>
-          
-          <TouchableOpacity 
-            style={styles.errorButtonPrimary} 
-            onPress={onRefresh}
-          >
+          <TouchableOpacity style={styles.errorButtonPrimary} onPress={onRefresh}>
             <Ionicons name="refresh" size={20} color="#FFFFFF" />
             <Text style={styles.errorButtonTextPrimary}>Try Again</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.errorButtonSecondary} 
-            onPress={handleEmergencyLogout}
-          >
+          <TouchableOpacity style={styles.errorButtonSecondary} onPress={handleEmergencyLogout}>
             <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
             <Text style={styles.errorButtonTextSecondary}>Logout & Start Fresh</Text>
           </TouchableOpacity>
-
-          <Text style={styles.errorHint}>
-            If this problem persists, contact support
-          </Text>
         </View>
       </SafeAreaView>
     );
@@ -830,7 +696,6 @@ export default function ProfileScreen() {
               <Text style={styles.email}>{profile.phoneNumber}</Text>
             )}
 
-            {/* ✅ NEW: Session status indicator */}
             {isSessionStale && (
               <View style={styles.sessionWarningBadge}>
                 <Ionicons name="time-outline" size={14} color="#FF9500" />
@@ -847,86 +712,31 @@ export default function ProfileScreen() {
           {/* Basic Information */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Basic Information</Text>
-
             <InfoCard icon="person-outline" label="Full Name" value={fullName} />
-            <InfoCard
-              icon="calendar-outline"
-              label="Date of Birth"
-              value={
-                profile?.profile?.dob
-                  ? profileService.formatDate(profile.profile.dob)
-                  : 'Not set'
-              }
-            />
-            <InfoCard
-              icon="transgender-outline"
-              label="Gender"
-              value={getProfileValue('gender')}
-            />
-            <InfoCard
-              icon="body-outline"
-              label="Height"
-              value={
-                profile?.profile?.height ? `${profile.profile.height} cm` : 'Not set'
-              }
-            />
-            <InfoCard
-              icon="scale-outline"
-              label="Weight"
-              value={
-                profile?.profile?.weight ? `${profile.profile.weight} kg` : 'Not set'
-              }
-            />
+            <InfoCard icon="calendar-outline" label="Date of Birth" value={profile?.profile?.dob ? profileService.formatDate(profile.profile.dob) : 'Not set'} />
+            <InfoCard icon="transgender-outline" label="Gender" value={getProfileValue('gender')} />
+            <InfoCard icon="body-outline" label="Height" value={profile?.profile?.height ? `${profile.profile.height} cm` : 'Not set'} />
+            <InfoCard icon="scale-outline" label="Weight" value={profile?.profile?.weight ? `${profile.profile.weight} kg` : 'Not set'} />
           </View>
 
           {/* Medical Information */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Medical Information</Text>
-
-            <InfoCard
-              icon="water-outline"
-              label="Blood Group"
-              value={getProfileValue('bloodGroup')}
-            />
-            <InfoCard
-              icon="medical-outline"
-              label="Allergies"
-              value={getProfileValue('allergies', 'None')}
-            />
-            <InfoCard
-              icon="fitness-outline"
-              label="Medical Conditions"
-              value={getProfileValue('conditions', 'None')}
-            />
-            <InfoCard
-              icon="medkit-outline"
-              label="Current Medications"
-              value={getProfileValue('medications', 'None')}
-            />
+            <InfoCard icon="water-outline" label="Blood Group" value={getProfileValue('bloodGroup')} />
+            <InfoCard icon="medical-outline" label="Allergies" value={getProfileValue('allergies', 'None')} />
+            <InfoCard icon="fitness-outline" label="Medical Conditions" value={getProfileValue('conditions', 'None')} />
+            <InfoCard icon="medkit-outline" label="Current Medications" value={getProfileValue('medications', 'None')} />
           </View>
 
           {/* Lifestyle & Habits */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Lifestyle & Habits</Text>
-
-            <InfoCard
-              icon="restaurant-outline"
-              label="Diet Type"
-              value={getProfileValue('dietType')}
-            />
-            <InfoCard
-              icon="bed-outline"
-              label="Sleep Duration"
-              value={getProfileValue('sleepDuration')}
-            />
-            <InfoCard
-              icon="barbell-outline"
-              label="Physical Activity"
-              value={getProfileValue('physicalActivity')}
-            />
+            <InfoCard icon="restaurant-outline" label="Diet Type" value={getProfileValue('dietType')} />
+            <InfoCard icon="bed-outline" label="Sleep Duration" value={getProfileValue('sleepDuration')} />
+            <InfoCard icon="barbell-outline" label="Physical Activity" value={getProfileValue('physicalActivity')} />
           </View>
 
-          {/* Period Tracking Section - Only show if gender is Female */}
+          {/* Period Tracking */}
           {profile?.profile?.gender === 'Female' && (
             <>
               <View style={styles.section}>
@@ -934,114 +744,39 @@ export default function ProfileScreen() {
                   <Ionicons name="water" size={22} color={Colors.light.primary} />
                   <Text style={styles.sectionTitle}>Period Tracking</Text>
                 </View>
-
-                <InfoCard
-                  icon="calendar-outline"
-                  label="Last Period Start"
-                  value={
-                    profile?.profile?.periodStartDate
-                      ? profileService.formatDate(profile.profile.periodStartDate)
-                      : 'Not tracked'
-                  }
-                />
-                <InfoCard
-                  icon="calendar-outline"
-                  label="Last Period End"
-                  value={
-                    profile?.profile?.periodEndDate
-                      ? profileService.formatDate(profile.profile.periodEndDate)
-                      : 'Not tracked'
-                  }
-                />
-                <InfoCard
-                  icon="time-outline"
-                  label="Average Cycle Length"
-                  value={
-                    profile?.profile?.averageCycleLength
-                      ? `${profile.profile.averageCycleLength} days`
-                      : 'Not set'
-                  }
-                />
-                <InfoCard
-                  icon="pulse-outline"
-                  label="Flow Intensity"
-                  value={getProfileValue('flowIntensity', 'Not tracked')}
-                />
+                <InfoCard icon="calendar-outline" label="Last Period Start" value={profile?.profile?.periodStartDate ? profileService.formatDate(profile.profile.periodStartDate) : 'Not tracked'} />
+                <InfoCard icon="calendar-outline" label="Last Period End" value={profile?.profile?.periodEndDate ? profileService.formatDate(profile.profile.periodEndDate) : 'Not tracked'} />
+                <InfoCard icon="time-outline" label="Average Cycle Length" value={profile?.profile?.averageCycleLength ? `${profile.profile.averageCycleLength} days` : 'Not set'} />
+                <InfoCard icon="pulse-outline" label="Flow Intensity" value={getProfileValue('flowIntensity', 'Not tracked')} />
               </View>
 
-              {/* Period Predictions Section */}
               {periodCycle?.hasSufficientData && (
                 <View style={styles.section}>
                   <View style={styles.periodPredictionsHeader}>
                     <Ionicons name="analytics" size={22} color="#FF6B9D" />
                     <Text style={styles.sectionTitle}>Period Predictions</Text>
                   </View>
-
                   <View style={styles.highlightCard}>
                     <View style={styles.highlightCardHeader}>
                       <Ionicons name="today" size={24} color="#FF6B9D" />
                       <View style={styles.highlightCardContent}>
                         <Text style={styles.highlightCardTitle}>Current Status</Text>
-                        <Text style={styles.highlightCardValue}>
-                          Day {periodCycle.cycleDay} of {periodCycle.cycleLength}
-                        </Text>
-                        <Text style={styles.highlightCardSubtext}>
-                          {periodCycle.currentPhase} Phase
-                        </Text>
+                        <Text style={styles.highlightCardValue}>Day {periodCycle.cycleDay} of {periodCycle.cycleLength}</Text>
+                        <Text style={styles.highlightCardSubtext}>{periodCycle.currentPhase} Phase</Text>
                       </View>
                     </View>
                   </View>
-
                   <View style={styles.highlightCard}>
                     <View style={styles.highlightCardHeader}>
                       <Ionicons name="calendar" size={24} color="#FF6B9D" />
                       <View style={styles.highlightCardContent}>
                         <Text style={styles.highlightCardTitle}>Next Period</Text>
-                        <Text style={styles.highlightCardValue}>
-                          {periodCycle.nextPeriodStart
-                            ? profileService.formatDate(periodCycle.nextPeriodStart)
-                            : 'Not available'}
-                        </Text>
-                        <Text style={styles.highlightCardSubtext}>
-                          {periodCycle.daysUntilNextPeriod !== undefined &&
-                          periodCycle.daysUntilNextPeriod >= 0
-                            ? `In ${periodCycle.daysUntilNextPeriod} days`
-                            : 'Date may have passed'}
-                        </Text>
+                        <Text style={styles.highlightCardValue}>{periodCycle.nextPeriodStart ? profileService.formatDate(periodCycle.nextPeriodStart) : 'Not available'}</Text>
+                        <Text style={styles.highlightCardSubtext}>{periodCycle.daysUntilNextPeriod !== undefined && periodCycle.daysUntilNextPeriod >= 0 ? `In ${periodCycle.daysUntilNextPeriod} days` : 'Date may have passed'}</Text>
                       </View>
                     </View>
                   </View>
-
-                  <InfoCard
-                    icon="heart-outline"
-                    label="Ovulation Date"
-                    value={
-                      periodCycle.ovulationDate
-                        ? profileService.formatDate(periodCycle.ovulationDate)
-                        : 'Not available'
-                    }
-                  />
-
-                  <InfoCard
-                    icon="flower-outline"
-                    label="Fertile Window"
-                    value={
-                      periodCycle.fertileWindowStart && periodCycle.fertileWindowEnd
-                        ? `${new Date(
-                            periodCycle.fertileWindowStart
-                          ).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                          })} - ${new Date(
-                            periodCycle.fertileWindowEnd
-                          ).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                          })}`
-                        : 'Not available'
-                    }
-                  />
-
+                  <InfoCard icon="heart-outline" label="Ovulation Date" value={periodCycle.ovulationDate ? profileService.formatDate(periodCycle.ovulationDate) : 'Not available'} />
                   {periodCycle.notes && (
                     <View style={styles.periodNotesCard}>
                       <Ionicons name="information-circle" size={20} color="#FF9500" />
@@ -1050,209 +785,99 @@ export default function ProfileScreen() {
                   )}
                 </View>
               )}
-
-              {periodCycle && !periodCycle.hasSufficientData && (
-                <View style={styles.section}>
-                  <View style={styles.periodPredictionsHeader}>
-                    <Ionicons name="analytics" size={22} color="#FF6B9D" />
-                    <Text style={styles.sectionTitle}>Period Predictions</Text>
-                  </View>
-
-                  <View style={styles.periodNotesCard}>
-                    <Ionicons name="information-circle" size={20} color="#FF9500" />
-                    <Text style={styles.periodNotesText}>
-                      {periodCycle.notes || 'Add your period data to see predictions'}
-                    </Text>
-                  </View>
-                </View>
-              )}
             </>
           )}
 
           {/* App Settings */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>App Settings</Text>
-
             <View style={styles.notificationCard}>
               <View style={styles.notificationLeft}>
-                <Ionicons
-                  name={notificationsEnabled ? 'notifications' : 'notifications-off'}
-                  size={24}
-                  color={
-                    notificationsEnabled
-                      ? Colors.light.primary
-                      : Colors.light.textSecondary
-                  }
-                />
+                <Ionicons name={notificationsEnabled ? 'notifications' : 'notifications-off'} size={24} color={notificationsEnabled ? Colors.light.primary : Colors.light.textSecondary} />
                 <View style={styles.notificationTextContainer}>
                   <Text style={styles.notificationLabel}>Medication Reminders</Text>
-                  <Text style={styles.notificationSubtext}>
-                    {notificationsEnabled
-                      ? `${scheduledCount} reminders scheduled`
-                      : 'Enable to receive reminders'}
-                  </Text>
+                  <Text style={styles.notificationSubtext}>{notificationsEnabled ? `${scheduledCount} reminders scheduled` : 'Enable to receive reminders'}</Text>
                 </View>
               </View>
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={handleToggleNotifications}
-                trackColor={{ false: '#E5E5EA', true: Colors.light.primary + '50' }}
-                thumbColor={notificationsEnabled ? Colors.light.primary : '#F4F3F4'}
-                ios_backgroundColor="#E5E5EA"
-              />
+              <Switch value={notificationsEnabled} onValueChange={handleToggleNotifications} trackColor={{ false: '#E5E5EA', true: Colors.light.primary + '50' }} thumbColor={notificationsEnabled ? Colors.light.primary : '#F4F3F4'} ios_backgroundColor="#E5E5EA" />
             </View>
-
             {notificationsEnabled && (
               <>
-                <TouchableOpacity
-                  style={styles.actionCard}
-                  onPress={handleViewScheduledNotifications}
-                >
+                <TouchableOpacity style={styles.actionCard} onPress={handleViewScheduledNotifications}>
                   <View style={styles.actionLeft}>
-                    <Ionicons
-                      name="list-outline"
-                      size={20}
-                      color={Colors.light.primary}
-                    />
+                    <Ionicons name="list-outline" size={20} color={Colors.light.primary} />
                     <Text style={styles.actionLabel}>View Scheduled Reminders</Text>
                   </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color={Colors.light.textSecondary}
-                  />
+                  <Ionicons name="chevron-forward" size={20} color={Colors.light.textSecondary} />
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.actionCard}
-                  onPress={handleTestNotification}
-                >
+                <TouchableOpacity style={styles.actionCard} onPress={handleTestNotification}>
                   <View style={styles.actionLeft}>
-                    <Ionicons
-                      name="flask-outline"
-                      size={20}
-                      color={Colors.light.primary}
-                    />
+                    <Ionicons name="flask-outline" size={20} color={Colors.light.primary} />
                     <Text style={styles.actionLabel}>Send Test Notification</Text>
                   </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color={Colors.light.textSecondary}
-                  />
+                  <Ionicons name="chevron-forward" size={20} color={Colors.light.textSecondary} />
                 </TouchableOpacity>
               </>
             )}
-
             {!hasPermission && (
               <View style={styles.warningCard}>
                 <Ionicons name="warning-outline" size={20} color="#FF9500" />
-                <Text style={styles.warningText}>
-                  Notification permissions not granted. Enable in device settings to
-                  receive reminders.
-                </Text>
+                <Text style={styles.warningText}>Notification permissions not granted. Enable in device settings.</Text>
               </View>
             )}
           </View>
 
-          {/* Delete Account Button */}
-          <TouchableOpacity
-            style={styles.deleteAccountButton}
-            onPress={handleDeleteAccount}
-            activeOpacity={0.7}
-            disabled={deletionInProgress}
-          >
+          {/* Delete & Logout */}
+          <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount} disabled={deletionInProgress}>
             <Ionicons name="trash-outline" size={20} color="#FF3B30" />
             <Text style={styles.deleteAccountText}>Delete Account</Text>
           </TouchableOpacity>
 
-          {/* Logout Button */}
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color="#FF3B30" />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              Member since{' '}
-              {profile?.createdAt
-                ? profileService.formatDate(profile.createdAt)
-                : 'Unknown'}
-            </Text>
+            <Text style={styles.footerText}>Member since {profile?.createdAt ? profileService.formatDate(profile.createdAt) : 'Unknown'}</Text>
           </View>
         </Animated.View>
       </ScrollView>
 
-      {/* Edit Profile Modal */}
-      <EditProfileModal
-        visible={editModalVisible}
-        onClose={() => setEditModalVisible(false)}
-        profile={profile}
-        onSave={handleSaveProfile}
+      <EditProfileModal visible={editModalVisible} onClose={() => setEditModalVisible(false)} profile={profile} onSave={handleSaveProfile} />
+      
+      <DeleteAccountModal 
+        visible={deleteModalVisible} 
+        userName={fullName} 
+        userEmail={profile?.email || 'your account'} 
+        onClose={() => setDeleteModalVisible(false)} 
+        onConfirmDelete={handleConfirmDelete} 
       />
 
-      {/* Delete Account Confirmation Modal */}
-      <DeleteAccountModal
-        visible={deleteModalVisible}
-        userName={fullName}
-        userEmail={profile?.email || 'your account'}
-        onClose={() => setDeleteModalVisible(false)}
-        onConfirmDelete={handleConfirmDelete}
-      />
-
-      {/* ✅ NEW: Re-authentication Modal */}
-      <Modal
-        visible={reauthModalVisible}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-      >
+      <Modal visible={reauthModalVisible} transparent animationType="slide" statusBarTranslucent>
         <View style={styles.reauthOverlay}>
           <View style={styles.reauthModal}>
             <View style={styles.reauthHeader}>
               <Ionicons name="shield-checkmark" size={32} color={Colors.light.primary} />
               <Text style={styles.reauthTitle}>Re-authentication Required</Text>
-              <Text style={styles.reauthSubtitle}>
-                For security, please confirm your password
-              </Text>
+              <Text style={styles.reauthSubtitle}>For security, please confirm your password</Text>
             </View>
-
             <View style={styles.reauthContent}>
               <Text style={styles.reauthLabel}>Password</Text>
-              <TextInput
-                style={styles.reauthInput}
-                value={reauthPassword}
-                onChangeText={setReauthPassword}
-                placeholder="Enter your password"
+              <TextInput 
+                style={styles.reauthInput} 
+                value={reauthPassword} 
+                onChangeText={setReauthPassword} 
+                placeholder="Enter your password" 
                 placeholderTextColor={Colors.light.textSecondary}
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!reauthenticating}
+                secureTextEntry 
               />
-
               <View style={styles.reauthButtons}>
-                <TouchableOpacity
-                  style={[styles.reauthButton, styles.reauthButtonCancel]}
-                  onPress={() => {
-                    setReauthModalVisible(false);
-                    setReauthPassword('');
-                  }}
-                  disabled={reauthenticating}
-                >
+                <TouchableOpacity style={[styles.reauthButton, styles.reauthButtonCancel]} onPress={() => setReauthModalVisible(false)}>
                   <Text style={styles.reauthButtonTextCancel}>Cancel</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.reauthButton, styles.reauthButtonConfirm]}
-                  onPress={handleReauthenticate}
-                  disabled={reauthenticating || !reauthPassword.trim()}
-                >
-                  {reauthenticating ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.reauthButtonTextConfirm}>Confirm</Text>
-                  )}
+                <TouchableOpacity style={[styles.reauthButton, styles.reauthButtonConfirm]} onPress={handleReauthenticate}>
+                  {reauthenticating ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.reauthButtonTextConfirm}>Confirm</Text>}
                 </TouchableOpacity>
               </View>
             </View>
@@ -1260,13 +885,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Deletion Progress Modal */}
-      <Modal
-        visible={deletionInProgress}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-      >
+      <Modal visible={deletionInProgress} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.progressOverlay}>
           <View style={styles.progressModal}>
             <View style={styles.progressHeader}>
@@ -1274,58 +893,45 @@ export default function ProfileScreen() {
               <Text style={styles.progressTitle}>Deleting Account</Text>
               <Text style={styles.progressSubtitle}>Please wait...</Text>
             </View>
-
             <View style={styles.progressContent}>
               <ActivityIndicator size="large" color={Colors.light.primary} />
-              
               <View style={styles.progressSteps}>
-                <Text style={styles.progressStepText}>
-                  Step {deletionProgress.step} of {deletionProgress.totalSteps}
-                </Text>
-                <Text style={styles.progressTaskText}>
-                  {deletionProgress.currentTask}
-                </Text>
-                {deletionProgress.details && (
-                  <Text style={styles.progressDetailsText}>
-                    {deletionProgress.details}
-                  </Text>
-                )}
+                <Text style={styles.progressStepText}>Step {deletionProgress.step} of {deletionProgress.totalSteps}</Text>
+                <Text style={styles.progressTaskText}>{deletionProgress.currentTask}</Text>
+                {deletionProgress.details && <Text style={styles.progressDetailsText}>{deletionProgress.details}</Text>}
               </View>
-
-              {/* Progress Bar */}
               <View style={styles.progressBarContainer}>
-                <View
-                  style={[
-                    styles.progressBarFill,
-                    {
-                      width: `${
-                        (deletionProgress.step / deletionProgress.totalSteps) * 100
-                      }%`,
-                    },
-                  ]}
-                />
+                <View style={[styles.progressBarFill, { width: `${(deletionProgress.step / deletionProgress.totalSteps) * 100}%` }]} />
               </View>
-
-              <Text style={styles.progressWarning}>
-                ⚠️ Do not close the app or navigate away
-              </Text>
+              <Text style={styles.progressWarning}>⚠️ Do not close the app or navigate away</Text>
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* ✅ ADDED: Global UI Components */}
+      <ConfirmDialog
+        visible={confirmDialogVisible}
+        title={confirmDialogConfig.title}
+        message={confirmDialogConfig.message}
+        confirmText={confirmDialogConfig.confirmText}
+        cancelText={confirmDialogConfig.cancelText}
+        type={confirmDialogConfig.type}
+        onConfirm={confirmDialogConfig.onConfirm}
+        onCancel={confirmDialogConfig.onCancel}
+      />
+
+      <CustomToast
+        visible={toastVisible}
+        message={toastConfig.message}
+        type={toastConfig.type}
+        onHide={() => setToastVisible(false)}
+      />
     </SafeAreaView>
   );
 }
 
-const InfoCard = ({
-  icon,
-  label,
-  value,
-}: {
-  icon: string;
-  label: string;
-  value: string;
-}) => (
+const InfoCard = ({ icon, label, value }: { icon: string; label: string; value: string }) => (
   <View style={styles.infoCard}>
     <View style={styles.infoLeft}>
       <Ionicons name={icon as any} size={20} color={Colors.light.primary} />
@@ -1350,7 +956,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.textSecondary,
   },
-  // ✅ NEW: Orphaned auth warning styles
   orphanedAuthWarning: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1368,7 +973,6 @@ const styles = StyleSheet.create({
     color: '#FF9500',
     fontWeight: '500',
   },
-  // ✅ NEW: Error container styles
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1487,7 +1091,6 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     marginBottom: 4,
   },
-  // ✅ NEW: Session warning badge
   sessionWarningBadge: {
     flexDirection: 'row',
     alignItems: 'center',

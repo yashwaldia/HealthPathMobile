@@ -1,4 +1,5 @@
 // services/medicationService.ts
+
 // ✅ ENHANCED: Added batch save and merge helpers for Smart Import feature
 // ✅ FIXED: IMMEDIATE notification scheduling on add/update (Dec 31, 2025)
 export { resolveConflictsAndSave, smartImportMedications } from './smartImportService';
@@ -314,6 +315,12 @@ export const detectPotentialDuplicates = (
  * Get all medications for a user
  */
 export const getAllMedications = async (userId: string): Promise<Medication[]> => {
+  // ✅ FIX: Safety check to prevent permission denied errors
+  if (!userId) {
+    console.log('⚠️ No user ID, skipping medication fetch');
+    return [];
+  }
+
   try {
     const querySnapshot = await firestore()
       .collection(`users/${userId}/medications`)
@@ -336,6 +343,12 @@ export const getAllMedications = async (userId: string): Promise<Medication[]> =
  * Get active medications only
  */
 export const getActiveMedications = async (userId: string): Promise<Medication[]> => {
+  // ✅ FIX: Safety check to prevent permission denied errors
+  if (!userId) {
+    console.log('⚠️ No user ID, skipping active medication fetch');
+    return [];
+  }
+
   try {
     const querySnapshot = await firestore()
       .collection(`users/${userId}/medications`)
