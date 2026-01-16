@@ -7,7 +7,7 @@ module.exports = {
     icon: "./assets/images/android-icon-512.png",
     scheme: "healthpathmobile",
     userInterfaceStyle: "automatic",
-    newArchEnabled: true,
+    newArchEnabled: false,
 
     splash: {
       image: "./assets/images/android-icon-512.png",
