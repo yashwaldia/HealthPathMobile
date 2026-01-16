@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: "PI HEALTH",
     slug: "pi-health",
-    version: "1.0.1",
+    version: "1.0.2",
     orientation: "portrait",
     icon: "./assets/images/android-icon-512.png",
     scheme: "healthpathmobile",
@@ -33,7 +33,6 @@ module.exports = {
         "android.permission.CAMERA",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.SCHEDULE_EXACT_ALARM",
-        "android.permission.USE_EXACT_ALARM",
         "android.permission.RECORD_AUDIO",
       ],
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
