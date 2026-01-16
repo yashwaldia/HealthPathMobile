@@ -14,7 +14,7 @@ interface WeeklySummary {
   vitalsLogged: number;
   labsUploaded: number;
   symptomsLogged: number;
-  fitCalcUsed: number; // ✅ NEW: FitCalc calculations count
+  fitCalcUsed: number;
   aiSummary: string;
   generatedAt: admin.firestore.FieldValue;
   dataPoints: {
@@ -22,15 +22,17 @@ interface WeeklySummary {
     medications: number;
     labs: number;
     symptoms: number;
-    fitcalc: number; // ✅ NEW: FitCalc data point
+    fitcalc: number;
   };
   topSymptoms?: string[];
   averageSeverity?: number;
-  fitCalcTypes?: string[]; // ✅ NEW: Calculator types used (optional)
+  fitCalcTypes?: string[];
 }
 
 /**
- * Generates a weekly health report ONLY if the user has been active.
+ * Generates a weekly health report.
+ * If active: Generates AI summary.
+ * If inactive: Sends an "Engagement Nudge" notification instead of a report.
  */
 export const generateWeeklyReport = async (userId: string): Promise<string | null> => {
   // Initialize db inside function to avoid 'no-app' error
@@ -67,7 +69,7 @@ export const generateWeeklyReport = async (userId: string): Promise<string | nul
       .get();
     const activeMedsCount = medsSnapshot.size;
 
-    // D. Symptoms (NEW!)
+    // D. Symptoms
     const symptomsSnapshot = await db
       .collection(`users/${userId}/symptoms`)
       .where('timestamp', '>=', admin.firestore.Timestamp.fromDate(sevenDaysAgo))
@@ -108,8 +110,7 @@ export const generateWeeklyReport = async (userId: string): Promise<string | nul
     const averageSeverity =
       symptomsCount > 0 ? Math.round((totalSeverity / symptomsCount) * 10) / 10 : 0;
 
-    // ✅ E. FitCalc History (NEW!)
-    // ==========================================
+    // E. FitCalc History
     const fitCalcSnapshot = await db
       .collection(`users/${userId}/fitcalc_history`)
       .where('savedAt', '>=', admin.firestore.Timestamp.fromDate(sevenDaysAgo))
@@ -124,15 +125,33 @@ export const generateWeeklyReport = async (userId: string): Promise<string | nul
         calculatorTypesSet.add(calcId);
       }
     });
-    const fitCalcTypes = Array.from(calculatorTypesSet).slice(0, 3); // Top 3 most used
+    const fitCalcTypes = Array.from(calculatorTypesSet).slice(0, 3);
 
-    // ✅ UPDATED: Include FitCalc in total activity
+    // Calculate Total Activity
     const totalActivity = vitalsCount + labsCount + symptomsCount + fitCalcCount;
 
-    // 2. Smart Check: Is user active?
-    // ==========================================
+    // 2. Smart Check: Is user active? (The "Engagement Nudge" Logic)
+    // =============================================================
     if (totalActivity === 0 && activeMedsCount === 0) {
-      logger.info(`Skipping weekly report for ${userId}: No activity.`);
+      logger.info(`User ${userId} is inactive. Sending engagement nudge instead of report.`);
+
+      // 🔥 NEW: Create "We Missed You" In-App Notification
+      const nudgeRef = db.collection(`users/${userId}/notifications`).doc();
+      
+      await nudgeRef.set({
+        title: '👋 We missed you this week!',
+        body: 'No health logs found for last week. Tracking just one vital takes less than 30 seconds. Tap to start!',
+        type: 'reminder', // Uses the 'alarm-outline' icon or similar from your frontend
+        read: false,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        data: { 
+          type: 'engagement-nudge',
+          action: 'open-add-vitals' // You can handle this in frontend navigation
+        },
+      });
+
+      // Return null so we don't send the "Weekly Report Ready" Push Notification
+      // (The user will see the red dot on the bell icon next time they open the app)
       return null;
     }
 
@@ -141,9 +160,9 @@ export const generateWeeklyReport = async (userId: string): Promise<string | nul
     let aiSummary = '';
 
     try {
-      // ✅ Access the secret value at runtime
       const genAI = new GoogleGenerativeAI(geminiApiKey.value());
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+      // ✅ UPDATED: Using the latest stable Flash model
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
       // Build symptom context for AI
       let symptomContext = '';
@@ -157,7 +176,6 @@ export const generateWeeklyReport = async (userId: string): Promise<string | nul
 - Categories affected: ${[...new Set(symptomLogs.map((l) => l.categoryName))].join(', ')}
 `;
 
-        // Add AI analysis insights if available
         const aiAnalyzedSymptoms = symptomLogs.filter((log) => log.aiAnalysis);
         if (aiAnalyzedSymptoms.length > 0) {
           symptomContext += `
@@ -167,25 +185,15 @@ export const generateWeeklyReport = async (userId: string): Promise<string | nul
         }
       }
 
-      // ✅ Build FitCalc context for AI (NEW!)
+      // Build FitCalc context for AI
       let fitCalcContext = '';
       if (fitCalcCount > 0) {
-        // Map calculator IDs to user-friendly names
         const calcNames: { [key: string]: string } = {
-          bmi: 'BMI',
-          bmr: 'BMR',
-          tdee: 'TDEE',
-          macros: 'Macros',
-          'one-rm': '1-Rep Max',
-          'body-fat': 'Body Fat',
-          'hr-zones': 'Heart Rate Zones',
-          vo2max: 'VO₂max',
-          'activity-calories': 'Activity Calories',
-          'body-ratios': 'Body Ratios',
-          'ideal-weight': 'Ideal Weight',
-          water: 'Water Intake',
-          running: 'Running Pace',
-          protein: 'Protein Intake',
+          bmi: 'BMI', bmr: 'BMR', tdee: 'TDEE', macros: 'Macros',
+          'one-rm': '1-Rep Max', 'body-fat': 'Body Fat', 'hr-zones': 'Heart Rate Zones',
+          vo2max: 'VO₂max', 'activity-calories': 'Activity Calories',
+          'body-ratios': 'Body Ratios', 'ideal-weight': 'Ideal Weight',
+          water: 'Water Intake', running: 'Running Pace', protein: 'Protein Intake',
         };
 
         const calcNamesUsed = fitCalcTypes
@@ -204,21 +212,19 @@ Write a concise 3-4 sentence weekly health summary for a user based on their dat
 **User Data (Last 7 Days):**
 - Vitals logged: ${vitalsCount} times
 - Lab reports uploaded: ${labsCount}
-- Active medications being tracked: ${activeMedsCount}
+- Active medications: ${activeMedsCount}
 - Symptom logs: ${symptomsCount}${symptomContext}${fitCalcContext}
 
 **Tone Instructions:**
-- If activity is LOW (0-2 total logs): Be encouraging, hype them up to build habits. Focus on "small steps matter."
-- If activity is HIGH (>3 logs): Praise their consistency and detailed tracking. Mention specific numbers to validate their effort.
-- If symptoms were logged: Acknowledge symptom tracking and provide empathetic, supportive feedback. If severity is high (>3), suggest consulting a healthcare provider.
-- If AI analyzed symptoms: Mention that they're using smart health insights.
-- If FitCalc was used: Acknowledge their fitness tracking efforts and encourage consistency.
+- Activity LOW (1-2 logs): Be encouraging. Focus on "small steps matter."
+- Activity HIGH (>3 logs): Praise consistency. Mention specific numbers.
+- Symptoms logged: Acknowledge tracking. If severity > 3, suggest consulting a doctor.
+- FitCalc used: Acknowledge fitness tracking efforts.
 
 **Formatting:**
 - Conversational paragraph (no bullet points).
 - Keep it under 80 words.
 - Compassionate, professional, and supportive.
-- If multiple symptoms with high severity, gently recommend medical consultation.
       `;
 
       const result = await model.generateContent(prompt);
@@ -226,28 +232,21 @@ Write a concise 3-4 sentence weekly health summary for a user based on their dat
     } catch (aiError) {
       logger.error('AI Generation failed, falling back to rule-based summary', aiError);
 
-      // ✅ UPDATED: Fallback logic with FitCalc support
       if (totalActivity > 5) {
         aiSummary = `Outstanding week! You logged ${vitalsCount} vitals, ${symptomsCount} symptoms${
           fitCalcCount > 0 ? `, and performed ${fitCalcCount} fitness calculations` : ''
-        }, and stayed on top of your health. ${
-          averageSeverity > 3
-            ? 'Some symptoms showed higher severity - consider consulting your doctor if they persist.'
-            : 'Keep up the great tracking!'
-        }`;
+        }, and stayed on top of your health. Keep up the great tracking!`;
       } else if (symptomsCount > 0) {
-        aiSummary = `You tracked ${symptomsCount} symptoms this week${
-          topSymptoms.length > 0 ? `, including ${topSymptoms.join(', ')}` : ''
-        }. ${
+        aiSummary = `You tracked ${symptomsCount} symptoms this week. ${
           averageSeverity > 3
-            ? 'Average severity was moderate - monitor closely and consult a doctor if needed.'
+            ? 'Average severity was moderate - monitor closely.'
             : 'Great awareness of your body!'
         }`;
       } else if (fitCalcCount > 0) {
         aiSummary = `Great job tracking fitness! You performed ${fitCalcCount} calculations this week. Keep building those healthy habits! 💪`;
       } else {
         aiSummary =
-          'A quiet week for logs, but every step counts. Try logging a few more vitals or symptoms next week to build your health history! 🌱';
+          'Every step counts. Try logging a few more vitals or symptoms next week to build your health history! 🌱';
       }
     }
 
@@ -257,11 +256,11 @@ Write a concise 3-4 sentence weekly health summary for a user based on their dat
     const reportData: WeeklySummary = {
       weekStartDate: sevenDaysAgo.toISOString(),
       weekEndDate: now.toISOString(),
-      medicationAdherence: 80, // Placeholder until adherence tracking is live
+      medicationAdherence: 80,
       vitalsLogged: vitalsCount,
       labsUploaded: labsCount,
       symptomsLogged: symptomsCount,
-      fitCalcUsed: fitCalcCount, // ✅ NEW: FitCalc count
+      fitCalcUsed: fitCalcCount,
       aiSummary: aiSummary,
       generatedAt: admin.firestore.FieldValue.serverTimestamp(),
       dataPoints: {
@@ -269,28 +268,25 @@ Write a concise 3-4 sentence weekly health summary for a user based on their dat
         medications: activeMedsCount,
         labs: labsCount,
         symptoms: symptomsCount,
-        fitcalc: fitCalcCount, // ✅ NEW: FitCalc data point
+        fitcalc: fitCalcCount,
       },
       topSymptoms: topSymptoms.length > 0 ? topSymptoms : undefined,
       averageSeverity: symptomsCount > 0 ? averageSeverity : undefined,
-      fitCalcTypes: fitCalcTypes.length > 0 ? fitCalcTypes : undefined, // ✅ NEW: Calculator types
+      fitCalcTypes: fitCalcTypes.length > 0 ? fitCalcTypes : undefined,
     };
 
     await reportRef.set(reportData);
     logger.info(`Generated weekly report for ${userId}: ${reportRef.id}`);
 
-    // ✅ UPDATED: Notification message includes FitCalc if used
-    // 5. Create In-App Notification (for History/Bell)
+    // 5. Create In-App Notification (Report Ready)
     // ==========================================
     const notificationRef = db.collection(`users/${userId}/notifications`).doc();
     
     let notificationBody = 'Tap to view your AI health summary for this week.';
     if (symptomsCount > 0 && fitCalcCount > 0) {
-      notificationBody = `Your AI health summary is ready! Includes ${symptomsCount} symptom${symptomsCount > 1 ? 's' : ''} and ${fitCalcCount} fitness calculation${fitCalcCount > 1 ? 's' : ''}.`;
+      notificationBody = `Your AI summary includes ${symptomsCount} symptom${symptomsCount > 1 ? 's' : ''} and ${fitCalcCount} fitness calc${fitCalcCount > 1 ? 's' : ''}.`;
     } else if (symptomsCount > 0) {
-      notificationBody = `Your AI health summary is ready! Includes ${symptomsCount} symptom${symptomsCount > 1 ? 's' : ''} tracked this week.`;
-    } else if (fitCalcCount > 0) {
-      notificationBody = `Your AI health summary is ready! Includes ${fitCalcCount} fitness calculation${fitCalcCount > 1 ? 's' : ''} this week.`;
+      notificationBody = `Your AI summary includes ${symptomsCount} symptom${symptomsCount > 1 ? 's' : ''} tracked this week.`;
     }
 
     await notificationRef.set({
@@ -301,8 +297,6 @@ Write a concise 3-4 sentence weekly health summary for a user based on their dat
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       data: { reportId: reportRef.id, type: 'weekly-report' },
     });
-
-    logger.info(`Weekly report notification sent for ${userId}`);
 
     return reportRef.id;
   } catch (error) {
